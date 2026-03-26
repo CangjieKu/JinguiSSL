@@ -1,0 +1,18 @@
+[package]
+  cjc-version = "1.0.0"
+  version = "0.1.0"
+  name = "jinguissl"
+  output-type = "static"
+  src-dir = "src/jinguissl"
+  compile-option = "-Woff unused"
+  description = "jinguiSSL phase-1 foundation library in pure Cangjie"
+  include = ["src", "testdata", "examples"]
+
+[target.aarch64-linux-ohos]
+  compile-option = "-B \"${DEVECO_CANGJIE_HOME}/compiler/third_party/llvm/bin\" -B \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/aarch64-linux-ohos\" -L \"${DEVECO_CANGJIE_HOME}/musl/usr/lib/aarch64-linux-ohos\" --sysroot \"${DEVECO_CANGJIE_HOME}/musl\""
+[target.aarch64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}/linux_ohos_aarch64_cjnative/static/stdx"]
+
+[target.aarch64-linux-ohos-cjnative]
+[target.aarch64-linux-ohos-cjnative.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_PATH}/linux_ohos_aarch64_cjnative/static/stdx"]

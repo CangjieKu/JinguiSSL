@@ -1,0 +1,14 @@
+.DS_Store
+.cache/
+.cjpm_test_tmp*/
+target/
+.vscode/
+
+examples/*/target/
+examples/*
+!examples/phase1-demo/
+!examples/phase1-demo/**
+
+_helper/
+benchmarks/
+bridges/
