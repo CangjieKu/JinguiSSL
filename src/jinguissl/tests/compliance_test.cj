@@ -6,7 +6,7 @@ import jinguissl.crypto.error.CryptoException
 @Test
 public class ComplianceTestSuite {
     @TestCase
-    public func testDefaultProfileAllowAndReject() {
+    public func testDefaultProfileAllowAndReject(): Unit {
         let profile = FipsProfile.phase1Default()
         @Assert(profile.isAllowed("AES-GCM"), true)
         @Assert(profile.isAllowed("md5"), false)
@@ -22,7 +22,7 @@ public class ComplianceTestSuite {
     }
 
     @TestCase
-    public func testProfileFromText() {
+    public func testProfileFromText(): Unit {
         let raw = """
 # phase1 profile
 sha-256, hmac-sha-256
@@ -36,13 +36,13 @@ TLS1.3
     }
 
     @TestCase
-    public func testTlsConstants() {
+    public func testTlsConstants(): Unit {
         @Assert(TLS_VERSION_1_2.toString(), "TLS1.2")
         @Assert(TLS_VERSION_1_3.toString(), "TLS1.3")
     }
 
     @TestCase
-    public func testProfileValidationAndNormalization() {
+    public func testProfileValidationAndNormalization(): Unit {
         try {
             _ = FipsProfile([])
             @Fail("empty allow list should be rejected")

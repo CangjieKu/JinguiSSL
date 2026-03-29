@@ -6,7 +6,7 @@ import jinguissl.crypto.perf.*
 @Test
 public class PerfBenchTestSuite {
     @TestCase
-    public func testBenchRunWarmupAndSamples() {
+    public func testBenchRunWarmupAndSamples(): Unit {
         let counter = BenchCallCounter()
         let summary = benchRun(BenchConfig("unit-bench", warmupRounds: 2, samples: 3), { =>
             counter.value += 1
@@ -22,7 +22,7 @@ public class PerfBenchTestSuite {
     }
 
     @TestCase
-    public func testBenchCpuBindingProbe() {
+    public func testBenchCpuBindingProbe(): Unit {
         let notRequested = benchTryPinCurrentThread(-1)
         @Assert(notRequested.requested, false)
         @Assert(notRequested.applied, false)
@@ -34,7 +34,7 @@ public class PerfBenchTestSuite {
     }
 
     @TestCase
-    public func testBenchConfigValidation() {
+    public func testBenchConfigValidation(): Unit {
         try {
             _ = BenchConfig("", warmupRounds: 1, samples: 1)
             @Fail("empty benchmark name should be rejected")
@@ -58,7 +58,7 @@ public class PerfBenchTestSuite {
     }
 
     @TestCase
-    public func testBenchRunStableReportsAttemptAndThreshold() {
+    public func testBenchRunStableReportsAttemptAndThreshold(): Unit {
         let counter = BenchCallCounter()
         let stable = benchRunStable(
             BenchConfig("stable-bench", warmupRounds: 1, samples: 2),
@@ -76,7 +76,7 @@ public class PerfBenchTestSuite {
     }
 
     @TestCase
-    public func testBenchRunStableRetriesWhenThresholdTooStrict() {
+    public func testBenchRunStableRetriesWhenThresholdTooStrict(): Unit {
         let counter = BenchCallCounter()
         let stable = benchRunStable(
             BenchConfig("retry-bench", warmupRounds: 0, samples: 2),
@@ -97,7 +97,7 @@ public class PerfBenchTestSuite {
     }
 
     @TestCase
-    public func testBenchStabilityConfigValidation() {
+    public func testBenchStabilityConfigValidation(): Unit {
         try {
             _ = BenchStabilityConfig(maxSpreadRatio: 0.0, maxRetries: 1, sampleStep: 1)
             @Fail("non-positive spread ratio should be rejected")

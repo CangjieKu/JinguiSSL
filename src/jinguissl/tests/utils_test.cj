@@ -6,7 +6,7 @@ import jinguissl.crypto.error.CryptoException
 @Test
 public class UtilsTestSuite {
     @TestCase
-    public func testEndianConversion() {
+    public func testEndianConversion(): Unit {
         let bytesBE: Array<Byte> = [0x12, 0x34, 0x56, 0x78]
         let bytesLE: Array<Byte> = [0x78, 0x56, 0x34, 0x12]
 
@@ -17,7 +17,7 @@ public class UtilsTestSuite {
     }
 
     @TestCase
-    public func testSecureCopyAndZero() {
+    public func testSecureCopyAndZero(): Unit {
         let source: Array<Byte> = [1, 2, 3, 4]
         let copied = secureCopy(source)
         @Assert(copied, source)
@@ -36,14 +36,14 @@ public class UtilsTestSuite {
     }
 
     @TestCase
-    public func testConstantTimeEquals() {
+    public func testConstantTimeEquals(): Unit {
         @Assert(constantTimeEquals([1, 2, 3], [1, 2, 3]), true)
         @Assert(constantTimeEquals([1, 2, 3], [1, 2, 4]), false)
         @Assert(constantTimeEquals([1, 2, 3], [1, 2]), false)
     }
 
     @TestCase
-    public func testRandomSeedSize() {
+    public func testRandomSeedSize(): Unit {
         let seed = randomSeed(size: 16)
         @Assert(seed.size, 16)
 
@@ -56,7 +56,7 @@ public class UtilsTestSuite {
     }
 
     @TestCase
-    public func testCsprngApis() {
+    public func testCsprngApis(): Unit {
         let available = csprngIsAvailable()
         if (available) {
             let out = csprngBytes(32)
@@ -72,7 +72,7 @@ public class UtilsTestSuite {
     }
 
     @TestCase
-    public func testBoundsChecks() {
+    public func testBoundsChecks(): Unit {
         try {
             _ = bytesToUInt32BE([1, 2, 3], offset: 0)
             @Fail("bytesToUInt32BE should throw on short input")

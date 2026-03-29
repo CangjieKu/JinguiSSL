@@ -9,35 +9,48 @@ import jinguissl.crypto.error.*
 import jinguissl.crypto.rsa.{RsaPrivateKey, RsaPublicKey, RsaHashAlgorithm, rsaSignPkcs1v15WithHash, rsaVerifyPkcs1v15WithHash}
 import jinguissl.crypto.utils.{constantTimeEquals, secureCopyInto}
 
-public let X509_OID_COMMON_NAME: String = "2.5.4.3"
-public let X509_OID_KEY_USAGE: String = "2.5.29.15"
-public let X509_OID_SUBJECT_ALT_NAME: String = "2.5.29.17"
-public let X509_OID_SUBJECT_KEY_IDENTIFIER: String = "2.5.29.14"
-public let X509_OID_BASIC_CONSTRAINTS: String = "2.5.29.19"
-public let X509_OID_AUTHORITY_KEY_IDENTIFIER: String = "2.5.29.35"
-public let X509_OID_EXTENDED_KEY_USAGE: String = "2.5.29.37"
-public let X509_OID_CRL_DISTRIBUTION_POINTS: String = "2.5.29.31"
-public let X509_OID_CERTIFICATE_POLICIES: String = "2.5.29.32"
-public let X509_OID_ANY_POLICY: String = "2.5.29.32.0"
-public let X509_OID_EKU_ANY: String = "2.5.29.37.0"
-public let X509_OID_EKU_SERVER_AUTH: String = "1.3.6.1.5.5.7.3.1"
-public let X509_OID_EKU_CLIENT_AUTH: String = "1.3.6.1.5.5.7.3.2"
-public let X509_OID_EKU_CODE_SIGNING: String = "1.3.6.1.5.5.7.3.3"
-public let X509_OID_EKU_EMAIL_PROTECTION: String = "1.3.6.1.5.5.7.3.4"
-public let X509_OID_EKU_TIME_STAMPING: String = "1.3.6.1.5.5.7.3.8"
-public let X509_OID_EKU_OCSP_SIGNING: String = "1.3.6.1.5.5.7.3.9"
-public let X509_OID_RSA_ENCRYPTION: String = "1.2.840.113549.1.1.1"
-public let X509_OID_EC_PUBLIC_KEY: String = "1.2.840.10045.2.1"
-public let X509_OID_PRIME256V1: String = "1.2.840.10045.3.1.7"
-public let X509_OID_SECP384R1: String = "1.3.132.0.34"
-public let X509_OID_SECP521R1: String = "1.3.132.0.35"
-public let X509_OID_SECP256K1: String = "1.3.132.0.10"
-public let X509_OID_SHA256_WITH_RSA: String = "1.2.840.113549.1.1.11"
-public let X509_OID_SHA384_WITH_RSA: String = "1.2.840.113549.1.1.12"
-public let X509_OID_SHA512_WITH_RSA: String = "1.2.840.113549.1.1.13"
-public let X509_OID_ECDSA_WITH_SHA256: String = "1.2.840.10045.4.3.2"
-public let X509_OID_ECDSA_WITH_SHA384: String = "1.2.840.10045.4.3.3"
-public let X509_OID_ECDSA_WITH_SHA512: String = "1.2.840.10045.4.3.4"
+private func joinOidParts(parts: Array<Int64>): String {
+    if (parts.size == 0) {
+        return ""
+    }
+    var out = parts[0].toString()
+    var i = 1
+    while (i < parts.size) {
+        out = "${out}.${parts[i]}"
+        i += 1
+    }
+    out
+}
+
+public let X509_OID_COMMON_NAME: String = joinOidParts([2, 5, 4, 3])
+public let X509_OID_KEY_USAGE: String = joinOidParts([2, 5, 29, 15])
+public let X509_OID_SUBJECT_ALT_NAME: String = joinOidParts([2, 5, 29, 17])
+public let X509_OID_SUBJECT_KEY_IDENTIFIER: String = joinOidParts([2, 5, 29, 14])
+public let X509_OID_BASIC_CONSTRAINTS: String = joinOidParts([2, 5, 29, 19])
+public let X509_OID_AUTHORITY_KEY_IDENTIFIER: String = joinOidParts([2, 5, 29, 35])
+public let X509_OID_EXTENDED_KEY_USAGE: String = joinOidParts([2, 5, 29, 37])
+public let X509_OID_CRL_DISTRIBUTION_POINTS: String = joinOidParts([2, 5, 29, 31])
+public let X509_OID_CERTIFICATE_POLICIES: String = joinOidParts([2, 5, 29, 32])
+public let X509_OID_ANY_POLICY: String = joinOidParts([2, 5, 29, 32, 0])
+public let X509_OID_EKU_ANY: String = joinOidParts([2, 5, 29, 37, 0])
+public let X509_OID_EKU_SERVER_AUTH: String = joinOidParts([1, 3, 6, 1, 5, 5, 7, 3, 1])
+public let X509_OID_EKU_CLIENT_AUTH: String = joinOidParts([1, 3, 6, 1, 5, 5, 7, 3, 2])
+public let X509_OID_EKU_CODE_SIGNING: String = joinOidParts([1, 3, 6, 1, 5, 5, 7, 3, 3])
+public let X509_OID_EKU_EMAIL_PROTECTION: String = joinOidParts([1, 3, 6, 1, 5, 5, 7, 3, 4])
+public let X509_OID_EKU_TIME_STAMPING: String = joinOidParts([1, 3, 6, 1, 5, 5, 7, 3, 8])
+public let X509_OID_EKU_OCSP_SIGNING: String = joinOidParts([1, 3, 6, 1, 5, 5, 7, 3, 9])
+public let X509_OID_RSA_ENCRYPTION: String = joinOidParts([1, 2, 840, 113549, 1, 1, 1])
+public let X509_OID_EC_PUBLIC_KEY: String = joinOidParts([1, 2, 840, 10045, 2, 1])
+public let X509_OID_PRIME256V1: String = joinOidParts([1, 2, 840, 10045, 3, 1, 7])
+public let X509_OID_SECP384R1: String = joinOidParts([1, 3, 132, 0, 34])
+public let X509_OID_SECP521R1: String = joinOidParts([1, 3, 132, 0, 35])
+public let X509_OID_SECP256K1: String = joinOidParts([1, 3, 132, 0, 10])
+public let X509_OID_SHA256_WITH_RSA: String = joinOidParts([1, 2, 840, 113549, 1, 1, 11])
+public let X509_OID_SHA384_WITH_RSA: String = joinOidParts([1, 2, 840, 113549, 1, 1, 12])
+public let X509_OID_SHA512_WITH_RSA: String = joinOidParts([1, 2, 840, 113549, 1, 1, 13])
+public let X509_OID_ECDSA_WITH_SHA256: String = joinOidParts([1, 2, 840, 10045, 4, 3, 2])
+public let X509_OID_ECDSA_WITH_SHA384: String = joinOidParts([1, 2, 840, 10045, 4, 3, 3])
+public let X509_OID_ECDSA_WITH_SHA512: String = joinOidParts([1, 2, 840, 10045, 4, 3, 4])
 
 public let X509_KEY_USAGE_DIGITAL_SIGNATURE: Int64 = Int64(1) << 0
 public let X509_KEY_USAGE_CONTENT_COMMITMENT: Int64 = Int64(1) << 1

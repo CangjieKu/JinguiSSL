@@ -1241,7 +1241,7 @@ public func aesEcbEncrypt(key: Array<Byte>, plaintext: Array<Byte>, pkcs7!: Bool
     var offset = 0
     while (offset < input.size) {
         copyBlockFromOffsetUnchecked(input, offset, inBlock)
-        encryptBlockWithScheduleIntoUnchecked(inBlock, roundKeys, nr, state, outBlock)
+        encryptBlockWithScheduleIntoUnchecked(inBlock, roundKeys, nr, outBlock)
         copyBlockToOffsetUnchecked(outBlock, out, offset)
         offset += AES_BLOCK_SIZE
     }
@@ -1320,7 +1320,7 @@ public func aesCbcEncrypt(
     var offset = 0
     while (offset < input.size) {
         xorInputBlockWithPrevUnchecked(input, offset, prev, workBlock)
-        encryptBlockWithScheduleIntoUnchecked(workBlock, roundKeys, nr, state, outBlock)
+        encryptBlockWithScheduleIntoUnchecked(workBlock, roundKeys, nr, outBlock)
         copyBlockToOffsetUnchecked(outBlock, out, offset)
         secureCopyInto(outBlock, prev)
         offset += AES_BLOCK_SIZE
@@ -1769,7 +1769,7 @@ private func encryptBlockWithScheduleInto(
     if (state.size != AES_BLOCK_SIZE || out.size != AES_BLOCK_SIZE) {
         throw CryptoException(InvalidArgument, "AES scratch length must be 16 bytes")
     }
-    encryptBlockWithScheduleIntoUnchecked(block, words, nr, state, out)
+    encryptBlockWithScheduleIntoUnchecked(block, words, nr, out)
 }
 
 @OverflowWrapping
@@ -1777,7 +1777,6 @@ private func encryptBlockWithScheduleIntoUnchecked(
     block: Array<Byte>,
     words: Array<UInt32>,
     nr: Int64,
-    state: Array<UInt8>,
     out: Array<Byte>
 ): Unit {
     var s0 = packWordBE(block, 0) ^ words[0]
@@ -1932,7 +1931,7 @@ private func cryptBlocksWithSchedule(
         if (decrypt) {
             decryptBlockWithScheduleIntoUnchecked(inBlock, roundKeys, nr, state, outBlock)
         } else {
-            encryptBlockWithScheduleIntoUnchecked(inBlock, roundKeys, nr, state, outBlock)
+            encryptBlockWithScheduleIntoUnchecked(inBlock, roundKeys, nr, outBlock)
         }
         copyBlockToOffsetUnchecked(outBlock, out, offset)
         offset += AES_BLOCK_SIZE
@@ -2393,7 +2392,7 @@ private func ctrCryptWithScheduleInc128(
 
     var offset = 0
     while (offset < input.size) {
-        encryptBlockWithScheduleIntoUnchecked(counter, roundKeys, nr, state, keystream)
+        encryptBlockWithScheduleIntoUnchecked(counter, roundKeys, nr, keystream)
         let remaining = input.size - offset
         let take = if (remaining < AES_BLOCK_SIZE) {
             remaining
@@ -2446,7 +2445,7 @@ private func ctrCryptWithScheduleInc32Into(
 
     var offset = 0
     while (offset < input.size) {
-        encryptBlockWithScheduleIntoUnchecked(counter, roundKeys, nr, state, keystream)
+        encryptBlockWithScheduleIntoUnchecked(counter, roundKeys, nr, keystream)
         let remaining = input.size - offset
         let take = if (remaining < AES_BLOCK_SIZE) {
             remaining
@@ -2591,7 +2590,7 @@ private func aesGcmEncryptWithContextSoftwareInto(
     var offset = 0
     let fullLimit = plaintext.size - (plaintext.size % AES_BLOCK_SIZE)
     while (offset < fullLimit) {
-        encryptBlockWithScheduleIntoUnchecked(counter, ctx.schedule.roundKeys, ctx.schedule.nr, state, keystream)
+        encryptBlockWithScheduleIntoUnchecked(counter, ctx.schedule.roundKeys, ctx.schedule.nr, keystream)
         let plainHi = decodeUInt64BE(plaintext, offset)
         let plainLo = decodeUInt64BE(plaintext, offset + 8)
         let streamHi = decodeUInt64BE(keystream, 0)
@@ -2611,7 +2610,7 @@ private func aesGcmEncryptWithContextSoftwareInto(
     }
 
     if (offset < plaintext.size) {
-        encryptBlockWithScheduleIntoUnchecked(counter, ctx.schedule.roundKeys, ctx.schedule.nr, state, keystream)
+        encryptBlockWithScheduleIntoUnchecked(counter, ctx.schedule.roundKeys, ctx.schedule.nr, keystream)
         let take = plaintext.size - offset
         var i = 0
         var hiShift = Int64(56)
@@ -2641,7 +2640,7 @@ private func aesGcmEncryptWithContextSoftwareInto(
         ctx.ghashTableHi,
         ctx.ghashTableLo
     )
-    encryptBlockWithScheduleIntoUnchecked(j0, ctx.schedule.roundKeys, ctx.schedule.nr, state, keystream)
+    encryptBlockWithScheduleIntoUnchecked(j0, ctx.schedule.roundKeys, ctx.schedule.nr, keystream)
     let tagHi = decodeUInt64BE(keystream, 0) ^ hashHi
     let tagLo = decodeUInt64BE(keystream, 8) ^ hashLo
 

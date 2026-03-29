@@ -19,7 +19,7 @@ private let P384_GY: BigNum = BigNum.fromHex("3617DE4A96262C6F5D9E98BF9292DC29F8
 @Test
 public class Tls12HandshakeFlowTestSuite {
     @TestCase
-    public func testTls12RsaHandshakeFlowAndRecordRoundTrip() {
+    public func testTls12RsaHandshakeFlowAndRecordRoundTrip(): Unit {
         let profile = FipsProfile.phase1Default()
         tls12HandshakeRequireAllowed(profile, Tls12KeyExchange.RSA)
 
@@ -50,7 +50,7 @@ public class Tls12HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls12EcdheHandshakeFlowAndRecordRoundTrip() {
+    public func testTls12EcdheHandshakeFlowAndRecordRoundTrip(): Unit {
         let profile = FipsProfile.phase1Default()
         tls12HandshakeRequireAllowed(profile, Tls12KeyExchange.ECDHE_P256)
 
@@ -85,7 +85,7 @@ public class Tls12HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls12EcdheP384HandshakeFlowAndRecordRoundTrip() {
+    public func testTls12EcdheP384HandshakeFlowAndRecordRoundTrip(): Unit {
         let profile = FipsProfile.phase1Default()
         tls12HandshakeRequireAllowed(profile, Tls12KeyExchange.ECDHE_P384)
 
@@ -120,7 +120,7 @@ public class Tls12HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls12EcdheHandshakeFlowWithChacha20Poly1305RecordLayer() {
+    public func testTls12EcdheHandshakeFlowWithChacha20Poly1305RecordLayer(): Unit {
         let profile = FipsProfile.fromText("TLS1.2\nCHACHA20-POLY1305\nECDH")
         tls12HandshakeRequireAllowed(profile, Tls12KeyExchange.ECDHE_P256, algorithm: CHACHA20_POLY1305)
 
@@ -165,10 +165,10 @@ public class Tls12HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls12ClientHelloCarriesSniAlpnAndOcspExtensions() {
+    public func testTls12ClientHelloCarriesSniAlpnAndOcspExtensions(): Unit {
         let clientHelloEncoded = tls12BuildClientHello(
             Tls12KeyExchange.ECDHE_P256,
-            serverName: "api.example.com",
+            serverName: TEST_HOST_API,
             alpnProtocols: ["h2", "http/1.1"],
             requestOcspStapling: true
         )
@@ -177,7 +177,7 @@ public class Tls12HandshakeFlowTestSuite {
         let sniExt = tlsFindExtension(hello.extensions, TLS_EXT_SERVER_NAME) ?? throw Exception("missing SNI extension")
         let sniHosts = tlsParseServerNameExtension(sniExt)
         @Assert(sniHosts.size, 1)
-        @Assert(sniHosts[0], "api.example.com")
+        @Assert(sniHosts[0], TEST_HOST_API)
 
         let alpnExt = tlsFindExtension(hello.extensions, TLS_EXT_ALPN) ?? throw Exception("missing ALPN extension")
         let alpn = tlsParseAlpnExtension(alpnExt)
@@ -191,7 +191,7 @@ public class Tls12HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls12HandshakeRejectMalformedInputs() {
+    public func testTls12HandshakeRejectMalformedInputs(): Unit {
         let serverPrivateKey = loadRsa2048PrivateKey()
         let (clientKeyExchange, _) = tls12BuildRsaClientKeyExchange(serverPrivateKey.publicKey)
         let tampered = clientKeyExchange.clone()
@@ -215,7 +215,7 @@ public class Tls12HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls12HandshakeComplianceGate() {
+    public func testTls12HandshakeComplianceGate(): Unit {
         let blocked = FipsProfile.fromText("TLS1.2\nAES-GCM")
         try {
             tls12HandshakeRequireAllowed(blocked, Tls12KeyExchange.RSA)
@@ -250,7 +250,7 @@ public class Tls12HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls12CertificateHandshakeParseAndVerify() {
+    public func testTls12CertificateHandshakeParseAndVerify(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -258,7 +258,7 @@ public class Tls12HandshakeFlowTestSuite {
         let encoded = tls12BuildCertificateHandshakeFromDerChain([leaf.der, intermediate.der])
         let parsedChain = tls12ParseCertificateChainFromHandshake(encoded)
         @Assert(parsedChain.size, 2)
-        @Assert(parsedChain[0].subject.commonName(), "www.example.com")
+        @Assert(parsedChain[0].subject.commonName(), TEST_HOST_WWW)
         @Assert(parsedChain[1].subject.commonName(), "Policy Intermediate")
 
         let policy = X509VerificationPolicy(

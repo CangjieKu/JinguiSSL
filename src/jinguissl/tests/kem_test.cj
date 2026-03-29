@@ -14,7 +14,7 @@ private let P256_GY: BigNum = BigNum.fromHex("4FE342E2FE1A7F9B8EE7EB4A7C0F9E162B
 @Test
 public class KemTestSuite {
     @TestCase
-    public func testRsaKemRoundTrip() {
+    public func testRsaKemRoundTrip(): Unit {
         let privateKey = loadRsa2048PrivateKey()
         let info = "stage3-rsa-kem".toArray()
         let (ciphertext, secretEnc) = rsaKemEncapsulate(
@@ -35,7 +35,7 @@ public class KemTestSuite {
     }
 
     @TestCase
-    public func testRsaKemRejectInvalidCiphertext() {
+    public func testRsaKemRejectInvalidCiphertext(): Unit {
         let privateKey = loadRsa2048PrivateKey()
 
         let shortCipher = Array<Byte>(255, repeat: 0)
@@ -56,7 +56,7 @@ public class KemTestSuite {
     }
 
     @TestCase
-    public func testEcdhKemRoundTrip() {
+    public func testEcdhKemRoundTrip(): Unit {
         let receiverPrivate = EcPrivateKey(P256, BigNum.one())
         let receiverPublic = EcPublicKey(P256, P256_GX, P256_GY)
         let info = "stage3-ecdh-kem".toArray()
@@ -80,7 +80,7 @@ public class KemTestSuite {
     }
 
     @TestCase
-    public func testEcdhKemRejectInvalidInput() {
+    public func testEcdhKemRejectInvalidInput(): Unit {
         let receiverPrivate = EcPrivateKey(P256, BigNum.one())
         let receiverPublic = EcPublicKey(P256, P256_GX, P256_GY)
 
@@ -105,7 +105,7 @@ public class KemTestSuite {
     }
 
     @TestCase
-    public func testKemComplianceRequireAllowed() {
+    public func testKemComplianceRequireAllowed(): Unit {
         let defaultProfile = FipsProfile.phase1Default()
         rsaKemRequireAllowed(defaultProfile)
         ecdhKemRequireAllowed(defaultProfile)

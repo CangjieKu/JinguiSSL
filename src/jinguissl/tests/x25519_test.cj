@@ -6,7 +6,7 @@ import jinguissl.crypto.x25519.*
 @Test
 public class X25519TestSuite {
     @TestCase
-    public func testRfc7748DhVectors() {
+    public func testRfc7748DhVectors(): Unit {
         let alicePrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let bobPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
 
@@ -23,7 +23,7 @@ public class X25519TestSuite {
     }
 
     @TestCase
-    public func testClampAndGeneratePrivateKey() {
+    public func testClampAndGeneratePrivateKey(): Unit {
         let raw = Array<Byte>(X25519_KEY_LEN, repeat: UInt8(0xff))
         let clamped = x25519ClampPrivateKey(raw)
         @Assert(UInt8(clamped[0]) & UInt8(0x07), UInt8(0))
@@ -38,7 +38,7 @@ public class X25519TestSuite {
     }
 
     @TestCase
-    public func testRejectInvalidLengthAndAllZeroSharedSecret() {
+    public func testRejectInvalidLengthAndAllZeroSharedSecret(): Unit {
         try {
             _ = x25519PublicFromPrivate([UInt8(0x01), UInt8(0x02)])
             @Fail("short private key should fail")

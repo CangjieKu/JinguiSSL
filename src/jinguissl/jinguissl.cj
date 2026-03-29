@@ -1,3 +1,4 @@
 package jinguissl
 
-public let PHASE1_VERSION: String = "0.1.0"
+public let LIBRARY_VERSION: String = "0.6.0"
+public let PHASE1_VERSION: String = LIBRARY_VERSION

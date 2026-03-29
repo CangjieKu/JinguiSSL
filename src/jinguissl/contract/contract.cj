@@ -399,7 +399,9 @@ public func contractCapabilityInfo(): ContractCapabilityInfo {
             "tls13-session-ticket-psk",
             "tls13-key-update",
             "http-server-tls-config-validation",
+            "http-server-tls-material-preparation",
             "http-client-tls-config-validation",
+            "http-client-trust-material-preparation",
             "alpn-normalization"
         ],
         [
@@ -410,12 +412,14 @@ public func contractCapabilityInfo(): ContractCapabilityInfo {
             "ecdsa-p256-hostkey",
             "ecdsa-p384-hostkey",
             "ed25519-hostkey",
+            "host-signing-material-facade",
             "client-initial-handshake-facade",
             "server-initial-handshake-facade",
             "host-verification-required-modes"
         ],
         [
             "pem-der-parse",
+            "pem-bundle-normalization",
             "certificate-chain-verify",
             "http-client-peer-certificate-verify",
             "hostname-policy",
@@ -762,6 +766,78 @@ public class ContractHttpServerTlsConfigValidationOutcome {
     }
 }
 
+public class ContractHttpServerTlsMaterial {
+    public let validation: ContractHttpServerTlsConfigValidationResult
+    public let certificateChainPemBlocks: Array<String>
+    public let privateKeyPem: String
+
+    public init(
+        validation: ContractHttpServerTlsConfigValidationResult,
+        certificateChainPemBlocks: Array<String>,
+        privateKeyPem: String
+    ) {
+        if (certificateChainPemBlocks.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "TLS server certificate PEM blocks must not be empty")
+        }
+        if (Int64(certificateChainPemBlocks.size) != validation.certificateChainLength) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS server certificate PEM block count must match validation result"
+            )
+        }
+        let normalizedPrivateKeyPem = privateKeyPem.trimAscii()
+        if (normalizedPrivateKeyPem.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "TLS server private key PEM must not be empty")
+        }
+        this.validation = validation
+        this.certificateChainPemBlocks = contractCloneTrimmedPemBlocks(
+            certificateChainPemBlocks,
+            "TLS server certificate PEM"
+        )
+        this.privateKeyPem = normalizedPrivateKeyPem
+    }
+
+    public func leafCertificatePem(): String {
+        certificateChainPemBlocks[0]
+    }
+
+    public func certificateChainPemBundle(): String {
+        contractJoinPemBlocks(certificateChainPemBlocks)
+    }
+}
+
+public class ContractHttpServerTlsMaterialOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractHttpServerTlsMaterial
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractHttpServerTlsMaterial = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "TLS server material outcome message must not be empty")
+        }
+        contractValidateOutcomeState(
+            ok,
+            code,
+            igniteCode,
+            result,
+            "TLS server material outcome result"
+        )
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
 public class ContractHttpClientTlsConfigValidationResult {
     public let trustAnchorCount: Int64
     public let intermediateCount: Int64
@@ -805,6 +881,92 @@ public class ContractHttpClientTlsConfigValidationResult {
     }
 }
 
+public class ContractHttpClientTlsTrustMaterial {
+    public let validation: ContractHttpClientTlsConfigValidationResult
+    public let trustAnchorPemBlocks: Array<String>
+    public let intermediatePemBlocks: Array<String>
+    public let validationTime: String
+    public let pinPolicy: ContractX509PinPolicy
+
+    public init(
+        validation: ContractHttpClientTlsConfigValidationResult,
+        trustAnchorPemBlocks: Array<String>,
+        intermediatePemBlocks!: Array<String> = [],
+        validationTime!: String = "",
+        pinPolicy!: ContractX509PinPolicy = ContractX509PinPolicy()
+    ) {
+        if (trustAnchorPemBlocks.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "TLS client trust anchor PEM blocks must not be empty")
+        }
+        if (Int64(trustAnchorPemBlocks.size) != validation.trustAnchorCount) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS client trust anchor PEM block count must match validation result"
+            )
+        }
+        if (Int64(intermediatePemBlocks.size) != validation.intermediateCount) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS client intermediate PEM block count must match validation result"
+            )
+        }
+        this.validation = validation
+        this.trustAnchorPemBlocks = contractCloneTrimmedPemBlocks(
+            trustAnchorPemBlocks,
+            "TLS client trust anchor PEM"
+        )
+        this.intermediatePemBlocks = contractCloneTrimmedPemBlocks(
+            intermediatePemBlocks,
+            "TLS client intermediate PEM"
+        )
+        this.validationTime = validationTime.trimAscii()
+        this.pinPolicy = ContractX509PinPolicy(
+            allowedLeafDerSha256: pinPolicy.allowedLeafDerSha256,
+            allowedLeafSpkiSha256: pinPolicy.allowedLeafSpkiSha256
+        )
+    }
+
+    public func trustAnchorsPemBundle(): String {
+        contractJoinPemBlocks(trustAnchorPemBlocks)
+    }
+
+    public func intermediatesPemBundle(): String {
+        contractJoinPemBlocks(intermediatePemBlocks)
+    }
+}
+
+public class ContractHttpClientTlsTrustMaterialOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractHttpClientTlsTrustMaterial
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractHttpClientTlsTrustMaterial = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "TLS client material outcome message must not be empty")
+        }
+        contractValidateOutcomeState(
+            ok,
+            code,
+            igniteCode,
+            result,
+            "TLS client material outcome result"
+        )
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
 public class ContractHttpClientTlsConfigValidationOutcome {
     public let ok: Bool
     public let message: String
@@ -834,6 +996,107 @@ public class ContractHttpClientTlsConfigValidationOutcome {
         this.code = code
         this.igniteCode = igniteCode
         this.result = result
+    }
+}
+
+public class ContractHttpServerTlsConfigRequest {
+    public let certificateChainPem: String
+    public let privateKeyPem: String
+    public let alpnProtocols: Array<String>
+    public let requireHttp2Alpn: Bool
+
+    public init(
+        certificateChainPem: String,
+        privateKeyPem: String,
+        alpnProtocols!: Array<String> = ["h2", "http/1.1"],
+        requireHttp2Alpn!: Bool = true
+    ) {
+        if (certificateChainPem.trimAscii().size == 0 || privateKeyPem.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "HTTP server TLS config request fields are invalid"
+            )
+        }
+        this.certificateChainPem = certificateChainPem
+        this.privateKeyPem = privateKeyPem
+        this.alpnProtocols = alpnProtocols.clone()
+        this.requireHttp2Alpn = requireHttp2Alpn
+    }
+}
+
+public class ContractHttpClientTlsTrustRequest {
+    public let trustAnchorsPemBundle: String
+    public let intermediatesPemBundle: String
+    public let hostname: String
+    public let validationTime: String
+    public let pinPolicy: ContractX509PinPolicy
+    public let policy: ContractTlsHttpNegotiationPolicy
+
+    public init(
+        trustAnchorsPemBundle: String,
+        intermediatesPemBundle!: String = "",
+        hostname!: String = "",
+        validationTime!: String = "",
+        pinPolicy!: ContractX509PinPolicy = ContractX509PinPolicy(),
+        policy!: ContractTlsHttpNegotiationPolicy = ContractTlsHttpNegotiationPolicy()
+    ) {
+        if (trustAnchorsPemBundle.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "HTTP client TLS trust request trust anchors must not be empty"
+            )
+        }
+        this.trustAnchorsPemBundle = trustAnchorsPemBundle
+        this.intermediatesPemBundle = intermediatesPemBundle
+        this.hostname = hostname
+        this.validationTime = validationTime
+        this.pinPolicy = ContractX509PinPolicy(
+            allowedLeafDerSha256: pinPolicy.allowedLeafDerSha256,
+            allowedLeafSpkiSha256: pinPolicy.allowedLeafSpkiSha256
+        )
+        this.policy = ContractTlsHttpNegotiationPolicy(
+            requireServerName: policy.requireServerName,
+            allowedServerNames: policy.allowedServerNames,
+            alpnPreference: policy.alpnPreference
+        )
+    }
+}
+
+public class ContractHttpClientTlsPeerPemRequest {
+    public let leafPem: String
+    public let trust: ContractHttpClientTlsTrustRequest
+
+    public init(
+        leafPem: String,
+        trust: ContractHttpClientTlsTrustRequest
+    ) {
+        if (leafPem.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "HTTP client TLS peer PEM request leaf certificate must not be empty"
+            )
+        }
+        this.leafPem = leafPem
+        this.trust = trust
+    }
+}
+
+public class ContractHttpClientTlsPeerChainRequest {
+    public let certificateChainPemBundle: String
+    public let trust: ContractHttpClientTlsTrustRequest
+
+    public init(
+        certificateChainPemBundle: String,
+        trust: ContractHttpClientTlsTrustRequest
+    ) {
+        if (certificateChainPemBundle.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "HTTP client TLS peer chain request certificate chain must not be empty"
+            )
+        }
+        this.certificateChainPemBundle = certificateChainPemBundle
+        this.trust = trust
     }
 }
 
@@ -984,6 +1247,139 @@ public class ContractSshHostVerificationOutcome {
     }
 }
 
+public class ContractSshHostSigningResult {
+    public let serverHostKey: Array<Byte>
+    public let hostSignature: Array<Byte>
+    public let hostKeyAlgorithm: String
+    public let hostSignatureAlgorithm: String
+    public let hostKeySha256: Array<Byte>
+
+    public init(
+        serverHostKey: Array<Byte>,
+        hostSignature: Array<Byte>,
+        hostKeyAlgorithm: String,
+        hostSignatureAlgorithm: String,
+        hostKeySha256: Array<Byte>
+    ) {
+        if (serverHostKey.size == 0 || hostSignature.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH host signing result fields must not be empty")
+        }
+        if (hostKeyAlgorithm.size == 0 || hostSignatureAlgorithm.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH host signing algorithms must not be empty")
+        }
+        if (hostKeySha256.size != 32) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH host signing fingerprint must be SHA-256 sized")
+        }
+        this.serverHostKey = serverHostKey.clone()
+        this.hostSignature = hostSignature.clone()
+        this.hostKeyAlgorithm = hostKeyAlgorithm
+        this.hostSignatureAlgorithm = hostSignatureAlgorithm
+        this.hostKeySha256 = hostKeySha256.clone()
+    }
+}
+
+public class ContractSshHostSigningOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractSshHostSigningResult
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractSshHostSigningResult = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH host signing outcome message must not be empty")
+        }
+        contractValidateOutcomeState(
+            ok,
+            code,
+            igniteCode,
+            result,
+            "SSH host signing outcome result"
+        )
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
+public class ContractSshHostSigningRsaPkcs8Request {
+    public let hostPrivateKeyPkcs8Pem: String
+    public let exchangeHash: Array<Byte>
+    public let signatureAlgorithm: String
+
+    public init(
+        hostPrivateKeyPkcs8Pem: String,
+        exchangeHash: Array<Byte>,
+        signatureAlgorithm!: String = "rsa-sha2-256"
+    ) {
+        if (
+            hostPrivateKeyPkcs8Pem.trimAscii().size == 0 ||
+            exchangeHash.size == 0 ||
+            signatureAlgorithm.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH RSA host signing request fields are invalid"
+            )
+        }
+        this.hostPrivateKeyPkcs8Pem = hostPrivateKeyPkcs8Pem
+        this.exchangeHash = exchangeHash.clone()
+        this.signatureAlgorithm = signatureAlgorithm.trimAscii()
+    }
+}
+
+public class ContractSshHostSigningEcdsaPkcs8Request {
+    public let hostPrivateKeyPkcs8Pem: String
+    public let exchangeHash: Array<Byte>
+
+    public init(
+        hostPrivateKeyPkcs8Pem: String,
+        exchangeHash: Array<Byte>
+    ) {
+        if (
+            hostPrivateKeyPkcs8Pem.trimAscii().size == 0 ||
+            exchangeHash.size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH ECDSA host signing request fields are invalid"
+            )
+        }
+        this.hostPrivateKeyPkcs8Pem = hostPrivateKeyPkcs8Pem
+        this.exchangeHash = exchangeHash.clone()
+    }
+}
+
+public class ContractSshHostSigningEd25519SeedRequest {
+    public let hostPrivateKeySeed: Array<Byte>
+    public let exchangeHash: Array<Byte>
+
+    public init(
+        hostPrivateKeySeed: Array<Byte>,
+        exchangeHash: Array<Byte>
+    ) {
+        if (
+            hostPrivateKeySeed.size != 32 ||
+            exchangeHash.size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH Ed25519 host signing request fields are invalid"
+            )
+        }
+        this.hostPrivateKeySeed = hostPrivateKeySeed.clone()
+        this.exchangeHash = exchangeHash.clone()
+    }
+}
+
 public class ContractSshServerInitialHandshakeResult {
     public let encodedReply: Array<Byte>
     public let sharedSecret: Array<Byte>
@@ -1121,6 +1517,38 @@ public class ContractSshClientInitialHandshakeResult {
 
     public func transport(): ContractSshTransportChannel {
         _transport
+    }
+}
+
+public class ContractSshServerInitialHandshakeOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractSshServerInitialHandshakeResult
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractSshServerInitialHandshakeResult = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH server handshake outcome message must not be empty")
+        }
+        contractValidateOutcomeState(
+            ok,
+            code,
+            igniteCode,
+            result,
+            "SSH server handshake outcome result"
+        )
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
     }
 }
 
@@ -1448,6 +1876,310 @@ public class ContractTls12HandshakeSecrets {
     }
 }
 
+public class ContractTls12HttpClientHelloRequest {
+    public let keyExchange: ContractTls12KeyExchange
+    public let sessionId: Array<Byte>
+    public let serverName: String
+    public let alpnProtocols: Array<String>
+    public let requestOcspStapling: Bool
+
+    public init(
+        keyExchange: ContractTls12KeyExchange,
+        sessionId!: Array<Byte> = [],
+        serverName!: String = "",
+        alpnProtocols!: Array<String> = [],
+        requestOcspStapling!: Bool = false
+    ) {
+        this.keyExchange = keyExchange
+        this.sessionId = sessionId.clone()
+        this.serverName = serverName
+        this.alpnProtocols = alpnProtocols.clone()
+        this.requestOcspStapling = requestOcspStapling
+    }
+}
+
+public class ContractTls12HttpServerHelloRequest {
+    public let encodedClientHello: Array<Byte>
+    public let keyExchange: ContractTls12KeyExchange
+
+    public init(
+        encodedClientHello: Array<Byte>,
+        keyExchange: ContractTls12KeyExchange
+    ) {
+        if (encodedClientHello.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.2 HTTP ServerHello request encoded ClientHello must not be empty"
+            )
+        }
+        this.encodedClientHello = encodedClientHello.clone()
+        this.keyExchange = keyExchange
+    }
+}
+
+public class ContractTls12CertificateHandshakeFromPemChainRequest {
+    public let certChainPemBundle: String
+
+    public init(certChainPemBundle: String) {
+        if (certChainPemBundle.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.2 certificate handshake request PEM bundle must not be empty"
+            )
+        }
+        this.certChainPemBundle = certChainPemBundle
+    }
+}
+
+public class ContractTls12VerifyCertificateHandshakeForHttpRequest {
+    public let encodedCertificateHandshake: Array<Byte>
+    public let trust: ContractHttpClientTlsTrustRequest
+
+    public init(
+        encodedCertificateHandshake: Array<Byte>,
+        trust: ContractHttpClientTlsTrustRequest
+    ) {
+        if (encodedCertificateHandshake.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.2 certificate verify request handshake must not be empty"
+            )
+        }
+        this.encodedCertificateHandshake = encodedCertificateHandshake.clone()
+        this.trust = trust
+    }
+}
+
+public class ContractTls12RsaClientKeyExchangeFromLeafPemRequest {
+    public let serverLeafPem: String
+
+    public init(serverLeafPem: String) {
+        if (serverLeafPem.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.2 RSA ClientKeyExchange request server leaf certificate must not be empty"
+            )
+        }
+        this.serverLeafPem = serverLeafPem
+    }
+}
+
+public class ContractTls12ProcessRsaClientKeyExchangeRequest {
+    public let serverPrivateKeyPkcs8Pem: String
+    public let encodedClientKeyExchange: Array<Byte>
+
+    public init(
+        serverPrivateKeyPkcs8Pem: String,
+        encodedClientKeyExchange: Array<Byte>
+    ) {
+        if (
+            serverPrivateKeyPkcs8Pem.trimAscii().size == 0 ||
+            encodedClientKeyExchange.size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.2 RSA ClientKeyExchange process request fields are invalid"
+            )
+        }
+        this.serverPrivateKeyPkcs8Pem = serverPrivateKeyPkcs8Pem
+        this.encodedClientKeyExchange = encodedClientKeyExchange.clone()
+    }
+}
+
+public class ContractTls12DeriveSecretsFromPreMasterRequest {
+    public let preMasterSecret: Array<Byte>
+    public let clientRandom: Array<Byte>
+    public let serverRandom: Array<Byte>
+    public let keyLen: Int64
+    public let ivLen: Int64
+
+    public init(
+        preMasterSecret: Array<Byte>,
+        clientRandom: Array<Byte>,
+        serverRandom: Array<Byte>,
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12
+    ) {
+        if (
+            preMasterSecret.size == 0 ||
+            clientRandom.size != 32 ||
+            serverRandom.size != 32 ||
+            keyLen <= 0 ||
+            ivLen <= 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.2 pre-master secret derivation request fields are invalid"
+            )
+        }
+        this.preMasterSecret = preMasterSecret.clone()
+        this.clientRandom = clientRandom.clone()
+        this.serverRandom = serverRandom.clone()
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+    }
+}
+
+public class ContractTls12EcdheServerKeyExchangeRequest {
+    public let keyExchange: ContractTls12KeyExchange
+    public let serverPrivateScalar: ?Array<Byte>
+
+    public init(
+        keyExchange: ContractTls12KeyExchange,
+        serverPrivateScalar!: ?Array<Byte> = None
+    ) {
+        if (let Some(value) <- serverPrivateScalar) {
+            if (value.size == 0) {
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "TLS1.2 ECDHE server key exchange request scalar must not be empty"
+                )
+            }
+            this.serverPrivateScalar = Some(value.clone())
+        } else {
+            this.serverPrivateScalar = None
+        }
+        this.keyExchange = keyExchange
+    }
+}
+
+public class ContractTls12EcdheClientKeyExchangeRequest {
+    public let keyExchange: ContractTls12KeyExchange
+    public let clientPrivateScalar: ?Array<Byte>
+
+    public init(
+        keyExchange: ContractTls12KeyExchange,
+        clientPrivateScalar!: ?Array<Byte> = None
+    ) {
+        if (let Some(value) <- clientPrivateScalar) {
+            if (value.size == 0) {
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "TLS1.2 ECDHE client key exchange request scalar must not be empty"
+                )
+            }
+            this.clientPrivateScalar = Some(value.clone())
+        } else {
+            this.clientPrivateScalar = None
+        }
+        this.keyExchange = keyExchange
+    }
+}
+
+public class ContractTls12DeriveClientSecretsFromEcdheRequest {
+    public let keyExchange: ContractTls12KeyExchange
+    public let clientPrivateScalar: Array<Byte>
+    public let encodedServerKeyExchange: Array<Byte>
+    public let clientRandom: Array<Byte>
+    public let serverRandom: Array<Byte>
+    public let keyLen: Int64
+    public let ivLen: Int64
+
+    public init(
+        keyExchange: ContractTls12KeyExchange,
+        clientPrivateScalar: Array<Byte>,
+        encodedServerKeyExchange: Array<Byte>,
+        clientRandom: Array<Byte>,
+        serverRandom: Array<Byte>,
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12
+    ) {
+        if (
+            clientPrivateScalar.size == 0 ||
+            encodedServerKeyExchange.size == 0 ||
+            clientRandom.size != 32 ||
+            serverRandom.size != 32 ||
+            keyLen <= 0 ||
+            ivLen <= 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.2 ECDHE client secret derivation request fields are invalid"
+            )
+        }
+        this.keyExchange = keyExchange
+        this.clientPrivateScalar = clientPrivateScalar.clone()
+        this.encodedServerKeyExchange = encodedServerKeyExchange.clone()
+        this.clientRandom = clientRandom.clone()
+        this.serverRandom = serverRandom.clone()
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+    }
+}
+
+public class ContractTls12DeriveServerSecretsFromEcdheRequest {
+    public let keyExchange: ContractTls12KeyExchange
+    public let serverPrivateScalar: Array<Byte>
+    public let encodedClientKeyExchange: Array<Byte>
+    public let clientRandom: Array<Byte>
+    public let serverRandom: Array<Byte>
+    public let keyLen: Int64
+    public let ivLen: Int64
+
+    public init(
+        keyExchange: ContractTls12KeyExchange,
+        serverPrivateScalar: Array<Byte>,
+        encodedClientKeyExchange: Array<Byte>,
+        clientRandom: Array<Byte>,
+        serverRandom: Array<Byte>,
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12
+    ) {
+        if (
+            serverPrivateScalar.size == 0 ||
+            encodedClientKeyExchange.size == 0 ||
+            clientRandom.size != 32 ||
+            serverRandom.size != 32 ||
+            keyLen <= 0 ||
+            ivLen <= 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.2 ECDHE server secret derivation request fields are invalid"
+            )
+        }
+        this.keyExchange = keyExchange
+        this.serverPrivateScalar = serverPrivateScalar.clone()
+        this.encodedClientKeyExchange = encodedClientKeyExchange.clone()
+        this.clientRandom = clientRandom.clone()
+        this.serverRandom = serverRandom.clone()
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+    }
+}
+
+public class ContractTls13HttpClientHelloX25519Request {
+    public let serverName: String
+    public let alpnProtocols: Array<String>
+    public let clientPrivateKey: ?Array<Byte>
+
+    public init(
+        serverName: String,
+        alpnProtocols!: Array<String> = [],
+        clientPrivateKey!: ?Array<Byte> = None
+    ) {
+        if (serverName.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 HTTP ClientHello request server name must not be empty"
+            )
+        }
+        if (let Some(value) <- clientPrivateKey) {
+            if (value.size != 32) {
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "TLS1.3 HTTP ClientHello request private key must be 32 bytes"
+                )
+            }
+            this.clientPrivateKey = Some(value.clone())
+        } else {
+            this.clientPrivateKey = None
+        }
+        this.serverName = serverName.trimAscii()
+        this.alpnProtocols = alpnProtocols.clone()
+    }
+}
+
 public class ContractTls13HttpClientHelloX25519 {
     public let encodedClientHello: Array<Byte>
     public let clientPrivateKey: Array<Byte>
@@ -1467,6 +2199,43 @@ public class ContractTls13HttpClientHelloX25519 {
         this.encodedClientHello = encodedClientHello.clone()
         this.clientPrivateKey = clientPrivateKey.clone()
         this.clientPublicKey = clientPublicKey.clone()
+    }
+}
+
+public class ContractTls13HttpServerFlightX25519Request {
+    public let encodedClientHello: Array<Byte>
+    public let serverKeyExchangePrivate: Array<Byte>
+    public let certChainPemBundle: String
+    public let certificatePrivateKeyPkcs8Pem: String
+    public let policy: ContractTlsHttpNegotiationPolicy
+
+    public init(
+        encodedClientHello: Array<Byte>,
+        serverKeyExchangePrivate: Array<Byte>,
+        certChainPemBundle: String,
+        certificatePrivateKeyPkcs8Pem: String,
+        policy!: ContractTlsHttpNegotiationPolicy = ContractTlsHttpNegotiationPolicy()
+    ) {
+        if (
+            encodedClientHello.size == 0 ||
+            serverKeyExchangePrivate.size != 32 ||
+            certChainPemBundle.trimAscii().size == 0 ||
+            certificatePrivateKeyPkcs8Pem.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 HTTP server flight request fields are invalid"
+            )
+        }
+        this.encodedClientHello = encodedClientHello.clone()
+        this.serverKeyExchangePrivate = serverKeyExchangePrivate.clone()
+        this.certChainPemBundle = certChainPemBundle
+        this.certificatePrivateKeyPkcs8Pem = certificatePrivateKeyPkcs8Pem
+        this.policy = ContractTlsHttpNegotiationPolicy(
+            requireServerName: policy.requireServerName,
+            allowedServerNames: policy.allowedServerNames,
+            alpnPreference: policy.alpnPreference
+        )
     }
 }
 
@@ -1514,6 +2283,22 @@ public class ContractTls13HttpServerFlight {
         this.selectedAlpn = selectedAlpn.trimAscii()
         this.requestedServerName = requestedServerName.trimAscii().toAsciiLower()
         this.acknowledgedServerName = acknowledgedServerName
+    }
+}
+
+public class ContractTls13HttpVerifyServerFlightX25519Request {
+    public let clientHello: ContractTls13HttpClientHelloX25519
+    public let serverFlight: ContractTls13HttpServerFlight
+    public let trust: ContractHttpClientTlsTrustRequest
+
+    public init(
+        clientHello: ContractTls13HttpClientHelloX25519,
+        serverFlight: ContractTls13HttpServerFlight,
+        trust: ContractHttpClientTlsTrustRequest
+    ) {
+        this.clientHello = clientHello
+        this.serverFlight = serverFlight
+        this.trust = trust
     }
 }
 
@@ -4653,6 +5438,17 @@ public func contractValidateHttpServerTlsConfigInput(
     }
 }
 
+public func contractValidateHttpServerTlsConfigRequest(
+    request: ContractHttpServerTlsConfigRequest
+): ContractHttpServerTlsConfigValidationResult {
+    contractValidateHttpServerTlsConfigInput(
+        request.certificateChainPem,
+        request.privateKeyPem,
+        alpnProtocols: request.alpnProtocols,
+        requireHttp2Alpn: request.requireHttp2Alpn
+    )
+}
+
 public func contractTryValidateHttpServerTlsConfigInput(
     certificateChainPem: String,
     privateKeyPem: String,
@@ -4669,6 +5465,102 @@ public func contractTryValidateHttpServerTlsConfigInput(
         ContractHttpServerTlsConfigValidationOutcome(true, "OK", result: Some(result))
     } catch (e: ContractException) {
         ContractHttpServerTlsConfigValidationOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractTryValidateHttpServerTlsConfigRequest(
+    request: ContractHttpServerTlsConfigRequest
+): ContractHttpServerTlsConfigValidationOutcome {
+    try {
+        let result = contractValidateHttpServerTlsConfigRequest(request)
+        ContractHttpServerTlsConfigValidationOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpServerTlsConfigValidationOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareHttpServerTlsMaterial(
+    certificateChainPem: String,
+    privateKeyPem: String,
+    alpnProtocols!: Array<String> = ["h2", "http/1.1"],
+    requireHttp2Alpn!: Bool = true
+): ContractHttpServerTlsMaterial {
+    try {
+        let validation = contractValidateHttpServerTlsConfigInput(
+            certificateChainPem,
+            privateKeyPem,
+            alpnProtocols: alpnProtocols,
+            requireHttp2Alpn: requireHttp2Alpn
+        )
+        let certChain = x509ParsePemChain(certificateChainPem)
+        ContractHttpServerTlsMaterial(
+            validation,
+            contractCertificatesToPemBlocks(certChain),
+            privateKeyPem
+        )
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "x509"),
+            "TLS server material preparation failed: ${e.message}"
+        )
+    }
+}
+
+public func contractPrepareHttpServerTlsMaterialRequest(
+    request: ContractHttpServerTlsConfigRequest
+): ContractHttpServerTlsMaterial {
+    contractPrepareHttpServerTlsMaterial(
+        request.certificateChainPem,
+        request.privateKeyPem,
+        alpnProtocols: request.alpnProtocols,
+        requireHttp2Alpn: request.requireHttp2Alpn
+    )
+}
+
+public func contractTryPrepareHttpServerTlsMaterial(
+    certificateChainPem: String,
+    privateKeyPem: String,
+    alpnProtocols!: Array<String> = ["h2", "http/1.1"],
+    requireHttp2Alpn!: Bool = true
+): ContractHttpServerTlsMaterialOutcome {
+    try {
+        let result = contractPrepareHttpServerTlsMaterial(
+            certificateChainPem,
+            privateKeyPem,
+            alpnProtocols: alpnProtocols,
+            requireHttp2Alpn: requireHttp2Alpn
+        )
+        ContractHttpServerTlsMaterialOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpServerTlsMaterialOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractTryPrepareHttpServerTlsMaterialRequest(
+    request: ContractHttpServerTlsConfigRequest
+): ContractHttpServerTlsMaterialOutcome {
+    try {
+        let result = contractPrepareHttpServerTlsMaterialRequest(request)
+        ContractHttpServerTlsMaterialOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpServerTlsMaterialOutcome(
             false,
             e.message,
             code: Some(e.code),
@@ -4734,6 +5626,116 @@ public func contractValidateHttpClientTlsConfigInput(
     }
 }
 
+public func contractValidateHttpClientTlsTrustRequest(
+    request: ContractHttpClientTlsTrustRequest
+): ContractHttpClientTlsConfigValidationResult {
+    contractValidateHttpClientTlsConfigInput(
+        request.trustAnchorsPemBundle,
+        intermediatesPemBundle: request.intermediatesPemBundle,
+        hostname: request.hostname,
+        validationTime: request.validationTime,
+        pinPolicy: request.pinPolicy,
+        policy: request.policy
+    )
+}
+
+public func contractPrepareHttpClientTlsTrustMaterial(
+    trustAnchorsPemBundle: String,
+    intermediatesPemBundle!: String = "",
+    hostname!: String = "",
+    validationTime!: String = "",
+    pinPolicy!: ContractX509PinPolicy = ContractX509PinPolicy(),
+    policy!: ContractTlsHttpNegotiationPolicy = ContractTlsHttpNegotiationPolicy()
+): ContractHttpClientTlsTrustMaterial {
+    try {
+        let validation = contractValidateHttpClientTlsConfigInput(
+            trustAnchorsPemBundle,
+            intermediatesPemBundle: intermediatesPemBundle,
+            hostname: hostname,
+            validationTime: validationTime,
+            pinPolicy: pinPolicy,
+            policy: policy
+        )
+        let anchors = x509ParsePemChain(trustAnchorsPemBundle)
+        let intermediates: Array<X509Certificate> = if (intermediatesPemBundle.trimAscii().size == 0) {
+            []
+        } else {
+            x509ParsePemChain(intermediatesPemBundle)
+        }
+        ContractHttpClientTlsTrustMaterial(
+            validation,
+            contractCertificatesToPemBlocks(anchors),
+            intermediatePemBlocks: contractCertificatesToPemBlocks(intermediates),
+            validationTime: validationTime,
+            pinPolicy: pinPolicy
+        )
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "x509"),
+            "TLS client trust material preparation failed: ${e.message}"
+        )
+    }
+}
+
+public func contractPrepareHttpClientTlsTrustMaterialRequest(
+    request: ContractHttpClientTlsTrustRequest
+): ContractHttpClientTlsTrustMaterial {
+    contractPrepareHttpClientTlsTrustMaterial(
+        request.trustAnchorsPemBundle,
+        intermediatesPemBundle: request.intermediatesPemBundle,
+        hostname: request.hostname,
+        validationTime: request.validationTime,
+        pinPolicy: request.pinPolicy,
+        policy: request.policy
+    )
+}
+
+public func contractTryPrepareHttpClientTlsTrustMaterial(
+    trustAnchorsPemBundle: String,
+    intermediatesPemBundle!: String = "",
+    hostname!: String = "",
+    validationTime!: String = "",
+    pinPolicy!: ContractX509PinPolicy = ContractX509PinPolicy(),
+    policy!: ContractTlsHttpNegotiationPolicy = ContractTlsHttpNegotiationPolicy()
+): ContractHttpClientTlsTrustMaterialOutcome {
+    try {
+        let result = contractPrepareHttpClientTlsTrustMaterial(
+            trustAnchorsPemBundle,
+            intermediatesPemBundle: intermediatesPemBundle,
+            hostname: hostname,
+            validationTime: validationTime,
+            pinPolicy: pinPolicy,
+            policy: policy
+        )
+        ContractHttpClientTlsTrustMaterialOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpClientTlsTrustMaterialOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractTryPrepareHttpClientTlsTrustMaterialRequest(
+    request: ContractHttpClientTlsTrustRequest
+): ContractHttpClientTlsTrustMaterialOutcome {
+    try {
+        let result = contractPrepareHttpClientTlsTrustMaterialRequest(request)
+        ContractHttpClientTlsTrustMaterialOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpClientTlsTrustMaterialOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
 public func contractTryValidateHttpClientTlsConfigInput(
     trustAnchorsPemBundle: String,
     intermediatesPemBundle!: String = "",
@@ -4751,6 +5753,22 @@ public func contractTryValidateHttpClientTlsConfigInput(
             pinPolicy: pinPolicy,
             policy: policy
         )
+        ContractHttpClientTlsConfigValidationOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpClientTlsConfigValidationOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractTryValidateHttpClientTlsTrustRequest(
+    request: ContractHttpClientTlsTrustRequest
+): ContractHttpClientTlsConfigValidationOutcome {
+    try {
+        let result = contractValidateHttpClientTlsTrustRequest(request)
         ContractHttpClientTlsConfigValidationOutcome(true, "OK", result: Some(result))
     } catch (e: ContractException) {
         ContractHttpClientTlsConfigValidationOutcome(
@@ -4789,6 +5807,20 @@ public func contractVerifyHttpClientPeerCertificatePem(
     )
 }
 
+public func contractVerifyHttpClientPeerCertificatePemRequest(
+    request: ContractHttpClientTlsPeerPemRequest
+): ContractX509VerifyResult {
+    contractVerifyHttpClientPeerCertificatePem(
+        request.leafPem,
+        request.trust.trustAnchorsPemBundle,
+        intermediatesPemBundle: request.trust.intermediatesPemBundle,
+        hostname: request.trust.hostname,
+        validationTime: request.trust.validationTime,
+        pinPolicy: request.trust.pinPolicy,
+        policy: request.trust.policy
+    )
+}
+
 public func contractTryVerifyHttpClientPeerCertificatePem(
     leafPem: String,
     trustAnchorsPemBundle: String,
@@ -4808,6 +5840,28 @@ public func contractTryVerifyHttpClientPeerCertificatePem(
             pinPolicy: pinPolicy,
             policy: policy
         )
+        ContractX509VerifyOutcome(
+            true,
+            ContractErrorCode.VerifyFailed,
+            "OK",
+            result: Some(result)
+        )
+    } catch (e: ContractException) {
+        ContractX509VerifyOutcome(
+            false,
+            e.code,
+            e.message,
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code)),
+            result: None
+        )
+    }
+}
+
+public func contractTryVerifyHttpClientPeerCertificatePemRequest(
+    request: ContractHttpClientTlsPeerPemRequest
+): ContractX509VerifyOutcome {
+    try {
+        let result = contractVerifyHttpClientPeerCertificatePemRequest(request)
         ContractX509VerifyOutcome(
             true,
             ContractErrorCode.VerifyFailed,
@@ -4852,6 +5906,20 @@ public func contractVerifyHttpClientPeerCertificateChainPem(
     )
 }
 
+public func contractVerifyHttpClientPeerCertificateChainPemRequest(
+    request: ContractHttpClientTlsPeerChainRequest
+): ContractX509VerifyResult {
+    contractVerifyHttpClientPeerCertificateChainPem(
+        request.certificateChainPemBundle,
+        request.trust.trustAnchorsPemBundle,
+        intermediatesPemBundle: request.trust.intermediatesPemBundle,
+        hostname: request.trust.hostname,
+        validationTime: request.trust.validationTime,
+        pinPolicy: request.trust.pinPolicy,
+        policy: request.trust.policy
+    )
+}
+
 public func contractTryVerifyHttpClientPeerCertificateChainPem(
     certificateChainPemBundle: String,
     trustAnchorsPemBundle: String,
@@ -4871,6 +5939,28 @@ public func contractTryVerifyHttpClientPeerCertificateChainPem(
             pinPolicy: pinPolicy,
             policy: policy
         )
+        ContractX509VerifyOutcome(
+            true,
+            ContractErrorCode.VerifyFailed,
+            "OK",
+            result: Some(result)
+        )
+    } catch (e: ContractException) {
+        ContractX509VerifyOutcome(
+            false,
+            e.code,
+            e.message,
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code)),
+            result: None
+        )
+    }
+}
+
+public func contractTryVerifyHttpClientPeerCertificateChainPemRequest(
+    request: ContractHttpClientTlsPeerChainRequest
+): ContractX509VerifyOutcome {
+    try {
+        let result = contractVerifyHttpClientPeerCertificateChainPemRequest(request)
         ContractX509VerifyOutcome(
             true,
             ContractErrorCode.VerifyFailed,
@@ -4913,6 +6003,18 @@ public func contractTls12BuildHttpClientHello(
     }
 }
 
+public func contractTls12BuildHttpClientHelloRequest(
+    request: ContractTls12HttpClientHelloRequest
+): ContractTls12ClientHello {
+    contractTls12BuildHttpClientHello(
+        request.keyExchange,
+        sessionId: request.sessionId,
+        serverName: request.serverName,
+        alpnProtocols: request.alpnProtocols,
+        requestOcspStapling: request.requestOcspStapling
+    )
+}
+
 public func contractTls12BuildHttpServerHello(
     encodedClientHello: Array<Byte>,
     keyExchange: ContractTls12KeyExchange
@@ -4930,6 +6032,15 @@ public func contractTls12BuildHttpServerHello(
             "TLS1.2 HTTP ServerHello build failed: ${e.message}"
         )
     }
+}
+
+public func contractTls12BuildHttpServerHelloRequest(
+    request: ContractTls12HttpServerHelloRequest
+): ContractTls12ServerHello {
+    contractTls12BuildHttpServerHello(
+        request.encodedClientHello,
+        request.keyExchange
+    )
 }
 
 public func contractTls12BuildCertificateHandshakeFromPemChain(
@@ -4950,6 +6061,12 @@ public func contractTls12BuildCertificateHandshakeFromPemChain(
             "TLS1.2 certificate handshake build failed: ${e.message}"
         )
     }
+}
+
+public func contractTls12BuildCertificateHandshakeFromPemChainRequest(
+    request: ContractTls12CertificateHandshakeFromPemChainRequest
+): Array<Byte> {
+    contractTls12BuildCertificateHandshakeFromPemChain(request.certChainPemBundle)
 }
 
 public func contractTls12VerifyCertificateHandshakeForHttp(
@@ -4995,6 +6112,19 @@ public func contractTls12VerifyCertificateHandshakeForHttp(
     }
 }
 
+public func contractTls12VerifyCertificateHandshakeForHttpRequest(
+    request: ContractTls12VerifyCertificateHandshakeForHttpRequest
+): ContractX509VerifyResult {
+    contractTls12VerifyCertificateHandshakeForHttp(
+        request.encodedCertificateHandshake,
+        request.trust.trustAnchorsPemBundle,
+        intermediatesPemBundle: request.trust.intermediatesPemBundle,
+        hostname: request.trust.hostname,
+        validationTime: request.trust.validationTime,
+        pinPolicy: request.trust.pinPolicy
+    )
+}
+
 public func contractTls12BuildRsaClientKeyExchangeFromLeafPem(
     serverLeafPem: String
 ): ContractTls12RsaClientKeyExchange {
@@ -5011,6 +6141,12 @@ public func contractTls12BuildRsaClientKeyExchangeFromLeafPem(
     }
 }
 
+public func contractTls12BuildRsaClientKeyExchangeFromLeafPemRequest(
+    request: ContractTls12RsaClientKeyExchangeFromLeafPemRequest
+): ContractTls12RsaClientKeyExchange {
+    contractTls12BuildRsaClientKeyExchangeFromLeafPem(request.serverLeafPem)
+}
+
 public func contractTls12ProcessRsaClientKeyExchange(
     serverPrivateKeyPkcs8Pem: String,
     encodedClientKeyExchange: Array<Byte>
@@ -5024,6 +6160,15 @@ public func contractTls12ProcessRsaClientKeyExchange(
             "TLS1.2 RSA ClientKeyExchange process failed: ${e.message}"
         )
     }
+}
+
+public func contractTls12ProcessRsaClientKeyExchangeRequest(
+    request: ContractTls12ProcessRsaClientKeyExchangeRequest
+): Array<Byte> {
+    contractTls12ProcessRsaClientKeyExchange(
+        request.serverPrivateKeyPkcs8Pem,
+        request.encodedClientKeyExchange
+    )
 }
 
 public func contractTls12DeriveSecretsFromPreMaster(
@@ -5048,6 +6193,18 @@ public func contractTls12DeriveSecretsFromPreMaster(
             "TLS1.2 handshake secret derivation failed: ${e.message}"
         )
     }
+}
+
+public func contractTls12DeriveSecretsFromPreMasterRequest(
+    request: ContractTls12DeriveSecretsFromPreMasterRequest
+): ContractTls12HandshakeSecrets {
+    contractTls12DeriveSecretsFromPreMaster(
+        request.preMasterSecret,
+        request.clientRandom,
+        request.serverRandom,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen
+    )
 }
 
 public func contractTls12BuildEcdheServerKeyExchange(
@@ -5075,6 +6232,15 @@ public func contractTls12BuildEcdheServerKeyExchange(
     }
 }
 
+public func contractTls12BuildEcdheServerKeyExchangeRequest(
+    request: ContractTls12EcdheServerKeyExchangeRequest
+): ContractTls12EcdheServerKeyExchange {
+    contractTls12BuildEcdheServerKeyExchange(
+        request.keyExchange,
+        serverPrivateScalar: request.serverPrivateScalar
+    )
+}
+
 public func contractTls12BuildEcdheClientKeyExchange(
     keyExchange: ContractTls12KeyExchange,
     clientPrivateScalar!: ?Array<Byte> = None
@@ -5098,6 +6264,15 @@ public func contractTls12BuildEcdheClientKeyExchange(
             "TLS1.2 ECDHE ClientKeyExchange build failed: ${e.message}"
         )
     }
+}
+
+public func contractTls12BuildEcdheClientKeyExchangeRequest(
+    request: ContractTls12EcdheClientKeyExchangeRequest
+): ContractTls12EcdheClientKeyExchange {
+    contractTls12BuildEcdheClientKeyExchange(
+        request.keyExchange,
+        clientPrivateScalar: request.clientPrivateScalar
+    )
 }
 
 public func contractTls12DeriveClientSecretsFromEcdhe(
@@ -5135,6 +6310,20 @@ public func contractTls12DeriveClientSecretsFromEcdhe(
     }
 }
 
+public func contractTls12DeriveClientSecretsFromEcdheRequest(
+    request: ContractTls12DeriveClientSecretsFromEcdheRequest
+): ContractTls12HandshakeSecrets {
+    contractTls12DeriveClientSecretsFromEcdhe(
+        request.keyExchange,
+        request.clientPrivateScalar,
+        request.encodedServerKeyExchange,
+        request.clientRandom,
+        request.serverRandom,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen
+    )
+}
+
 public func contractTls12DeriveServerSecretsFromEcdhe(
     keyExchange: ContractTls12KeyExchange,
     serverPrivateScalar: Array<Byte>,
@@ -5168,6 +6357,20 @@ public func contractTls12DeriveServerSecretsFromEcdhe(
             "TLS1.2 ECDHE server secret derivation failed: ${e.message}"
         )
     }
+}
+
+public func contractTls12DeriveServerSecretsFromEcdheRequest(
+    request: ContractTls12DeriveServerSecretsFromEcdheRequest
+): ContractTls12HandshakeSecrets {
+    contractTls12DeriveServerSecretsFromEcdhe(
+        request.keyExchange,
+        request.serverPrivateScalar,
+        request.encodedClientKeyExchange,
+        request.clientRandom,
+        request.serverRandom,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen
+    )
 }
 
 public func contractTls12CreateClientRecordChannel(
@@ -5346,6 +6549,16 @@ public func contractTls13BuildHttpClientHelloX25519(
     }
 }
 
+public func contractTls13BuildHttpClientHelloX25519Request(
+    request: ContractTls13HttpClientHelloX25519Request
+): ContractTls13HttpClientHelloX25519 {
+    contractTls13BuildHttpClientHelloX25519(
+        request.serverName,
+        alpnProtocols: request.alpnProtocols,
+        clientPrivateKey: request.clientPrivateKey
+    )
+}
+
 public func contractTls13BuildHttpServerFlightX25519(
     encodedClientHello: Array<Byte>,
     serverKeyExchangePrivate: Array<Byte>,
@@ -5395,6 +6608,18 @@ public func contractTls13BuildHttpServerFlightX25519(
     }
 }
 
+public func contractTls13BuildHttpServerFlightX25519Request(
+    request: ContractTls13HttpServerFlightX25519Request
+): ContractTls13HttpServerFlight {
+    contractTls13BuildHttpServerFlightX25519(
+        request.encodedClientHello,
+        request.serverKeyExchangePrivate,
+        request.certChainPemBundle,
+        request.certificatePrivateKeyPkcs8Pem,
+        policy: request.policy
+    )
+}
+
 public func contractTls13BuildHttpServerFlightX25519Rsa(
     encodedClientHello: Array<Byte>,
     serverKeyExchangePrivate: Array<Byte>,
@@ -5431,6 +6656,21 @@ public func contractTls13VerifyHttpServerFlightX25519(
         pinPolicy: pinPolicy,
         policy: policy
     ).result
+}
+
+public func contractTls13VerifyHttpServerFlightX25519Request(
+    request: ContractTls13HttpVerifyServerFlightX25519Request
+): ContractTls13HttpClientResult {
+    contractTls13VerifyHttpServerFlightX25519(
+        request.clientHello,
+        request.serverFlight,
+        request.trust.trustAnchorsPemBundle,
+        intermediatesPemBundle: request.trust.intermediatesPemBundle,
+        hostname: request.trust.hostname,
+        validationTime: request.trust.validationTime,
+        pinPolicy: request.trust.pinPolicy,
+        policy: request.trust.policy
+    )
 }
 
 public func contractTls13VerifyHttpServerFlightX25519WithSession(
@@ -5502,6 +6742,21 @@ public func contractTls13VerifyHttpServerFlightX25519WithSession(
     }
 }
 
+public func contractTls13VerifyHttpServerFlightX25519WithSessionRequest(
+    request: ContractTls13HttpVerifyServerFlightX25519Request
+): ContractTls13HttpClientVerifiedSession {
+    contractTls13VerifyHttpServerFlightX25519WithSession(
+        request.clientHello,
+        request.serverFlight,
+        request.trust.trustAnchorsPemBundle,
+        intermediatesPemBundle: request.trust.intermediatesPemBundle,
+        hostname: request.trust.hostname,
+        validationTime: request.trust.validationTime,
+        pinPolicy: request.trust.pinPolicy,
+        policy: request.trust.policy
+    )
+}
+
 public func contractTryTls13VerifyHttpServerFlightX25519(
     clientHello: ContractTls13HttpClientHelloX25519,
     serverFlight: ContractTls13HttpServerFlight,
@@ -5534,6 +6789,22 @@ public func contractTryTls13VerifyHttpServerFlightX25519(
     }
 }
 
+public func contractTryTls13VerifyHttpServerFlightX25519Request(
+    request: ContractTls13HttpVerifyServerFlightX25519Request
+): ContractTls13HttpClientVerifyOutcome {
+    try {
+        let result = contractTls13VerifyHttpServerFlightX25519Request(request)
+        ContractTls13HttpClientVerifyOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractTls13HttpClientVerifyOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
 public func contractTryTls13VerifyHttpServerFlightX25519WithSession(
     clientHello: ContractTls13HttpClientHelloX25519,
     serverFlight: ContractTls13HttpServerFlight,
@@ -5555,6 +6826,22 @@ public func contractTryTls13VerifyHttpServerFlightX25519WithSession(
             pinPolicy: pinPolicy,
             policy: policy
         )
+        ContractTls13HttpClientVerifiedSessionOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractTls13HttpClientVerifiedSessionOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractTryTls13VerifyHttpServerFlightX25519WithSessionRequest(
+    request: ContractTls13HttpVerifyServerFlightX25519Request
+): ContractTls13HttpClientVerifiedSessionOutcome {
+    try {
+        let result = contractTls13VerifyHttpServerFlightX25519WithSessionRequest(request)
         ContractTls13HttpClientVerifiedSessionOutcome(true, "OK", result: Some(result))
     } catch (e: ContractException) {
         ContractTls13HttpClientVerifiedSessionOutcome(
@@ -5636,6 +6923,166 @@ public func contractSshBuildEd25519HostKeyBlobFromSeed(privateKeySeed: Array<Byt
     }
 }
 
+public func contractPrepareSshHostSigningRsa(
+    privateKey: RsaPrivateKey,
+    exchangeHash: Array<Byte>,
+    signatureAlgorithm!: String = "rsa-sha2-256"
+): ContractSshHostSigningResult {
+    let serverHostKey = contractSshEncodeRsaHostPublicKey(privateKey.publicKey)
+    let hostSignature = contractSshSignExchangeHashRsa(
+        privateKey,
+        exchangeHash,
+        signatureAlgorithm: signatureAlgorithm
+    )
+    contractBuildSshHostSigningResult(serverHostKey, hostSignature)
+}
+
+public func contractTryPrepareSshHostSigningRsa(
+    privateKey: RsaPrivateKey,
+    exchangeHash: Array<Byte>,
+    signatureAlgorithm!: String = "rsa-sha2-256"
+): ContractSshHostSigningOutcome {
+    try {
+        let result = contractPrepareSshHostSigningRsa(
+            privateKey,
+            exchangeHash,
+            signatureAlgorithm: signatureAlgorithm
+        )
+        ContractSshHostSigningOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshHostSigningOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareSshHostSigningRsaPkcs8Request(
+    request: ContractSshHostSigningRsaPkcs8Request
+): ContractSshHostSigningResult {
+    let privateKey = contractParseRsaPrivateKeyPkcs8PemForSshHostSigning(request.hostPrivateKeyPkcs8Pem)
+    contractPrepareSshHostSigningRsa(
+        privateKey,
+        request.exchangeHash,
+        signatureAlgorithm: request.signatureAlgorithm
+    )
+}
+
+public func contractTryPrepareSshHostSigningRsaPkcs8Request(
+    request: ContractSshHostSigningRsaPkcs8Request
+): ContractSshHostSigningOutcome {
+    try {
+        let result = contractPrepareSshHostSigningRsaPkcs8Request(request)
+        ContractSshHostSigningOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshHostSigningOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareSshHostSigningEcdsa(
+    privateKey: EcPrivateKey,
+    exchangeHash: Array<Byte>
+): ContractSshHostSigningResult {
+    let serverHostKey = contractSshEncodeEcdsaHostPublicKey(ecPublicFromPrivateKey(privateKey))
+    let hostSignature = contractSshSignExchangeHashEcdsa(privateKey, exchangeHash)
+    contractBuildSshHostSigningResult(serverHostKey, hostSignature)
+}
+
+public func contractTryPrepareSshHostSigningEcdsa(
+    privateKey: EcPrivateKey,
+    exchangeHash: Array<Byte>
+): ContractSshHostSigningOutcome {
+    try {
+        let result = contractPrepareSshHostSigningEcdsa(privateKey, exchangeHash)
+        ContractSshHostSigningOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshHostSigningOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareSshHostSigningEcdsaPkcs8Request(
+    request: ContractSshHostSigningEcdsaPkcs8Request
+): ContractSshHostSigningResult {
+    let privateKey = contractParseEcPrivateKeyPkcs8PemForSshHostSigning(request.hostPrivateKeyPkcs8Pem)
+    contractPrepareSshHostSigningEcdsa(privateKey, request.exchangeHash)
+}
+
+public func contractTryPrepareSshHostSigningEcdsaPkcs8Request(
+    request: ContractSshHostSigningEcdsaPkcs8Request
+): ContractSshHostSigningOutcome {
+    try {
+        let result = contractPrepareSshHostSigningEcdsaPkcs8Request(request)
+        ContractSshHostSigningOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshHostSigningOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareSshHostSigningEd25519(
+    privateKeySeed: Array<Byte>,
+    exchangeHash: Array<Byte>
+): ContractSshHostSigningResult {
+    let serverHostKey = contractSshBuildEd25519HostKeyBlobFromSeed(privateKeySeed)
+    let hostSignature = contractSshSignExchangeHashEd25519(privateKeySeed, exchangeHash)
+    contractBuildSshHostSigningResult(serverHostKey, hostSignature)
+}
+
+public func contractTryPrepareSshHostSigningEd25519(
+    privateKeySeed: Array<Byte>,
+    exchangeHash: Array<Byte>
+): ContractSshHostSigningOutcome {
+    try {
+        let result = contractPrepareSshHostSigningEd25519(privateKeySeed, exchangeHash)
+        ContractSshHostSigningOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshHostSigningOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareSshHostSigningEd25519SeedRequest(
+    request: ContractSshHostSigningEd25519SeedRequest
+): ContractSshHostSigningResult {
+    contractPrepareSshHostSigningEd25519(request.hostPrivateKeySeed, request.exchangeHash)
+}
+
+public func contractTryPrepareSshHostSigningEd25519SeedRequest(
+    request: ContractSshHostSigningEd25519SeedRequest
+): ContractSshHostSigningOutcome {
+    try {
+        let result = contractPrepareSshHostSigningEd25519SeedRequest(request)
+        ContractSshHostSigningOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshHostSigningOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
 public func contractSshSignExchangeHashEd25519(privateKeySeed: Array<Byte>, exchangeHash: Array<Byte>): Array<Byte> {
     try {
         sshSignExchangeHashEd25519(privateKeySeed, exchangeHash)
@@ -5680,6 +7127,40 @@ public func contractSshCompleteServerInitialHandshakeX25519Rsa(
     }
 }
 
+public func contractTrySshCompleteServerInitialHandshakeX25519Rsa(
+    transcript: SshKexExchangeTranscript,
+    serverPrivateKey: Array<Byte>,
+    encodedClientInit: Array<Byte>,
+    hostPrivateKey: RsaPrivateKey,
+    negotiated: SshNegotiatedAlgorithms,
+    encodedClientNewKeys: Array<Byte>,
+    encodedServerNewKeys: Array<Byte>,
+    signatureAlgorithm!: String = "rsa-sha2-256",
+    serverPublicKey!: Array<Byte> = []
+): ContractSshServerInitialHandshakeOutcome {
+    try {
+        let result = contractSshCompleteServerInitialHandshakeX25519Rsa(
+            transcript,
+            serverPrivateKey,
+            encodedClientInit,
+            hostPrivateKey,
+            negotiated,
+            encodedClientNewKeys,
+            encodedServerNewKeys,
+            signatureAlgorithm: signatureAlgorithm,
+            serverPublicKey: serverPublicKey
+        )
+        ContractSshServerInitialHandshakeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerInitialHandshakeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
 public func contractSshCompleteServerInitialHandshakeX25519Ecdsa(
     transcript: SshKexExchangeTranscript,
     serverPrivateKey: Array<Byte>,
@@ -5711,6 +7192,38 @@ public func contractSshCompleteServerInitialHandshakeX25519Ecdsa(
     }
 }
 
+public func contractTrySshCompleteServerInitialHandshakeX25519Ecdsa(
+    transcript: SshKexExchangeTranscript,
+    serverPrivateKey: Array<Byte>,
+    encodedClientInit: Array<Byte>,
+    hostPrivateKey: EcPrivateKey,
+    negotiated: SshNegotiatedAlgorithms,
+    encodedClientNewKeys: Array<Byte>,
+    encodedServerNewKeys: Array<Byte>,
+    serverPublicKey!: Array<Byte> = []
+): ContractSshServerInitialHandshakeOutcome {
+    try {
+        let result = contractSshCompleteServerInitialHandshakeX25519Ecdsa(
+            transcript,
+            serverPrivateKey,
+            encodedClientInit,
+            hostPrivateKey,
+            negotiated,
+            encodedClientNewKeys,
+            encodedServerNewKeys,
+            serverPublicKey: serverPublicKey
+        )
+        ContractSshServerInitialHandshakeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerInitialHandshakeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
 public func contractSshCompleteServerInitialHandshakeX25519Ed25519(
     transcript: SshKexExchangeTranscript,
     serverPrivateKey: Array<Byte>,
@@ -5738,6 +7251,38 @@ public func contractSshCompleteServerInitialHandshakeX25519Ed25519(
         throw ContractException(
             mapCryptoErrorForOperation(e, "ssh"),
             "SSH Ed25519 server initial handshake failed: ${e.message}"
+        )
+    }
+}
+
+public func contractTrySshCompleteServerInitialHandshakeX25519Ed25519(
+    transcript: SshKexExchangeTranscript,
+    serverPrivateKey: Array<Byte>,
+    encodedClientInit: Array<Byte>,
+    hostPrivateKeySeed: Array<Byte>,
+    negotiated: SshNegotiatedAlgorithms,
+    encodedClientNewKeys: Array<Byte>,
+    encodedServerNewKeys: Array<Byte>,
+    serverPublicKey!: Array<Byte> = []
+): ContractSshServerInitialHandshakeOutcome {
+    try {
+        let result = contractSshCompleteServerInitialHandshakeX25519Ed25519(
+            transcript,
+            serverPrivateKey,
+            encodedClientInit,
+            hostPrivateKeySeed,
+            negotiated,
+            encodedClientNewKeys,
+            encodedServerNewKeys,
+            serverPublicKey: serverPublicKey
+        )
+        ContractSshServerInitialHandshakeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerInitialHandshakeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
         )
     }
 }
@@ -6022,6 +7567,53 @@ private func contractTryParseEcPrivateKeyPkcs8Pem(pkcs8Pem: String): ?EcPrivateK
             return None
         }
         throw e
+    }
+}
+
+private func contractParseRsaPrivateKeyPkcs8PemForSshHostSigning(pkcs8Pem: String): RsaPrivateKey {
+    try {
+        x509ParseRsaPrivateKeyPkcs8Pem(pkcs8Pem)
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH RSA host signing request failed: ${e.message}"
+        )
+    }
+}
+
+private func contractParseEcPrivateKeyPkcs8PemForSshHostSigning(pkcs8Pem: String): EcPrivateKey {
+    try {
+        x509ParseEcPrivateKeyPkcs8Pem(pkcs8Pem)
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH ECDSA host signing request failed: ${e.message}"
+        )
+    }
+}
+
+private func contractBuildSshHostSigningResult(
+    serverHostKey: Array<Byte>,
+    hostSignature: Array<Byte>
+): ContractSshHostSigningResult {
+    try {
+        let hostKeyAlgorithm = sshExtractHostKeyAlgorithm(serverHostKey)
+        let hostSignatureAlgorithm = sshExtractHostSignatureAlgorithm(hostSignature)
+        let hostKeySha256 = contractSshComputeHostKeySha256(serverHostKey)
+        ContractSshHostSigningResult(
+            serverHostKey,
+            hostSignature,
+            hostKeyAlgorithm,
+            hostSignatureAlgorithm,
+            hostKeySha256
+        )
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH host signing result construction failed: ${e.message}"
+        )
     }
 }
 
@@ -6784,6 +8376,46 @@ private func contractTryParseEcPrivateKeyPem(privateKeyPem: String): ?EcPrivateK
     }
 }
 
+private func contractCertificatesToPemBlocks(certificates: Array<X509Certificate>): Array<String> {
+    let blocks = ArrayList<String>()
+    for (certificate in certificates) {
+        blocks.add(certificate.toPem())
+    }
+    blocks.toArray()
+}
+
+private func contractCloneTrimmedPemBlocks(pemBlocks: Array<String>, fieldName: String): Array<String> {
+    let normalized = ArrayList<String>()
+    for (pemBlock in pemBlocks) {
+        let trimmed = pemBlock.trimAscii()
+        if (trimmed.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "${fieldName} block must not be empty")
+        }
+        normalized.add(trimmed)
+    }
+    normalized.toArray()
+}
+
+private func contractJoinPemBlocks(pemBlocks: Array<String>): String {
+    if (pemBlocks.size == 0) {
+        return ""
+    }
+    var out = ""
+    var first = true
+    for (pemBlock in pemBlocks) {
+        let trimmed = pemBlock.trimAscii()
+        if (trimmed.size == 0) {
+            continue
+        }
+        if (!first) {
+            out += "\n"
+        }
+        out += trimmed
+        first = false
+    }
+    out
+}
+
 private func decodeEnvelopeField(text: String, fieldName: String): Array<Byte> {
     try {
         base64UrlDecode(text)
@@ -6929,6 +8561,126 @@ private func contractValidateOutcomeState(
     ok: Bool,
     code: ?ContractErrorCode,
     igniteCode: ?ContractIgniteCryptoErrorCode,
+    result: ?ContractHttpServerTlsMaterial,
+    resultLabel: String
+): Unit {
+    if (ok) {
+        match (code) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (igniteCode) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (result) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must exist when ok is true"
+                )
+        }
+    } else {
+        match (code) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must exist when ok is false"
+                )
+        }
+        match (igniteCode) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must exist when ok is false"
+                )
+        }
+        match (result) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must be empty when ok is false"
+                )
+            case None => ()
+        }
+    }
+}
+
+private func contractValidateOutcomeState(
+    ok: Bool,
+    code: ?ContractErrorCode,
+    igniteCode: ?ContractIgniteCryptoErrorCode,
+    result: ?ContractHttpClientTlsTrustMaterial,
+    resultLabel: String
+): Unit {
+    if (ok) {
+        match (code) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (igniteCode) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (result) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must exist when ok is true"
+                )
+        }
+    } else {
+        match (code) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must exist when ok is false"
+                )
+        }
+        match (igniteCode) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must exist when ok is false"
+                )
+        }
+        match (result) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must be empty when ok is false"
+                )
+            case None => ()
+        }
+    }
+}
+
+private func contractValidateOutcomeState(
+    ok: Bool,
+    code: ?ContractErrorCode,
+    igniteCode: ?ContractIgniteCryptoErrorCode,
     result: ?ContractHttpServerTlsConfigValidationResult,
     resultLabel: String
 ): Unit {
@@ -6990,6 +8742,126 @@ private func contractValidateOutcomeState(
     code: ?ContractErrorCode,
     igniteCode: ?ContractIgniteCryptoErrorCode,
     result: ?ContractSshHostVerificationResult,
+    resultLabel: String
+): Unit {
+    if (ok) {
+        match (code) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (igniteCode) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (result) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must exist when ok is true"
+                )
+        }
+    } else {
+        match (code) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must exist when ok is false"
+                )
+        }
+        match (igniteCode) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must exist when ok is false"
+                )
+        }
+        match (result) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must be empty when ok is false"
+                )
+            case None => ()
+        }
+    }
+}
+
+private func contractValidateOutcomeState(
+    ok: Bool,
+    code: ?ContractErrorCode,
+    igniteCode: ?ContractIgniteCryptoErrorCode,
+    result: ?ContractSshHostSigningResult,
+    resultLabel: String
+): Unit {
+    if (ok) {
+        match (code) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (igniteCode) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (result) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must exist when ok is true"
+                )
+        }
+    } else {
+        match (code) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must exist when ok is false"
+                )
+        }
+        match (igniteCode) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must exist when ok is false"
+                )
+        }
+        match (result) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must be empty when ok is false"
+                )
+            case None => ()
+        }
+    }
+}
+
+private func contractValidateOutcomeState(
+    ok: Bool,
+    code: ?ContractErrorCode,
+    igniteCode: ?ContractIgniteCryptoErrorCode,
+    result: ?ContractSshServerInitialHandshakeResult,
     resultLabel: String
 ): Unit {
     if (ok) {

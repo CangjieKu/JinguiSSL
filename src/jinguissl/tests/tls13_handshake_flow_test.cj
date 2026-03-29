@@ -20,7 +20,7 @@ private let P384_GY: BigNum = BigNum.fromHex("3617DE4A96262C6F5D9E98BF9292DC29F8
 @Test
 public class Tls13HandshakeFlowTestSuite {
     @TestCase
-    public func testTls13BuildHelloAndExtractKeyShare() {
+    public func testTls13BuildHelloAndExtractKeyShare(): Unit {
         let clientPublic = EcPublicKey(P256, P256_2G_X, P256_2G_Y)
         let serverPublic = EcPublicKey(P256, P256_GX, P256_GY)
 
@@ -39,7 +39,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13BuildHelloAndExtractKeyShareP384() {
+    public func testTls13BuildHelloAndExtractKeyShareP384(): Unit {
         let clientPublic = EcPublicKey(P384, P384_GX, P384_GY)
         let serverPublic = EcPublicKey(P384, P384_GX, P384_GY)
 
@@ -60,7 +60,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13EcdheFlowRecordRoundTrip() {
+    public func testTls13EcdheFlowRecordRoundTrip(): Unit {
         let clientPrivate = EcPrivateKey(P256, BigNum.fromHex("02"))
         let clientPublic = EcPublicKey(P256, P256_2G_X, P256_2G_Y)
         let serverPrivate = EcPrivateKey(P256, BigNum.one())
@@ -97,7 +97,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13EcdheP384FlowRecordRoundTrip() {
+    public func testTls13EcdheP384FlowRecordRoundTrip(): Unit {
         let profile = FipsProfile.fromText("TLS1.3\nAES-GCM\nECDH")
         tls13HandshakeRequireAllowed(profile, Tls13HandshakeMode.ECDHE_1RTT, ecdheCurve: P384)
 
@@ -133,7 +133,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13X25519FlowRecordRoundTrip() {
+    public func testTls13X25519FlowRecordRoundTrip(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let clientPublic = x25519PublicFromPrivate(clientPrivate)
@@ -168,7 +168,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13X25519CipherSuiteSelectionAndRecordLayerHandle() {
+    public func testTls13X25519CipherSuiteSelectionAndRecordLayerHandle(): Unit {
         @Assert(TLS13_CIPHER_SUITE_AES_128_GCM_SHA256, 0x1301)
         @Assert(TLS13_CIPHER_SUITE_CHACHA20_POLY1305_SHA256, 0x1303)
         @Assert(tls13CipherSuiteAeadAlgorithm(TLS13_CIPHER_SUITE_AES_128_GCM_SHA256).toString(), "AES-GCM")
@@ -230,7 +230,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13RecordChannelCloseNotifyLifecycle() {
+    public func testTls13RecordChannelCloseNotifyLifecycle(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let clientPublic = x25519PublicFromPrivate(clientPrivate)
@@ -296,7 +296,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13RecordChannelFatalAlertLifecycle() {
+    public func testTls13RecordChannelFatalAlertLifecycle(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let clientPublic = x25519PublicFromPrivate(clientPrivate)
@@ -348,7 +348,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13EcdheFlowWithChacha20Poly1305RecordRoundTrip() {
+    public func testTls13EcdheFlowWithChacha20Poly1305RecordRoundTrip(): Unit {
         let profile = FipsProfile.fromText("TLS1.3\nCHACHA20-POLY1305\nECDH")
         tls13HandshakeRequireAllowed(profile, Tls13HandshakeMode.ECDHE_1RTT, algorithm: CHACHA20_POLY1305)
 
@@ -384,9 +384,9 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13PskAndEarlyDataPlaceholder() {
+    public func testTls13PskAndEarlyDataPlaceholder(): Unit {
         let pskIdentity = "ticket-A".toArray()
-        let psk = hexToBytes("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+        let psk = hexToBytes(TEST_HEX_32_00112233445566778899AABBCCDDEEFF_00112233445566778899AABBCCDDEEFF)
 
         let clientHello = tls13BuildClientHelloPsk(pskIdentity)
         let serverHello = tls13BuildServerHelloForPsk(clientHello, selectedIdentityIndex: 0)
@@ -405,11 +405,11 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13SessionTicketPskBinderFlow() {
+    public func testTls13SessionTicketPskBinderFlow(): Unit {
         let identity = TlsSessionIdentity(
             TLS1_3,
             "resume-id-01".toArray(),
-            serverName: "api.example.com",
+            serverName: TEST_HOST_API,
             alpnProtocol: "h2"
         )
         let ticket = tlsCreateSessionTicket(
@@ -449,14 +449,14 @@ public class Tls13HandshakeFlowTestSuite {
         @Assert(tls13ExtractServerSelectedPskIdentity(serverHelloFromTicket), 0)
 
         let expiredTicket = tlsCreateSessionTicket(
-            TlsSessionIdentity(TLS1_3, "resume-id-expired".toArray(), serverName: "api.example.com", alpnProtocol: "h2"),
+            TlsSessionIdentity(TLS1_3, "resume-id-expired".toArray(), serverName: TEST_HOST_API, alpnProtocol: "h2"),
             hexToBytes("11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff"),
             nonce: [UInt8(0x20), UInt8(0x21)],
             nowUnixSeconds: 1900,
             ttlSeconds: 10
         )
         let fallbackTicket = tlsCreateSessionTicket(
-            TlsSessionIdentity(TLS1_3, "resume-id-fallback".toArray(), serverName: "api.example.com", alpnProtocol: "h2"),
+            TlsSessionIdentity(TLS1_3, "resume-id-fallback".toArray(), serverName: TEST_HOST_API, alpnProtocol: "h2"),
             hexToBytes("ffeeddccbbaa00998877665544332211ffeeddccbbaa00998877665544332211"),
             nonce: [UInt8(0x30), UInt8(0x31)],
             nowUnixSeconds: 2000,
@@ -495,7 +495,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13KeyUpdateAndTrafficSecretRotation() {
+    public func testTls13KeyUpdateAndTrafficSecretRotation(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let clientPublic = x25519PublicFromPrivate(clientPrivate)
@@ -549,7 +549,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ExporterKeyingMaterial() {
+    public func testTls13ExporterKeyingMaterial(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let clientPublic = x25519PublicFromPrivate(clientPrivate)
@@ -600,7 +600,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13RejectMalformedMessages() {
+    public func testTls13RejectMalformedMessages(): Unit {
         let random = incrementalBytes(32)
         let malformedClientHello = tlsEncodeClientHelloHandshake(
             TlsClientHello(
@@ -632,7 +632,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ComplianceGate() {
+    public func testTls13ComplianceGate(): Unit {
         let profile = FipsProfile.phase1Default()
         tls13HandshakeRequireAllowed(profile, Tls13HandshakeMode.ECDHE_1RTT)
         tls13HandshakeRequireAllowed(profile, Tls13HandshakeMode.PSK_1RTT)
@@ -665,7 +665,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13CertificateHandshakeParseAndVerify() {
+    public func testTls13CertificateHandshakeParseAndVerify(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -676,7 +676,7 @@ public class Tls13HandshakeFlowTestSuite {
         )
         let parsedChain = tls13ParseCertificateChainFromHandshake(encoded)
         @Assert(parsedChain.size, 2)
-        @Assert(parsedChain[0].subject.commonName(), "www.example.com")
+        @Assert(parsedChain[0].subject.commonName(), TEST_HOST_WWW)
         @Assert(parsedChain[1].subject.commonName(), "Policy Intermediate")
 
         let policy = X509VerificationPolicy(
@@ -689,7 +689,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13CertificateRequestBuildAndDecode() {
+    public func testTls13CertificateRequestBuildAndDecode(): Unit {
         let certAuthority = hexToBytes("300b3109300706035504030c00")
         let encoded = tls13BuildCertificateRequestHandshake(
             requestContext: [UInt8(0x11), UInt8(0x22), UInt8(0x33)],
@@ -729,7 +729,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ClientAuthFlightForCertificateRequest() {
+    public func testTls13ClientAuthFlightForCertificateRequest(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -823,7 +823,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ClientAuthFlightForCertificateRequestP384() {
+    public func testTls13ClientAuthFlightForCertificateRequestP384(): Unit {
         let privateKey = EcPrivateKey(P384, BigNum.one())
         let certificate = x509CreateSelfSignedEcCertificate(
             X509SelfSignedConfig("tls13-client-auth-p384.local"),
@@ -895,7 +895,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ClientAuthFlightForCertificateRequestRsaPss() {
+    public func testTls13ClientAuthFlightForCertificateRequestRsaPss(): Unit {
         let privateKey = x509ParseRsaPrivateKeyPkcs8Pem(readText("testdata/x509/rsa_2048_pkcs8.pem"))
         let certificate = x509CreateSelfSignedRsaCertificate(
             X509SelfSignedConfig("tls13-client-auth-rsa.local"),
@@ -948,7 +948,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerContextClientAuthRequestFlow() {
+    public func testTls13ServerContextClientAuthRequestFlow(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -1045,7 +1045,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerClientAuthContextBuilderEcdheP256() {
+    public func testTls13ServerClientAuthContextBuilderEcdheP256(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -1091,7 +1091,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerClientAuthContextBuilderEcdheP384() {
+    public func testTls13ServerClientAuthContextBuilderEcdheP384(): Unit {
         let certPrivateKey = EcPrivateKey(P384, BigNum.one())
         let certificate = x509CreateSelfSignedEcCertificate(
             X509SelfSignedConfig("tls13-client-auth-context-p384.local"),
@@ -1139,7 +1139,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13CertificateVerifyEcdsaContexts() {
+    public func testTls13CertificateVerifyEcdsaContexts(): Unit {
         let certificate = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let privateKey = x509ParseEcPrivateKeyPkcs8Pem(readText("testdata/x509/policy_leaf_key_pkcs8.pem"))
         let transcriptHash = sha256("tls13-certificate-verify-ecdsa".toArray())
@@ -1161,7 +1161,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13CertificateVerifyEcdsaP384SignatureScheme() {
+    public func testTls13CertificateVerifyEcdsaP384SignatureScheme(): Unit {
         let privateKey = EcPrivateKey(P384, BigNum.one())
         let transcriptHash = sha256("tls13-certificate-verify-ecdsa-p384".toArray())
 
@@ -1177,7 +1177,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13CertificateVerifyRsaPss() {
+    public func testTls13CertificateVerifyRsaPss(): Unit {
         let privateKey = x509ParseRsaPrivateKeyPkcs8Pem(readText("testdata/x509/rsa_2048_pkcs8.pem"))
         let certificate = x509CreateSelfSignedRsaCertificate(
             X509SelfSignedConfig("tls13-rsa.local"),
@@ -1203,7 +1203,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerAuthFlightEcdsaAndVerify() {
+    public func testTls13ServerAuthFlightEcdsaAndVerify(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -1284,7 +1284,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerAuthFlightEcdsaP384AndVerify() {
+    public func testTls13ServerAuthFlightEcdsaP384AndVerify(): Unit {
         let certPrivateKey = EcPrivateKey(P384, BigNum.one())
         let certificate = x509CreateSelfSignedEcCertificate(
             X509SelfSignedConfig("tls13-auth-p384.local"),
@@ -1325,7 +1325,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerAuthFlightRsaPssAndProfileVerify() {
+    public func testTls13ServerAuthFlightRsaPssAndProfileVerify(): Unit {
         let privateKey = x509ParseRsaPrivateKeyPkcs8Pem(readText("testdata/x509/rsa_2048_pkcs8.pem"))
         let certificate = x509CreateSelfSignedRsaCertificate(
             X509SelfSignedConfig("tls13-auth-rsa.local"),
@@ -1359,7 +1359,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerHandshakeContextP256HttpFlow() {
+    public func testTls13ServerHandshakeContextP256HttpFlow(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -1371,12 +1371,12 @@ public class Tls13HandshakeFlowTestSuite {
         let serverPublic = EcPublicKey(P256, P256_GX, P256_GY)
         let clientHello = tls13BuildHttpClientHelloEcdhe(
             clientPublic,
-            "api.example.com",
+            TEST_HOST_API,
             alpnProtocols: ["h2", "http/1.1"]
         )
         let httpPolicy = TlsHttpNegotiationPolicy(
             requireServerName: true,
-            allowedServerNames: ["api.example.com"],
+            allowedServerNames: [TEST_HOST_API],
             alpnPreference: ["h2", "http/1.1"]
         )
 
@@ -1389,7 +1389,7 @@ public class Tls13HandshakeFlowTestSuite {
             policy: httpPolicy
         )
         @Assert(context.flight.selectedAlpn, "h2")
-        @Assert(context.flight.requestedServerName, "api.example.com")
+        @Assert(context.flight.requestedServerName, TEST_HOST_API)
         @Assert(context.flight.acknowledgedServerName, true)
 
         let policy = X509VerificationPolicy(
@@ -1404,7 +1404,7 @@ public class Tls13HandshakeFlowTestSuite {
         )
         tls13ValidateHttpClientResult(result, policy: httpPolicy)
         @Assert(result.selectedAlpn, "h2")
-        @Assert(result.requestedServerName, "api.example.com")
+        @Assert(result.requestedServerName, TEST_HOST_API)
         @Assert(result.acknowledgedServerName, true)
         @Assert(result.verification.chain.size, 3)
         @Assert(result.secrets.masterSecret, context.secrets.masterSecret)
@@ -1434,7 +1434,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerHandshakeContextP384HttpFlow() {
+    public func testTls13ServerHandshakeContextP384HttpFlow(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -1446,12 +1446,12 @@ public class Tls13HandshakeFlowTestSuite {
         let serverPublic = EcPublicKey(P384, P384_GX, P384_GY)
         let clientHello = tls13BuildHttpClientHelloEcdhe(
             clientPublic,
-            "api.example.com",
+            TEST_HOST_API,
             alpnProtocols: ["h2", "http/1.1"]
         )
         let httpPolicy = TlsHttpNegotiationPolicy(
             requireServerName: true,
-            allowedServerNames: ["api.example.com"],
+            allowedServerNames: [TEST_HOST_API],
             alpnPreference: ["h2", "http/1.1"]
         )
 
@@ -1464,7 +1464,7 @@ public class Tls13HandshakeFlowTestSuite {
             policy: httpPolicy
         )
         @Assert(context.flight.selectedAlpn, "h2")
-        @Assert(context.flight.requestedServerName, "api.example.com")
+        @Assert(context.flight.requestedServerName, TEST_HOST_API)
         @Assert(context.flight.acknowledgedServerName, true)
 
         let policy = X509VerificationPolicy(
@@ -1479,14 +1479,14 @@ public class Tls13HandshakeFlowTestSuite {
         )
         tls13ValidateHttpClientResult(result, policy: httpPolicy)
         @Assert(result.selectedAlpn, "h2")
-        @Assert(result.requestedServerName, "api.example.com")
+        @Assert(result.requestedServerName, TEST_HOST_API)
         @Assert(result.acknowledgedServerName, true)
         @Assert(result.verification.chain.size, 3)
         @Assert(result.secrets.masterSecret, context.secrets.masterSecret)
     }
 
     @TestCase
-    public func testTls13HttpClientHelloBuilders() {
+    public func testTls13HttpClientHelloBuilders(): Unit {
         let clientPublic = EcPublicKey(P256, P256_2G_X, P256_2G_Y)
         let ecdheHello = tls13BuildHttpClientHelloEcdhe(
             clientPublic,
@@ -1497,7 +1497,7 @@ public class Tls13HandshakeFlowTestSuite {
         if (let Some(sniExt) <- tlsFindExtension(decodedEcdhe.extensions, TLS_EXT_SERVER_NAME)) {
             let serverNames = tlsParseServerNameExtension(sniExt)
             @Assert(serverNames.size, 1)
-            @Assert(serverNames[0], "api.example.com")
+            @Assert(serverNames[0], TEST_HOST_API)
         } else {
             @Fail("HTTP ECDHE ClientHello should carry SNI extension")
         }
@@ -1525,7 +1525,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13HttpPolicyRejectsMissingSniAndAlpn() {
+    public func testTls13HttpPolicyRejectsMissingSniAndAlpn(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let certPrivateKey = x509ParseEcPrivateKeyPkcs8Pem(readText("testdata/x509/policy_leaf_key_pkcs8.pem"))
@@ -1535,7 +1535,7 @@ public class Tls13HandshakeFlowTestSuite {
         let serverPublic = EcPublicKey(P256, P256_GX, P256_GY)
         let strictPolicy = TlsHttpNegotiationPolicy(
             requireServerName: true,
-            allowedServerNames: ["api.example.com"],
+            allowedServerNames: [TEST_HOST_API],
             alpnPreference: ["h2", "http/1.1"]
         )
 
@@ -1560,7 +1560,7 @@ public class Tls13HandshakeFlowTestSuite {
 
         let missingHttpAlpn = tls13BuildHttpClientHelloEcdhe(
             clientPublic,
-            "api.example.com",
+            TEST_HOST_API,
             alpnProtocols: ["acme-tls/1"]
         )
         try {
@@ -1579,7 +1579,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerHandshakeContextX25519RsaFlow() {
+    public func testTls13ServerHandshakeContextX25519RsaFlow(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let clientPublic = x25519PublicFromPrivate(clientPrivate)
@@ -1621,7 +1621,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerHandshakeContextX25519RsaFlowWithChachaCipherSuite() {
+    public func testTls13ServerHandshakeContextX25519RsaFlowWithChachaCipherSuite(): Unit {
         @Assert(TLS13_CIPHER_SUITE_AES_128_GCM_SHA256, 0x1301)
         @Assert(TLS13_CIPHER_SUITE_CHACHA20_POLY1305_SHA256, 0x1303)
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
@@ -1678,7 +1678,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13HttpServerHandshakeContextX25519RsaFlow() {
+    public func testTls13HttpServerHandshakeContextX25519RsaFlow(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let clientPublic = x25519PublicFromPrivate(clientPrivate)
@@ -1730,7 +1730,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13HttpServerClientAuthContextBuilderX25519() {
+    public func testTls13HttpServerClientAuthContextBuilderX25519(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -1743,12 +1743,12 @@ public class Tls13HandshakeFlowTestSuite {
 
         let clientHello = tls13BuildHttpClientHelloX25519(
             clientPublic,
-            "api.example.com",
+            TEST_HOST_API,
             alpnProtocols: ["h2", "http/1.1"]
         )
         let httpPolicy = TlsHttpNegotiationPolicy(
             requireServerName: true,
-            allowedServerNames: ["api.example.com"],
+            allowedServerNames: [TEST_HOST_API],
             alpnPreference: ["h2", "http/1.1"]
         )
 
@@ -1764,7 +1764,7 @@ public class Tls13HandshakeFlowTestSuite {
             certificateAuthorities: [intermediate.subject.der]
         )
         @Assert(context.serverContext.flight.selectedAlpn, "h2")
-        @Assert(context.serverContext.flight.requestedServerName, "api.example.com")
+        @Assert(context.serverContext.flight.requestedServerName, TEST_HOST_API)
         @Assert(context.serverContext.flight.acknowledgedServerName, true)
         @Assert(context.request.requestContext, [UInt8(0x41), UInt8(0x42), UInt8(0x43)])
 
@@ -1798,7 +1798,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ServerClientAuthContextBuilderX25519Rsa() {
+    public func testTls13ServerClientAuthContextBuilderX25519Rsa(): Unit {
         let rsaPrivateKey = x509ParseRsaPrivateKeyPkcs8Pem(readText("testdata/x509/rsa_2048_pkcs8.pem"))
         let certificate = x509CreateSelfSignedRsaCertificate(
             X509SelfSignedConfig("tls13-client-auth-x25519-rsa.local"),
@@ -1851,7 +1851,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13HttpServerClientAuthContextBuilderEcdheP384() {
+    public func testTls13HttpServerClientAuthContextBuilderEcdheP384(): Unit {
         let certPrivateKey = EcPrivateKey(P384, BigNum.one())
         let certificate = x509CreateSelfSignedEcCertificate(
             X509SelfSignedConfig("api-p384.example.com"),
@@ -1918,7 +1918,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13ProcessClientAuthFlightRequirementModes() {
+    public func testTls13ProcessClientAuthFlightRequirementModes(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -1981,7 +1981,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13HttpClientAuthRequirementModes() {
+    public func testTls13HttpClientAuthRequirementModes(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -1993,12 +1993,12 @@ public class Tls13HandshakeFlowTestSuite {
 
         let clientHello = tls13BuildHttpClientHelloEcdhe(
             clientPublic,
-            "api.example.com",
+            TEST_HOST_API,
             alpnProtocols: ["h2", "http/1.1"]
         )
         let httpPolicy = TlsHttpNegotiationPolicy(
             requireServerName: true,
-            allowedServerNames: ["api.example.com"],
+            allowedServerNames: [TEST_HOST_API],
             alpnPreference: ["h2", "http/1.1"]
         )
 
@@ -2091,7 +2091,7 @@ public class Tls13HandshakeFlowTestSuite {
     }
 
     @TestCase
-    public func testTls13HttpClientAuthRequiredHelperWithRsaAuthorities() {
+    public func testTls13HttpClientAuthRequiredHelperWithRsaAuthorities(): Unit {
         let rsaPrivateKey = x509ParseRsaPrivateKeyPkcs8Pem(readText("testdata/x509/rsa_2048_pkcs8.pem"))
         let certificate = x509CreateSelfSignedRsaCertificate(
             X509SelfSignedConfig("tls13-http-client-auth-rsa.local"),

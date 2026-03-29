@@ -9,7 +9,7 @@ type VectorCase = (String, HashMap<String, String>)
 @Test
 public class BigNumVectorTestSuite {
     @TestCase
-    public func testSumVectors() {
+    public func testSumVectors(): Unit {
         runVectorFile("testdata/bn/sum_tests.txt", "Sum") { values =>
             let a = BigNum.fromHex(requireValue(values, "A"))
             let b = BigNum.fromHex(requireValue(values, "B"))
@@ -18,7 +18,7 @@ public class BigNumVectorTestSuite {
     }
 
     @TestCase
-    public func testProductVectors() {
+    public func testProductVectors(): Unit {
         runVectorFile("testdata/bn/product_tests.txt", "Product") { values =>
             let a = BigNum.fromHex(requireValue(values, "A"))
             let b = BigNum.fromHex(requireValue(values, "B"))
@@ -27,7 +27,7 @@ public class BigNumVectorTestSuite {
     }
 
     @TestCase
-    public func testQuotientVectors() {
+    public func testQuotientVectors(): Unit {
         runVectorFile("testdata/bn/quotient_tests.txt", "Quotient") { values =>
             let a = BigNum.fromHex(requireValue(values, "A"))
             let b = BigNum.fromHex(requireValue(values, "B"))
@@ -38,7 +38,7 @@ public class BigNumVectorTestSuite {
     }
 
     @TestCase
-    public func testShiftVectors() {
+    public func testShiftVectors(): Unit {
         let vectors = parseVectorFile("testdata/bn/shift_tests.txt")
         for ((kind, values) in vectors) {
             let a = BigNum.fromHex(requireValue(values, "A"))
@@ -60,7 +60,7 @@ public class BigNumVectorTestSuite {
     }
 
     @TestCase
-    public func testModMulVectors() {
+    public func testModMulVectors(): Unit {
         runVectorFile("testdata/bn/mod_mul_tests.txt", "ModMul") { values =>
             let a = BigNum.fromHex(requireValue(values, "A"))
             let b = BigNum.fromHex(requireValue(values, "B"))
@@ -71,7 +71,7 @@ public class BigNumVectorTestSuite {
     }
 
     @TestCase
-    public func testModExpVectors() {
+    public func testModExpVectors(): Unit {
         runVectorFile("testdata/bn/mod_exp_tests.txt", "ModExp") { values =>
             let a = BigNum.fromHex(requireValue(values, "A"))
             let e = BigNum.fromHex(requireValue(values, "E"))
@@ -82,7 +82,7 @@ public class BigNumVectorTestSuite {
     }
 
     @TestCase
-    public func testModInvVectors() {
+    public func testModInvVectors(): Unit {
         runVectorFile("testdata/bn/mod_inv_tests.txt", "ModInv") { values =>
             let a = BigNum.fromHex(requireValue(values, "A"))
             let m = BigNum.fromHex(requireValue(values, "M"))
@@ -92,7 +92,7 @@ public class BigNumVectorTestSuite {
     }
 
     @TestCase
-    public func testExpVectors() {
+    public func testExpVectors(): Unit {
         runVectorFile("testdata/bn/exp_tests.txt", "Exp") { values =>
             let a = BigNum.fromHex(requireValue(values, "A"))
             let e = BigNum.fromHex(requireValue(values, "E"))
@@ -102,7 +102,7 @@ public class BigNumVectorTestSuite {
     }
 
     @TestCase
-    public func testGcdVectors() {
+    public func testGcdVectors(): Unit {
         runVectorFile("testdata/bn/gcd_tests.txt", "GCD") { values =>
             let a = BigNum.fromHex(requireValue(values, "A"))
             let b = BigNum.fromHex(requireValue(values, "B"))
@@ -112,7 +112,7 @@ public class BigNumVectorTestSuite {
     }
 
     @TestCase
-    public func testModSqrtVectors() {
+    public func testModSqrtVectors(): Unit {
         runVectorFile("testdata/bn/mod_sqrt_tests.txt", "ModSqrt") { values =>
             let a = BigNum.fromHex(requireValue(values, "A"))
             let p = BigNum.fromHex(requireValue(values, "P"))
@@ -197,6 +197,9 @@ private func requireValue(values: HashMap<String, String>, key: String): String 
 
 private func assertBigNumEq(actual: BigNum, expectedHex: String, label: String): Unit {
     let expected = BigNum.fromHex(expectedHex)
+    if (label.size < 0) {
+        @Fail("unreachable label guard")
+    }
     if (actual.cmp(expected) != 0) {
         @Fail("${label} mismatch, got=${actual.toHex()}, expected=${expected.toHex()}")
     }

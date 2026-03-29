@@ -6,7 +6,7 @@ import jinguissl.crypto.error.CryptoException
 @Test
 public class DigestTestSuite {
     @TestCase
-    public func testMd5Vectors() {
+    public func testMd5Vectors(): Unit {
         assertDigestHex(md5("".toArray()), "d41d8cd98f00b204e9800998ecf8427e")
         assertDigestHex(md5("abc".toArray()), "900150983cd24fb0d6963f7d28e17f72")
         assertDigestHex(md5("message digest".toArray()), "f96b697d7cb7938d525a2f31aaf161d0")
@@ -17,7 +17,7 @@ public class DigestTestSuite {
     }
 
     @TestCase
-    public func testSha2Vectors() {
+    public func testSha2Vectors(): Unit {
         assertDigestHex(
             sha1("".toArray()),
             "da39a3ee5e6b4b0d3255bfef95601890afd80709"
@@ -70,7 +70,7 @@ public class DigestTestSuite {
     }
 
     @TestCase
-    public func testHmacVectors() {
+    public func testHmacVectors(): Unit {
         let key1 = Array<Byte>(20, repeat: UInt8(0x0b))
         let data1 = "Hi There".toArray()
 
@@ -127,7 +127,7 @@ public class DigestTestSuite {
     }
 
     @TestCase
-    public func testHkdfVectorsAndBounds() {
+    public func testHkdfVectorsAndBounds(): Unit {
         let ikm = Array<Byte>(22, repeat: UInt8(0x0b))
         let salt = hexToBytes("000102030405060708090a0b0c")
         let info = hexToBytes("f0f1f2f3f4f5f6f7f8f9")

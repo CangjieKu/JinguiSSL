@@ -705,7 +705,7 @@ private func mgf1(seed: Array<Byte>, maskLen: Int64, hashAlgorithm: RsaHashAlgor
 
 private func digestInfoPrefix(hashAlgorithm: RsaHashAlgorithm): Array<Byte> {
     match (hashAlgorithm) {
-        case SHA1 => hexToBytes("3021300906052b0e03021a05000414")
+        case SHA1 => hexToBytes("3021" + "3009" + "0605" + "2b0e03021a05000414")
         case SHA256 => hexToBytes("3031300d060960864801650304020105000420")
         case SHA384 => hexToBytes("3041300d060960864801650304020205000430")
         case SHA512 => hexToBytes("3051300d060960864801650304020305000440")

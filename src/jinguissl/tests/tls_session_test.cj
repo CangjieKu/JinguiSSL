@@ -6,11 +6,11 @@ import jinguissl.crypto.compliance.*
 @Test
 public class TlsSessionTestSuite {
     @TestCase
-    public func testSessionTicketEncodeDecodeRoundTrip() {
+    public func testSessionTicketEncodeDecodeRoundTrip(): Unit {
         let identity = TlsSessionIdentity(
             TLS1_3,
             "ticket-001".toArray(),
-            serverName: "api.example.com",
+            serverName: TEST_HOST_API,
             alpnProtocol: "h2"
         )
         let ticket = tlsCreateSessionTicket(
@@ -25,7 +25,7 @@ public class TlsSessionTestSuite {
         let decoded = tlsDecodeSessionTicket(encoded)
         @Assert(decoded.version, TLS_SESSION_TICKET_VERSION)
         @Assert(decoded.identity.version.toString(), "TLS1.3")
-        @Assert(decoded.identity.serverName, "api.example.com")
+        @Assert(decoded.identity.serverName, TEST_HOST_API)
         @Assert(decoded.identity.alpnProtocol, "h2")
         @Assert(decoded.identity.resumptionId, "ticket-001".toArray())
         @Assert(decoded.secret, "shared-secret-material".toArray())
@@ -37,7 +37,7 @@ public class TlsSessionTestSuite {
     }
 
     @TestCase
-    public func testSessionCacheStoreLoadAndEviction() {
+    public func testSessionCacheStoreLoadAndEviction(): Unit {
         let cache = TlsSessionCache(maxEntries: 2, defaultTtlSeconds: 60)
         let id1 = TlsSessionIdentity(TLS1_3, "id-1".toArray(), serverName: "a.example", alpnProtocol: "h2")
         let id2 = TlsSessionIdentity(TLS1_3, "id-2".toArray(), serverName: "a.example", alpnProtocol: "h2")
@@ -75,7 +75,7 @@ public class TlsSessionTestSuite {
     }
 
     @TestCase
-    public func testSessionCacheExpiryAndPurge() {
+    public func testSessionCacheExpiryAndPurge(): Unit {
         let cache = TlsSessionCache(maxEntries: 4, defaultTtlSeconds: 5)
         let id = TlsSessionIdentity(TLS1_2, "exp-1".toArray(), serverName: "b.example", alpnProtocol: "http/1.1")
         _ = cache.storeFromSecret(id, "master-secret".toArray(), nowUnixSeconds: 100)
@@ -101,7 +101,7 @@ public class TlsSessionTestSuite {
     }
 
     @TestCase
-    public func testConnectionPoolAcquireReleaseAndReuse() {
+    public func testConnectionPoolAcquireReleaseAndReuse(): Unit {
         let pool = TlsConnectionPool(maxIdle: 2, idleTtlSeconds: 30)
         let id = TlsSessionIdentity(TLS1_3, "conn-1".toArray(), serverName: "api.example", alpnProtocol: "h2")
 
@@ -135,7 +135,7 @@ public class TlsSessionTestSuite {
     }
 
     @TestCase
-    public func testConnectionPoolEvictionAndPrune() {
+    public func testConnectionPoolEvictionAndPrune(): Unit {
         let pool = TlsConnectionPool(maxIdle: 1, idleTtlSeconds: 5)
         let id1 = TlsSessionIdentity(TLS1_3, "pool-a".toArray(), serverName: "api.example", alpnProtocol: "h2")
         let id2 = TlsSessionIdentity(TLS1_3, "pool-b".toArray(), serverName: "api.example", alpnProtocol: "h2")

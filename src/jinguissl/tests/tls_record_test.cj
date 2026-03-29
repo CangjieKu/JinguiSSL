@@ -7,7 +7,7 @@ import jinguissl.crypto.tls.*
 @Test
 public class TlsRecordTestSuite {
     @TestCase
-    public func testEncodeDecodeRecord() {
+    public func testEncodeDecodeRecord(): Unit {
         let payload = "client-hello".toArray()
         let encoded = tlsEncodeRecord(Handshake, TLS1_2, payload)
         let decoded = tlsDecodeRecord(encoded)
@@ -19,7 +19,7 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testAlertPayloadAndRecordRoundTrip() {
+    public func testAlertPayloadAndRecordRoundTrip(): Unit {
         let closeNotifyPayload = tlsEncodeAlert(Warning, CloseNotify)
         let closeNotify = tlsDecodeAlert(closeNotifyPayload)
         @Assert(closeNotify.level.toString(), "WARNING")
@@ -38,7 +38,7 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testFragmentAndReassemble() {
+    public func testFragmentAndReassemble(): Unit {
         let payload = makePayload(50000)
         let fragments = tlsRecordFragment(payload, maxFragmentLen: 2048)
         @Assert(fragments.size > 1, true)
@@ -49,7 +49,7 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testAeadSealOpenRoundTrip() {
+    public func testAeadSealOpenRoundTrip(): Unit {
         let key = hexToBytes("000102030405060708090a0b0c0d0e0f")
         let iv = hexToBytes("101112131415161718191a1b")
         let layer = TlsAeadRecordLayer(key, iv, version: TLS1_2)
@@ -66,8 +66,8 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testAeadFragmentedRoundTrip() {
-        let key = hexToBytes("00112233445566778899aabbccddeeff")
+    public func testAeadFragmentedRoundTrip(): Unit {
+        let key = hexToBytes(TEST_HEX_BLOCK_00112233445566778899AABBCCDDEEFF)
         let iv = hexToBytes("0f0e0d0c0b0a090807060504")
         let sender = TlsAeadRecordLayer(key, iv, version: TLS1_2)
         let receiver = TlsAeadRecordLayer(key, iv, version: TLS1_2)
@@ -81,7 +81,7 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testAeadRejectTamperedOrInvalidRecord() {
+    public func testAeadRejectTamperedOrInvalidRecord(): Unit {
         let key = hexToBytes("a0a1a2a3a4a5a6a7a8a9aaabacadaeaf")
         let iv = hexToBytes("b0b1b2b3b4b5b6b7b8b9babb")
         let sender = TlsAeadRecordLayer(key, iv, version: TLS1_3)
@@ -110,7 +110,7 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testAeadSealOpenAlertRecord() {
+    public func testAeadSealOpenAlertRecord(): Unit {
         let key = hexToBytes("a0a1a2a3a4a5a6a7a8a9aaabacadaeaf")
         let iv = hexToBytes("b0b1b2b3b4b5b6b7b8b9babb")
         let sender = TlsAeadRecordLayer(key, iv, version: TLS1_3)
@@ -127,7 +127,7 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testChacha20Poly1305RecordRoundTrip() {
+    public func testChacha20Poly1305RecordRoundTrip(): Unit {
         let key = hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         let iv = hexToBytes("101112131415161718191a1b")
         let layer = TlsChacha20Poly1305RecordLayer(key, iv, version: TLS1_2)
@@ -144,7 +144,7 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testChacha20Poly1305RecordFragmentedRoundTrip() {
+    public func testChacha20Poly1305RecordFragmentedRoundTrip(): Unit {
         let key = hexToBytes("202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f")
         let iv = hexToBytes("b0b1b2b3b4b5b6b7b8b9babb")
         let sender = TlsChacha20Poly1305RecordLayer(key, iv, version: TLS1_3)
@@ -159,7 +159,7 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testChacha20Poly1305RecordRejectTamperedRecord() {
+    public func testChacha20Poly1305RecordRejectTamperedRecord(): Unit {
         let key = hexToBytes("404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f")
         let iv = hexToBytes("c0c1c2c3c4c5c6c7c8c9cacb")
         let sender = TlsChacha20Poly1305RecordLayer(key, iv, version: TLS1_3)
@@ -177,7 +177,7 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testAlertDecodeRejectInvalidInputs() {
+    public func testAlertDecodeRejectInvalidInputs(): Unit {
         try {
             _ = tlsDecodeAlert([UInt8(0x02)])
             @Fail("alert payload shorter than 2 bytes should be rejected")
@@ -209,7 +209,7 @@ public class TlsRecordTestSuite {
     }
 
     @TestCase
-    public func testTlsRecordComplianceGate() {
+    public func testTlsRecordComplianceGate(): Unit {
         let allowed = FipsProfile.phase1Default()
         tlsRecordRequireAllowed(allowed, TLS1_2)
         tlsRecordRequireAllowed(allowed, TLS1_3)

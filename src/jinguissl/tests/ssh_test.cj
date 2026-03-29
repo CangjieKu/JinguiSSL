@@ -13,7 +13,7 @@ import jinguissl.crypto.ssh.*
 @Test
 public class SshTestSuite {
     @TestCase
-    public func testVersionBannerRoundTripAndValidation() {
+    public func testVersionBannerRoundTripAndValidation(): Unit {
         let banner = sshBuildVersionBanner("jinguissl_0.1", comments: "dev")
         let encoded = sshEncodeVersionBanner(banner)
         @Assert(String.fromUtf8(encoded), "SSH-2.0-jinguissl_0.1 dev\r\n")
@@ -44,7 +44,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testKexInitRoundTripAndNegotiation() {
+    public func testKexInitRoundTripAndNegotiation(): Unit {
         let cookie = incrementalBytes(16, start: 16)
         let base = sshBuildDefaultKexInit(cookie: cookie)
         let encoded = sshEncodeKexInit(base)
@@ -60,8 +60,8 @@ public class SshTestSuite {
             cookie,
             ["curve25519-sha256", "ecdh-sha2-nistp256"],
             ["ssh-ed25519", "rsa-sha2-256"],
-            ["aes128-gcm@openssh.com", "aes128-ctr"],
-            ["aes128-gcm@openssh.com", "aes128-ctr"],
+            [SSH_CIPHER_AES128_GCM_OPENSSH, "aes128-ctr"],
+            [SSH_CIPHER_AES128_GCM_OPENSSH, "aes128-ctr"],
             ["hmac-sha2-256"],
             ["hmac-sha2-256"],
             ["none"],
@@ -71,8 +71,8 @@ public class SshTestSuite {
             incrementalBytes(16, start: 64),
             ["ecdh-sha2-nistp256", "curve25519-sha256"],
             ["rsa-sha2-256", "ssh-ed25519"],
-            ["aes128-ctr", "aes128-gcm@openssh.com"],
-            ["aes128-ctr", "aes128-gcm@openssh.com"],
+            ["aes128-ctr", SSH_CIPHER_AES128_GCM_OPENSSH],
+            ["aes128-ctr", SSH_CIPHER_AES128_GCM_OPENSSH],
             ["hmac-sha2-256"],
             ["hmac-sha2-256"],
             ["none"],
@@ -88,14 +88,14 @@ public class SshTestSuite {
 
         let noOverlapServer = SshKexInitMessage(
             incrementalBytes(16, start: 96),
-            ["sntrup761x25519-sha512@openssh.com"],
+            [SSH_KEX_ALGORITHM_SNTRUP761X25519_SHA512_OPENSSH],
             ["ssh-ed448"],
-            ["aes256-gcm@openssh.com"],
-            ["aes256-gcm@openssh.com"],
+            [SSH_CIPHER_AES256_GCM_OPENSSH],
+            [SSH_CIPHER_AES256_GCM_OPENSSH],
             ["hmac-sha2-512"],
             ["hmac-sha2-512"],
-            ["zlib@openssh.com"],
-            ["zlib@openssh.com"]
+            [SSH_COMPRESSION_ZLIB_OPENSSH],
+            [SSH_COMPRESSION_ZLIB_OPENSSH]
         )
         try {
             _ = sshNegotiateKexInit(client, noOverlapServer)
@@ -106,7 +106,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testTransportPacketEncodeDecodeAndMalformed() {
+    public func testTransportPacketEncodeDecodeAndMalformed(): Unit {
         let payload = "ssh-payload".toArray()
         let knownPadding = incrementalBytes(64, start: 128)
         let encoded = sshEncodeTransportPacket(
@@ -141,7 +141,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testKexEcdhX25519FlowAndExchangeHash() {
+    public func testKexEcdhX25519FlowAndExchangeHash(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let clientKexInit = sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1)))
@@ -188,7 +188,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testKexEcdhRejectMismatchedPrivateAndMalformedNewKeys() {
+    public func testKexEcdhRejectMismatchedPrivateAndMalformedNewKeys(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let wrongPrivate = hexToBytes("a546e36bf2c8278f843ec7394f6f55f4550f2f19fd3a812c47f5f57de7a3112a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
@@ -230,7 +230,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testDeriveSessionKeysSha256FromKexResult() {
+    public func testDeriveSessionKeysSha256FromKexResult(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let clientKexInit = sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 12)))
@@ -280,7 +280,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testCompleteInitialKeyExchangeX25519AndSupportProbes() {
+    public func testCompleteInitialKeyExchangeX25519AndSupportProbes(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let transcript = SshKexExchangeTranscript(
@@ -326,12 +326,12 @@ public class SshTestSuite {
 
         @Assert(sshIsCipherSupported("aes128-ctr"), true)
         @Assert(sshIsCipherSupported("aes256-ctr"), true)
-        @Assert(sshIsCipherSupported("chacha20-poly1305@openssh.com"), true)
-        @Assert(sshIsCipherSupported("aes128-gcm@openssh.com"), true)
-        @Assert(sshIsCipherSupported("aes256-gcm@openssh.com"), true)
+        @Assert(sshIsCipherSupported(SSH_CIPHER_CHACHA20_POLY1305_OPENSSH), true)
+        @Assert(sshIsCipherSupported(SSH_CIPHER_AES128_GCM_OPENSSH), true)
+        @Assert(sshIsCipherSupported(SSH_CIPHER_AES256_GCM_OPENSSH), true)
         @Assert(sshIsMacSupported("hmac-sha2-256"), true)
         @Assert(sshIsMacSupported("hmac-sha2-512"), true)
-        @Assert(sshIsMacSupported("umac-64@openssh.com"), false)
+        @Assert(sshIsMacSupported(SSH_MAC_ALGORITHM_UMAC64_OPENSSH), false)
 
         let preservedSessionId = incrementalBytes(32, start: 5)
         let resolved = sshResolveSessionId(clientResult.exchangeHash, existingSessionId: preservedSessionId)
@@ -339,7 +339,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testPacketProtectionLayerRoundTripAndMacReject() {
+    public func testPacketProtectionLayerRoundTripAndMacReject(): Unit {
         let derived = buildAesCtrDerivedSessionKeys()
         let clientLayer = sshBuildPacketProtectionLayer(derived, role: SshPeerRole.Client)
         let serverLayer = sshBuildPacketProtectionLayer(derived, role: SshPeerRole.Server)
@@ -376,7 +376,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testDeriveSessionKeysSha256ForAeadCiphers() {
+    public func testDeriveSessionKeysSha256ForAeadCiphers(): Unit {
         let sharedSecret = incrementalBytes(32, start: 17)
         let exchangeHash = incrementalBytes(32, start: 71)
         let sessionId = exchangeHash.clone()
@@ -384,8 +384,8 @@ public class SshTestSuite {
         let gcmNegotiated = SshNegotiatedAlgorithms(
             "curve25519-sha256",
             "rsa-sha2-256",
-            "aes256-gcm@openssh.com",
-            "aes128-gcm@openssh.com",
+            SSH_CIPHER_AES256_GCM_OPENSSH,
+            SSH_CIPHER_AES128_GCM_OPENSSH,
             "none",
             "none",
             "none",
@@ -402,8 +402,8 @@ public class SshTestSuite {
         let chachaNegotiated = SshNegotiatedAlgorithms(
             "curve25519-sha256",
             "ssh-ed25519",
-            "chacha20-poly1305@openssh.com",
-            "chacha20-poly1305@openssh.com",
+            SSH_CIPHER_CHACHA20_POLY1305_OPENSSH,
+            SSH_CIPHER_CHACHA20_POLY1305_OPENSSH,
             "none",
             "none",
             "none",
@@ -419,8 +419,8 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testPacketProtectionLayerAesGcmRoundTripAndTagReject() {
-        let derived = buildAesGcmDerivedSessionKeys("aes128-gcm@openssh.com")
+    public func testPacketProtectionLayerAesGcmRoundTripAndTagReject(): Unit {
+        let derived = buildAesGcmDerivedSessionKeys(SSH_CIPHER_AES128_GCM_OPENSSH)
         let clientLayer = sshBuildPacketProtectionLayer(derived, role: SshPeerRole.Client)
         let serverLayer = sshBuildPacketProtectionLayer(derived, role: SshPeerRole.Server)
 
@@ -443,7 +443,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testPacketProtectionLayerChacha20Poly1305RoundTripAndTagReject() {
+    public func testPacketProtectionLayerChacha20Poly1305RoundTripAndTagReject(): Unit {
         let derived = buildChacha20Poly1305DerivedSessionKeys()
         let clientLayer = sshBuildPacketProtectionLayer(derived, role: SshPeerRole.Client)
         let serverLayer = sshBuildPacketProtectionLayer(derived, role: SshPeerRole.Server)
@@ -467,7 +467,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testHandshakeStateMachineTransitionsAndPhaseMismatch() {
+    public func testHandshakeStateMachineTransitionsAndPhaseMismatch(): Unit {
         let state = SshHandshakeStateMachine()
         @Assert(state.phase.toString(), "IDENTIFICATION")
 
@@ -493,7 +493,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testHandshakeCoordinatorActivatesTransportAndRoundTrip() {
+    public func testHandshakeCoordinatorActivatesTransportAndRoundTrip(): Unit {
         let (clientResult, serverResult) = buildX25519KexResults(72)
         let negotiated = SshNegotiatedAlgorithms(
             "curve25519-sha256",
@@ -541,7 +541,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testHandshakeCoordinatorRejectsPhaseMismatchAndReplay() {
+    public func testHandshakeCoordinatorRejectsPhaseMismatchAndReplay(): Unit {
         let (clientResult, _) = buildX25519KexResults(96)
         let negotiated = SshNegotiatedAlgorithms(
             "curve25519-sha256",
@@ -575,7 +575,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testCompleteInitialHandshakeCoordinatorHelper() {
+    public func testCompleteInitialHandshakeCoordinatorHelper(): Unit {
         let (clientResult, serverResult) = buildX25519KexResults(120)
         let negotiated = SshNegotiatedAlgorithms(
             "curve25519-sha256",
@@ -614,7 +614,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testHandshakeCoordinatorRekeyPreservesSessionIdAndRotatesKeys() {
+    public func testHandshakeCoordinatorRekeyPreservesSessionIdAndRotatesKeys(): Unit {
         let (clientInitial, serverInitial) = buildX25519KexResults(152)
         let (clientRekey, serverRekey) = buildX25519KexResults(216)
         let negotiated = SshNegotiatedAlgorithms(
@@ -671,7 +671,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testHandshakeCoordinatorRekeyRequiresActiveState() {
+    public func testHandshakeCoordinatorRekeyRequiresActiveState(): Unit {
         let (clientKexResult, _) = buildX25519KexResults(248)
         let coordinator = SshHandshakeCoordinator(
             SshPeerRole.Client,
@@ -699,7 +699,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testVerifyServerHostSignatureRsaSha2() {
+    public func testVerifyServerHostSignatureRsaSha2(): Unit {
         let exchangeHash = sha256("ssh-host-signature-rsa".toArray())
         let privateKey = loadRsa2048VectorPrivateKey()
         let hostKeyBlob = sshEncodeRsaHostPublicKey(privateKey.publicKey)
@@ -772,7 +772,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testVerifyServerHostSignatureEcdsaP256() {
+    public func testVerifyServerHostSignatureEcdsaP256(): Unit {
         let exchangeHash = sha256("ssh-host-signature-ecdsa".toArray())
         let privateKey = EcPrivateKey(P256, BigNum.one())
         let publicKey = EcPublicKey(
@@ -809,7 +809,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testVerifyServerHostSignatureEcdsaP384() {
+    public func testVerifyServerHostSignatureEcdsaP384(): Unit {
         let exchangeHash = sha256("ssh-host-signature-ecdsa-p384".toArray())
         let privateKey = EcPrivateKey(P384, BigNum.one())
         let publicKey = EcPublicKey(
@@ -846,7 +846,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testVerifyServerHostSignatureLegacyRsaSha1Gate() {
+    public func testVerifyServerHostSignatureLegacyRsaSha1Gate(): Unit {
         let exchangeHash = sha256("ssh-host-signature-rsa-sha1".toArray())
         let privateKey = loadRsa2048VectorPrivateKey()
         let hostKeyBlob = sshEncodeRsaHostPublicKey(privateKey.publicKey)
@@ -896,7 +896,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testVerifyServerHostSignatureEd25519() {
+    public func testVerifyServerHostSignatureEd25519(): Unit {
         let exchangeHash = hexToBytes("72")
         let seed = hexToBytes("4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb")
         let publicKey = hexToBytes("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c")
@@ -936,7 +936,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testEncodeEd25519HostKeyAndSignatureHelpers() {
+    public func testEncodeEd25519HostKeyAndSignatureHelpers(): Unit {
         let seed = hexToBytes("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
         let publicKey = ed25519PublicKeyFromSeed(seed)
         let exchangeHash = sha256("ssh-ed25519-helper-round-trip".toArray())
@@ -959,7 +959,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testEncodeRsaAndEcdsaHostKeyAndSignatureHelpers() {
+    public func testEncodeRsaAndEcdsaHostKeyAndSignatureHelpers(): Unit {
         let exchangeHash = sha256("ssh-rsa-ecdsa-helper-round-trip".toArray())
 
         let rsaPrivateKey = loadRsa2048VectorPrivateKey()
@@ -1012,7 +1012,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testRequireVerifiedHostIdentityPolicy() {
+    public func testRequireVerifiedHostIdentityPolicy(): Unit {
         let exchangeHash = sha256("ssh-host-identity-policy".toArray())
         let privateKey = loadRsa2048VectorPrivateKey()
         let hostKeyBlob = buildSshRsaHostKeyBlob(privateKey.publicKey)
@@ -1081,7 +1081,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testRequireVerifiedHostIdentityLegacyRsaSha1Gate() {
+    public func testRequireVerifiedHostIdentityLegacyRsaSha1Gate(): Unit {
         let exchangeHash = sha256("ssh-host-identity-rsa-sha1-gate".toArray())
         let privateKey = loadRsa2048VectorPrivateKey()
         let hostKeyBlob = buildSshRsaHostKeyBlob(privateKey.publicKey)
@@ -1125,7 +1125,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testClientProcessKexEcdhReplyX25519VerifiedPath() {
+    public func testClientProcessKexEcdhReplyX25519VerifiedPath(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let transcript = SshKexExchangeTranscript(
@@ -1191,7 +1191,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testHandshakeCoordinatorMarkKexEcdhDoneVerifiedPath() {
+    public func testHandshakeCoordinatorMarkKexEcdhDoneVerifiedPath(): Unit {
         let clientResult = buildVerifiedRsaClientKexResult(160)
         let hostKeyFingerprint = sha256(clientResult.serverHostKey)
         let coordinator = SshHandshakeCoordinator(
@@ -1229,7 +1229,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testHandshakeCoordinatorMarkKexEcdhDoneVerifiedRejectsTamperedSignature() {
+    public func testHandshakeCoordinatorMarkKexEcdhDoneVerifiedRejectsTamperedSignature(): Unit {
         let clientResult = buildVerifiedRsaClientKexResult(190)
         let tamperedSignature = clientResult.hostSignature.clone()
         tamperedSignature[tamperedSignature.size - 1] =
@@ -1277,7 +1277,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testCompleteInitialHandshakeCoordinatorX25519VerifiedHelper() {
+    public func testCompleteInitialHandshakeCoordinatorX25519VerifiedHelper(): Unit {
         let clientResult = buildVerifiedRsaClientKexResult(220)
         let coordinator = sshCompleteInitialHandshakeCoordinatorX25519Verified(
             SshPeerRole.Client,
@@ -1306,7 +1306,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testVerifyHostIdentityWithRequirementModes() {
+    public func testVerifyHostIdentityWithRequirementModes(): Unit {
         let clientResult = buildVerifiedRsaClientKexResult(260)
         let policy = SshHostVerificationPolicy(
             negotiatedHostKeyAlgorithm: SSH_HOST_KEY_ALGORITHM_RSA_SHA256,
@@ -1354,7 +1354,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testVerifyHostIdentityWithRequirementLegacyRsaSha1Gate() {
+    public func testVerifyHostIdentityWithRequirementLegacyRsaSha1Gate(): Unit {
         let exchangeHash = sha256("ssh-host-identity-requirement-rsa-sha1-gate".toArray())
         let privateKey = loadRsa2048VectorPrivateKey()
         let hostKeyBlob = buildSshRsaHostKeyBlob(privateKey.publicKey)
@@ -1419,7 +1419,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testVerifyHostIdentityWithConfigFactories() {
+    public func testVerifyHostIdentityWithConfigFactories(): Unit {
         let clientResult = buildVerifiedRsaClientKexResult(380)
         let policy = SshHostVerificationPolicy(
             negotiatedHostKeyAlgorithm: SSH_HOST_KEY_ALGORITHM_RSA_SHA256,
@@ -1449,7 +1449,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testHandshakeCoordinatorMarkKexEcdhDoneWithHostVerificationConfigModes() {
+    public func testHandshakeCoordinatorMarkKexEcdhDoneWithHostVerificationConfigModes(): Unit {
         let clientResult = buildVerifiedRsaClientKexResult(420)
         let tamperedResult = tamperSshKexHostSignature(clientResult, 0x10)
         let policy = SshHostVerificationPolicy(
@@ -1498,7 +1498,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testHandshakeCoordinatorMarkKexEcdhDoneWithHostVerificationRequirementModes() {
+    public func testHandshakeCoordinatorMarkKexEcdhDoneWithHostVerificationRequirementModes(): Unit {
         let clientResult = buildVerifiedRsaClientKexResult(300)
         let tamperedResult = tamperSshKexHostSignature(clientResult, 0x02)
         let policy = SshHostVerificationPolicy(
@@ -1560,7 +1560,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testCompleteInitialHandshakeCoordinatorX25519WithHostVerificationRequirementModes() {
+    public func testCompleteInitialHandshakeCoordinatorX25519WithHostVerificationRequirementModes(): Unit {
         let clientResult = buildVerifiedRsaClientKexResult(340)
         let tamperedResult = tamperSshKexHostSignature(clientResult, 0x04)
         let policy = SshHostVerificationPolicy(
@@ -1614,7 +1614,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testCompleteInitialHandshakeCoordinatorX25519WithHostVerificationConfigModes() {
+    public func testCompleteInitialHandshakeCoordinatorX25519WithHostVerificationConfigModes(): Unit {
         let clientResult = buildVerifiedRsaClientKexResult(460)
         let tamperedResult = tamperSshKexHostSignature(clientResult, 0x20)
         let policy = SshHostVerificationPolicy(
@@ -1666,7 +1666,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testCompleteServerInitialHandshakeX25519ResultWrapperRoundTrip() {
+    public func testCompleteServerInitialHandshakeX25519ResultWrapperRoundTrip(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let transcript = SshKexExchangeTranscript(
@@ -1747,7 +1747,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testCompleteClientInitialHandshakeX25519ResultWrapperModes() {
+    public func testCompleteClientInitialHandshakeX25519ResultWrapperModes(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let transcript = SshKexExchangeTranscript(
@@ -1871,7 +1871,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testCompleteServerInitialHandshakeCoordinatorX25519HelperRoundTrip() {
+    public func testCompleteServerInitialHandshakeCoordinatorX25519HelperRoundTrip(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let transcript = SshKexExchangeTranscript(
@@ -1940,7 +1940,7 @@ public class SshTestSuite {
     }
 
     @TestCase
-    public func testCompleteClientInitialHandshakeCoordinatorX25519HelperModes() {
+    public func testCompleteClientInitialHandshakeCoordinatorX25519HelperModes(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let transcript = SshKexExchangeTranscript(
@@ -2349,7 +2349,7 @@ private func buildAesCtrDerivedSessionKeys(): SshDerivedSessionKeys {
 }
 
 private func buildAesGcmDerivedSessionKeys(cipherName: String): SshDerivedSessionKeys {
-    let keyLen = if (cipherName == "aes128-gcm@openssh.com") {
+    let keyLen = if (cipherName == SSH_CIPHER_AES128_GCM_OPENSSH) {
         16
     } else {
         32
@@ -2373,14 +2373,14 @@ private func buildAesGcmDerivedSessionKeys(cipherName: String): SshDerivedSessio
 
 private func buildChacha20Poly1305DerivedSessionKeys(): SshDerivedSessionKeys {
     let clientToServer = SshDirectionKeyMaterial(
-        "chacha20-poly1305@openssh.com",
+        SSH_CIPHER_CHACHA20_POLY1305_OPENSSH,
         "none",
         incrementalBytes(12, start: 19),
         incrementalBytes(32, start: 51),
         []
     )
     let serverToClient = SshDirectionKeyMaterial(
-        "chacha20-poly1305@openssh.com",
+        SSH_CIPHER_CHACHA20_POLY1305_OPENSSH,
         "none",
         incrementalBytes(12, start: 83),
         incrementalBytes(32, start: 115),

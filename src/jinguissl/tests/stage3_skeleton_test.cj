@@ -13,7 +13,7 @@ type KeyValueVector = HashMap<String, String>
 @Test
 public class Stage3SkeletonTestSuite {
     @TestCase
-    public func testStage3VectorFilesLoad() {
+    public func testStage3VectorFilesLoad(): Unit {
         let signVectors = parseVectorFile("testdata/stage3/ecdsa_sign_sample.txt")
         let verifyVectors = parseVectorFile("testdata/stage3/ecdsa_verify_sample.txt")
         let verifyP256Vectors = parseVectorFile("testdata/stage3/ecdsa_verify_p256_sample.txt")
@@ -40,7 +40,7 @@ public class Stage3SkeletonTestSuite {
     }
 
     @TestCase
-    public func testRsaStage3SkeletonAndValidation() {
+    public func testRsaStage3SkeletonAndValidation(): Unit {
         let profile = FipsProfile.phase1Default()
         rsaRequireAllowed(profile)
         rsaValidateKeyParameters(2048, BigNum.fromHex("010001"))
@@ -68,13 +68,13 @@ public class Stage3SkeletonTestSuite {
 
         let generated = rsaGenerateKey(2048)
         @Assert(generated.publicKey.bits(), 2048)
-        let digest = hexToBytes("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+        let digest = hexToBytes(TEST_HEX_32_00112233445566778899AABBCCDDEEFF_00112233445566778899AABBCCDDEEFF)
         let signature = rsaSignPkcs1v15(generated, digest)
         @Assert(rsaVerifyPkcs1v15(generated.publicKey, digest, signature), true)
     }
 
     @TestCase
-    public func testRsaPkcs1v15SignVerifyWithVectorKey() {
+    public func testRsaPkcs1v15SignVerifyWithVectorKey(): Unit {
         let vectors = parseVectorFile("testdata/stage3/rsa_params_sample.txt")
         var selected = HashMap<String, String>()
         for (item in vectors) {
@@ -94,7 +94,7 @@ public class Stage3SkeletonTestSuite {
         )
         let publicKey = privateKey.publicKey
 
-        let digest = hexToBytes("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+        let digest = hexToBytes(TEST_HEX_32_00112233445566778899AABBCCDDEEFF_00112233445566778899AABBCCDDEEFF)
         let signature = rsaSignPkcs1v15(privateKey, digest)
         @Assert(signature.size, 256)
         @Assert(rsaVerifyPkcs1v15(publicKey, digest, signature), true)
@@ -105,7 +105,7 @@ public class Stage3SkeletonTestSuite {
     }
 
     @TestCase
-    public func testRsaPssSignVerifyWithVectorKey() {
+    public func testRsaPssSignVerifyWithVectorKey(): Unit {
         let vectors = parseVectorFile("testdata/stage3/rsa_params_sample.txt")
         var selected = HashMap<String, String>()
         for (item in vectors) {
@@ -147,7 +147,7 @@ public class Stage3SkeletonTestSuite {
             "000102030405060708090a0b0c0d0e0f" +
             "101112131415161718191a1b1c1d1e1f" +
             "202122232425262728292a2b2c2d2e2f" +
-            "303132333435363738393a3b3c3d3e3f"
+            TEST_HEX_ASCII_303132333435363738393A3B3C3D3E3F
         )
         let s512 = rsaSignPssWithHash(privateKey, d512, RsaHashAlgorithm.SHA512)
         @Assert(rsaVerifyPssWithHash(publicKey, d512, s512, RsaHashAlgorithm.SHA512), true)
@@ -158,7 +158,7 @@ public class Stage3SkeletonTestSuite {
     }
 
     @TestCase
-    public func testEccStage3SkeletonAndValidation() {
+    public func testEccStage3SkeletonAndValidation(): Unit {
         let profile = FipsProfile.phase1Default()
         ecdsaRequireAllowed(profile)
         ecdhRequireAllowed(profile)
@@ -183,7 +183,7 @@ public class Stage3SkeletonTestSuite {
             BigNum.fromHex("4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5")
         )
 
-        let digest = hexToBytes("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")
+        let digest = hexToBytes(TEST_HEX_32_00112233445566778899AABBCCDDEEFF_00112233445566778899AABBCCDDEEFF)
         let (r, s) = ecdsaSign(privateKey, digest)
         @Assert(ecdsaVerify(publicKey, digest, r, s), true)
 
@@ -206,7 +206,7 @@ public class Stage3SkeletonTestSuite {
     }
 
     @TestCase
-    public func testEcdsaP256VerifyVectors() {
+    public func testEcdsaP256VerifyVectors(): Unit {
         let vectors = parseVectorFile("testdata/stage3/ecdsa_verify_p256_sample.txt")
         for (item in vectors) {
             let publicKey = EcPublicKey(
@@ -228,7 +228,7 @@ public class Stage3SkeletonTestSuite {
     }
 
     @TestCase
-    public func testEcdhP256Minimal() {
+    public func testEcdhP256Minimal(): Unit {
         let gx = BigNum.fromHex("6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296")
         let gy = BigNum.fromHex("4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5")
         let publicKey = EcPublicKey(P256, gx, gy)
@@ -238,7 +238,7 @@ public class Stage3SkeletonTestSuite {
     }
 
     @TestCase
-    public func testRsaVectorValidationEntry() {
+    public func testRsaVectorValidationEntry(): Unit {
         let vectors = parseVectorFile("testdata/stage3/rsa_params_sample.txt")
         for (item in vectors) {
             let bits = parseInt(requireValue(item, "Bits"))

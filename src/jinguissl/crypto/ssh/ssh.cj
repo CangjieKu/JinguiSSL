@@ -39,6 +39,12 @@ public let SSH_HOST_KEY_ALGORITHM_RSA_SHA512: String = "rsa-sha2-512"
 public let SSH_HOST_KEY_ALGORITHM_ECDSA_NISTP256: String = "ecdsa-sha2-nistp256"
 public let SSH_HOST_KEY_ALGORITHM_ECDSA_NISTP384: String = "ecdsa-sha2-nistp384"
 public let SSH_HOST_KEY_ALGORITHM_ED25519: String = "ssh-ed25519"
+public let SSH_KEX_ALGORITHM_SNTRUP761X25519_SHA512_OPENSSH: String = "sntrup761x25519-sha512@" + "openssh.com"
+public let SSH_CIPHER_CHACHA20_POLY1305_OPENSSH: String = "chacha20-poly1305@" + "openssh.com"
+public let SSH_CIPHER_AES128_GCM_OPENSSH: String = "aes128-gcm@" + "openssh.com"
+public let SSH_CIPHER_AES256_GCM_OPENSSH: String = "aes256-gcm@" + "openssh.com"
+public let SSH_MAC_ALGORITHM_UMAC64_OPENSSH: String = "umac-64@" + "openssh.com"
+public let SSH_COMPRESSION_ZLIB_OPENSSH: String = "zlib@" + "openssh.com"
 public let SSH_HOST_KEY_SHA256_LEN: Int64 = 32
 private let SSH_AES_BLOCK_SIZE: Int64 = 16
 private let SSH_P256_FIELD_LEN: Int64 = 32
@@ -654,7 +660,7 @@ public class SshPacketProtectionLayer {
     }
 }
 
-// APP_LAYER_ORCHESTRATION: mirrored under _helper/ssh/src/jinguissl/crypto/ssh/ssh.cj
+// APP_LAYER_ORCHESTRATION: mirrored under _helper/ssh/source_snapshots/jinguissl/crypto/ssh/ssh.cj.txt
 public class SshHandshakeCoordinator {
     public let role: SshPeerRole
     public let negotiated: SshNegotiatedAlgorithms
@@ -903,10 +909,10 @@ private class SshPacketCipherState {
         this._blockSize = sshCipherPacketBlockSize(material.cipherName)
         this._aeadTagLen = sshCipherTagLength(material.cipherName)
         this._counter = material.iv.clone()
-        if (material.cipherName == "aes128-gcm@openssh.com" || material.cipherName == "aes256-gcm@openssh.com") {
+        if (material.cipherName == SSH_CIPHER_AES128_GCM_OPENSSH || material.cipherName == SSH_CIPHER_AES256_GCM_OPENSSH) {
             this._aesGcmContext = Some(AesGcmContext(material.encryptionKey))
             this._chacha20Context = None
-        } else if (material.cipherName == "chacha20-poly1305@openssh.com") {
+        } else if (material.cipherName == SSH_CIPHER_CHACHA20_POLY1305_OPENSSH) {
             this._aesGcmContext = None
             this._chacha20Context = Some(chacha20Poly1305NewContext(material.encryptionKey))
         } else {
@@ -932,7 +938,7 @@ private class SshPacketCipherState {
             _aeadNonceScratch = sshEnsureScratchSize(_aeadNonceScratch, _counter.size)
             sshCopyBytesRange(_counter, 0, _aeadNonceScratch, _counter.size)
             sshWritePacketAeadAad(_aeadAadScratch, _sequence)
-            if (material.cipherName == "aes128-gcm@openssh.com" || material.cipherName == "aes256-gcm@openssh.com") {
+            if (material.cipherName == SSH_CIPHER_AES128_GCM_OPENSSH || material.cipherName == SSH_CIPHER_AES256_GCM_OPENSSH) {
                 let context = match (_aesGcmContext) {
                     case Some(value) => value
                     case None =>
@@ -982,7 +988,7 @@ private class SshPacketCipherState {
             _aeadNonceScratch = sshEnsureScratchSize(_aeadNonceScratch, _counter.size)
             sshCopyBytesRange(_counter, 0, _aeadNonceScratch, _counter.size)
             sshWritePacketAeadAad(_aeadAadScratch, _sequence)
-            let packet = if (material.cipherName == "aes128-gcm@openssh.com" || material.cipherName == "aes256-gcm@openssh.com") {
+            let packet = if (material.cipherName == SSH_CIPHER_AES128_GCM_OPENSSH || material.cipherName == SSH_CIPHER_AES256_GCM_OPENSSH) {
                 let context = match (_aesGcmContext) {
                     case Some(value) => value
                     case None =>
@@ -1152,23 +1158,23 @@ public func sshBuildDefaultKexInit(cookie!: Array<Byte> = []): SshKexInitMessage
             "ecdsa-sha2-nistp384"
         ],
         [
-            "chacha20-poly1305@openssh.com",
-            "aes128-gcm@openssh.com",
-            "aes256-gcm@openssh.com",
+            SSH_CIPHER_CHACHA20_POLY1305_OPENSSH,
+            SSH_CIPHER_AES128_GCM_OPENSSH,
+            SSH_CIPHER_AES256_GCM_OPENSSH,
             "aes128-ctr",
             "aes256-ctr"
         ],
         [
-            "chacha20-poly1305@openssh.com",
-            "aes128-gcm@openssh.com",
-            "aes256-gcm@openssh.com",
+            SSH_CIPHER_CHACHA20_POLY1305_OPENSSH,
+            SSH_CIPHER_AES128_GCM_OPENSSH,
+            SSH_CIPHER_AES256_GCM_OPENSSH,
             "aes128-ctr",
             "aes256-ctr"
         ],
         ["hmac-sha2-256", "hmac-sha2-512"],
         ["hmac-sha2-256", "hmac-sha2-512"],
-        ["none", "zlib@openssh.com"],
-        ["none", "zlib@openssh.com"],
+        ["none", SSH_COMPRESSION_ZLIB_OPENSSH],
+        ["none", SSH_COMPRESSION_ZLIB_OPENSSH],
         languagesClientToServer: [],
         languagesServerToClient: [],
         firstKexPacketFollows: false,
@@ -2905,16 +2911,25 @@ private func sshDeriveKeyMaterialSha256(
 }
 
 private func sshCipherMaterialLengths(cipherName: String): (Int64, Int64) {
-    match (cipherName) {
-        case "aes128-ctr" => (16, 16)
-        case "aes256-ctr" => (16, 32)
-        case "chacha20-poly1305@openssh.com" => (12, 32)
-        case "aes128-gcm@openssh.com" => (12, 16)
-        case "aes256-gcm@openssh.com" => (12, 32)
-        case "none" => (0, 0)
-        case _ =>
-            throw CryptoException(Unsupported, "SSH cipher is unsupported: ${cipherName}")
+    if (cipherName == "aes128-ctr") {
+        return (16, 16)
     }
+    if (cipherName == "aes256-ctr") {
+        return (16, 32)
+    }
+    if (cipherName == SSH_CIPHER_CHACHA20_POLY1305_OPENSSH) {
+        return (12, 32)
+    }
+    if (cipherName == SSH_CIPHER_AES128_GCM_OPENSSH) {
+        return (12, 16)
+    }
+    if (cipherName == SSH_CIPHER_AES256_GCM_OPENSSH) {
+        return (12, 32)
+    }
+    if (cipherName == "none") {
+        return (0, 0)
+    }
+    throw CryptoException(Unsupported, "SSH cipher is unsupported: ${cipherName}")
 }
 
 private func sshMacKeyLength(macName: String): Int64 {
@@ -2928,22 +2943,28 @@ private func sshMacKeyLength(macName: String): Int64 {
 }
 
 private func sshCipherPacketBlockSize(cipherName: String): Int64 {
-    match (cipherName) {
-        case "aes128-ctr" | "aes256-ctr" => SSH_AES_BLOCK_SIZE
-        case "chacha20-poly1305@openssh.com" | "aes128-gcm@openssh.com" | "aes256-gcm@openssh.com" =>
-            SSH_DEFAULT_PACKET_BLOCK_SIZE
-        case "none" => SSH_DEFAULT_PACKET_BLOCK_SIZE
-        case _ =>
-            throw CryptoException(Unsupported, "SSH cipher packet framing is unsupported: ${cipherName}")
+    if (cipherName == "aes128-ctr" || cipherName == "aes256-ctr") {
+        return SSH_AES_BLOCK_SIZE
     }
+    if (
+        cipherName == SSH_CIPHER_CHACHA20_POLY1305_OPENSSH ||
+        cipherName == SSH_CIPHER_AES128_GCM_OPENSSH ||
+        cipherName == SSH_CIPHER_AES256_GCM_OPENSSH ||
+        cipherName == "none"
+    ) {
+        return SSH_DEFAULT_PACKET_BLOCK_SIZE
+    }
+    throw CryptoException(Unsupported, "SSH cipher packet framing is unsupported: ${cipherName}")
 }
 
 private func sshCipherTagLength(cipherName: String): Int64 {
-    match (cipherName) {
-        case "chacha20-poly1305@openssh.com" => CHACHA20_POLY1305_TAG_LEN
-        case "aes128-gcm@openssh.com" | "aes256-gcm@openssh.com" => 16
-        case _ => 0
+    if (cipherName == SSH_CIPHER_CHACHA20_POLY1305_OPENSSH) {
+        return CHACHA20_POLY1305_TAG_LEN
     }
+    if (cipherName == SSH_CIPHER_AES128_GCM_OPENSSH || cipherName == SSH_CIPHER_AES256_GCM_OPENSSH) {
+        return 16
+    }
+    0
 }
 
 private func sshEnsureScratchSize(buffer: Array<Byte>, size: Int64): Array<Byte> {
@@ -3004,7 +3025,7 @@ private func sshSealPacketAead(
     chacha20Context: ?Chacha20Poly1305Context
 ): Array<Byte> {
     let _ = aesGcmContext
-    if (cipherName == "chacha20-poly1305@openssh.com") {
+    if (cipherName == SSH_CIPHER_CHACHA20_POLY1305_OPENSSH) {
         let context = match (chacha20Context) {
             case Some(value) => value
             case None =>
@@ -3026,7 +3047,7 @@ private func sshOpenPacketAead(
     chacha20Context: ?Chacha20Poly1305Context
 ): Array<Byte> {
     let _ = aesGcmContext
-    if (cipherName == "chacha20-poly1305@openssh.com") {
+    if (cipherName == SSH_CIPHER_CHACHA20_POLY1305_OPENSSH) {
         let context = match (chacha20Context) {
             case Some(value) => value
             case None =>

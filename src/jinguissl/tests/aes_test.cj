@@ -8,8 +8,8 @@ import jinguissl.crypto.error.CryptoException
 @Test
 public class AesTestSuite {
     @TestCase
-    public func testAesSingleBlockVectors() {
-        let pt = hexToBytes("00112233445566778899aabbccddeeff")
+    public func testAesSingleBlockVectors(): Unit {
+        let pt = hexToBytes(TEST_HEX_BLOCK_00112233445566778899AABBCCDDEEFF)
 
         let k128 = hexToBytes("000102030405060708090a0b0c0d0e0f")
         let c128 = aesBlockEncrypt(k128, pt)
@@ -28,7 +28,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesEcbAndPkcs7() {
+    public func testAesEcbAndPkcs7(): Unit {
         let key = hexToBytes("2b7e151628aed2a6abf7158809cf4f3c")
         let plain = hexToBytes(
             "6bc1bee22e409f96e93d7e117393172a" +
@@ -52,7 +52,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesCbcVector() {
+    public func testAesCbcVector(): Unit {
         let key = hexToBytes("2b7e151628aed2a6abf7158809cf4f3c")
         let iv = hexToBytes("000102030405060708090a0b0c0d0e0f")
         let plain = hexToBytes(
@@ -77,7 +77,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesCtrVector() {
+    public func testAesCtrVector(): Unit {
         let key = hexToBytes("2b7e151628aed2a6abf7158809cf4f3c")
         let counter = hexToBytes("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff")
         let plain = hexToBytes(
@@ -99,7 +99,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesGcmVectorsAndTagCheck() {
+    public func testAesGcmVectorsAndTagCheck(): Unit {
         let key1 = hexToBytes("00000000000000000000000000000000")
         let iv1 = hexToBytes("000000000000000000000000")
         let pt1 = hexToBytes("00000000000000000000000000000000")
@@ -139,7 +139,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesGcmContextAndSchedulePath() {
+    public func testAesGcmContextAndSchedulePath(): Unit {
         let key = hexToBytes("feffe9928665731c6d6a8f9467308308")
         let iv = hexToBytes("cafebabefacedbaddecaf888")
         let aad = hexToBytes("feedfacedeadbeeffeedfacedeadbeefabaddad2")
@@ -165,7 +165,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesGcmIntoApis() {
+    public func testAesGcmIntoApis(): Unit {
         let key = hexToBytes("feffe9928665731c6d6a8f9467308308")
         let iv = hexToBytes("cafebabefacedbaddecaf888")
         let aad = hexToBytes("feedfacedeadbeeffeedfacedeadbeefabaddad2")
@@ -226,7 +226,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesEngineSelectionAndEnforcement() {
+    public func testAesEngineSelectionAndEnforcement(): Unit {
         @Assert(aesCurrentEngineKind().toString(), "SOFTWARE")
         @Assert(aesHardwareAvailable(), false)
         @Assert(aesProbeHardware().backend, "none")
@@ -249,10 +249,10 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesHardwareShimSelection() {
+    public func testAesHardwareShimSelection(): Unit {
         let key = hexToBytes("000102030405060708090a0b0c0d0e0f")
         let iv = hexToBytes("000000000000000000000000")
-        let pt = hexToBytes("00112233445566778899aabbccddeeff")
+        let pt = hexToBytes(TEST_HEX_BLOCK_00112233445566778899AABBCCDDEEFF)
         let mounts = aesListHardwareMountPoints()
         @Assert(mounts.size >= 3, true)
         @Assert(mounts[0].backend, "aesni")
@@ -327,7 +327,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesArmv8CeNativeBackendPath() {
+    public func testAesArmv8CeNativeBackendPath(): Unit {
         let probe = aesProbeHardware(backendHint: "armv8-ce")
         if (!probe.available) {
             @Assert(probe.backend, "none")
@@ -365,7 +365,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesArmv8CeNativeBridgeRawKeyBlobPath() {
+    public func testAesArmv8CeNativeBridgeRawKeyBlobPath(): Unit {
         let probe = aesProbeHardware(backendHint: "armv8-ce")
         if (!probe.available) {
             @Assert(probe.backend, "none")
@@ -374,7 +374,7 @@ public class AesTestSuite {
         }
 
         let key = hexToBytes("000102030405060708090a0b0c0d0e0f")
-        let pt = hexToBytes("00112233445566778899aabbccddeeff")
+        let pt = hexToBytes(TEST_HEX_BLOCK_00112233445566778899AABBCCDDEEFF)
         let bridge = AesNativeBridgeSpec("armv8-ce", "")
         let handle = aesOpenNativeBridge(bridge)
         @Assert(handle.probe.backend, "armv8-ce")
@@ -398,7 +398,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesArmv8CePointerApiPath() {
+    public func testAesArmv8CePointerApiPath(): Unit {
         let probe = aesProbeHardware(backendHint: "armv8-ce")
         if (!probe.available) {
             @Assert(probe.backend, "none")
@@ -518,7 +518,7 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testAesNativeBridgeMarshalAndSoftwareDispatch() {
+    public func testAesNativeBridgeMarshalAndSoftwareDispatch(): Unit {
         let key = hexToBytes("603deb1015ca71be2b73aef0857d7781" + "1f352c073b6108d72d9810a30914dff4")
         let pt = hexToBytes("6bc1bee22e409f96e93d7e117393172a" + "ae2d8a571e03ac9c9eb76fac45af8e51")
 
@@ -580,10 +580,10 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testComplianceCheckedAesRejectsAndAllows() {
+    public func testComplianceCheckedAesRejectsAndAllows(): Unit {
         let profile = FipsProfile.phase1Default()
         let key = hexToBytes("000102030405060708090a0b0c0d0e0f")
-        let pt = hexToBytes("00112233445566778899aabbccddeeff")
+        let pt = hexToBytes(TEST_HEX_BLOCK_00112233445566778899AABBCCDDEEFF)
 
         try {
             _ = aesEcbEncryptChecked(profile, key, pt)
@@ -599,10 +599,10 @@ public class AesTestSuite {
     }
 
     @TestCase
-    public func testComplianceCheckedAesCustomProfile() {
+    public func testComplianceCheckedAesCustomProfile(): Unit {
         let profile = FipsProfile.fromText("AES-ECB")
         let key = hexToBytes("000102030405060708090a0b0c0d0e0f")
-        let pt = hexToBytes("00112233445566778899aabbccddeeff")
+        let pt = hexToBytes(TEST_HEX_BLOCK_00112233445566778899AABBCCDDEEFF)
 
         let ct = aesEcbEncryptChecked(profile, key, pt)
         @Assert(aesEcbDecryptChecked(profile, key, ct), pt)

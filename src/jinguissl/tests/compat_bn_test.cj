@@ -7,7 +7,7 @@ import jinguissl.crypto.error.CryptoException
 @Test
 public class CompatBnTestSuite {
     @TestCase
-    public func testCompatAndNativeConsistency() {
+    public func testCompatAndNativeConsistency(): Unit {
         let a = BN(BigNum.fromHex("1234567890abcdef"))
         let b = BN(BigNum.fromHex("fedcba987654321"))
 
@@ -27,7 +27,7 @@ public class CompatBnTestSuite {
     }
 
     @TestCase
-    public func testCompatModExpAndInverse() {
+    public func testCompatModExpAndInverse(): Unit {
         let a = BN(BigNum.fromHex("2"))
         let e = BN(BigNum.fromHex("10"))
         let m = BN(BigNum.fromHex("10001"))
@@ -42,7 +42,7 @@ public class CompatBnTestSuite {
     }
 
     @TestCase
-    public func testCompatErrorSurface() {
+    public func testCompatErrorSurface(): Unit {
         try {
             let a = BN(BigNum.fromHex("1234"))
             _ = BN_div(a, BN(BigNum.zero()))
@@ -61,7 +61,7 @@ public class CompatBnTestSuite {
     }
 
     @TestCase
-    public func testBin2BnAndBn2Bin() {
+    public func testBin2BnAndBn2Bin(): Unit {
         let raw: Array<Byte> = [0x00, 0x12, 0x34, 0x56]
         let bn = BN_bin2bn(raw)
         let expected: Array<Byte> = [0x12, 0x34, 0x56]

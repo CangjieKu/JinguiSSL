@@ -7,7 +7,7 @@ import jinguissl.crypto.tls.*
 @Test
 public class TlsHandshakeTestSuite {
     @TestCase
-    public func testHandshakeFrameRoundTrip() {
+    public func testHandshakeFrameRoundTrip(): Unit {
         let body = "abcd".toArray()
         let frame = TlsHandshakeFrame(Finished, body)
         let encoded = tlsEncodeHandshakeFrame(frame)
@@ -36,7 +36,7 @@ public class TlsHandshakeTestSuite {
     }
 
     @TestCase
-    public func testClientHelloRoundTripAndDeterministicEncoding() {
+    public func testClientHelloRoundTripAndDeterministicEncoding(): Unit {
         let random = incrementalBytes(32, start: 0)
         let clientHello = TlsClientHello(
             random,
@@ -77,7 +77,7 @@ public class TlsHandshakeTestSuite {
     }
 
     @TestCase
-    public func testServerHelloRoundTripAndDeterministicEncoding() {
+    public func testServerHelloRoundTripAndDeterministicEncoding(): Unit {
         let random = incrementalBytes(32, start: 0x20)
         let serverHello = TlsServerHello(
             random,
@@ -128,7 +128,7 @@ public class TlsHandshakeTestSuite {
     }
 
     @TestCase
-    public func testKeyExchangeRoundTrip() {
+    public func testKeyExchangeRoundTrip(): Unit {
         let payload = [UInt8(0xde), UInt8(0xad), UInt8(0xbe), UInt8(0xef)]
         let message = TlsKeyExchangeMessage(payload)
 
@@ -142,7 +142,7 @@ public class TlsHandshakeTestSuite {
     }
 
     @TestCase
-    public func testCertificateAndFinishedRoundTrip() {
+    public func testCertificateAndFinishedRoundTrip(): Unit {
         let cert1 = [UInt8(0x30), UInt8(0x82), UInt8(0x01), UInt8(0x0a)]
         let cert2 = [UInt8(0x30), UInt8(0x82), UInt8(0x02), UInt8(0x0b), UInt8(0x00)]
 
@@ -191,12 +191,12 @@ public class TlsHandshakeTestSuite {
     }
 
     @TestCase
-    public func testSniAlpnAndOcspExtensionCodecs() {
+    public func testSniAlpnAndOcspExtensionCodecs(): Unit {
         let sniExt = tlsBuildServerNameExtension("WWW.Example.com")
         @Assert(sniExt.extType, TLS_EXT_SERVER_NAME)
         let sniHosts = tlsParseServerNameExtension(sniExt)
         @Assert(sniHosts.size, 1)
-        @Assert(sniHosts[0], "www.example.com")
+        @Assert(sniHosts[0], TEST_HOST_WWW)
 
         let alpnExt = tlsBuildAlpnExtension(["h2", "http/1.1"])
         @Assert(alpnExt.extType, TLS_EXT_ALPN)
@@ -223,7 +223,7 @@ public class TlsHandshakeTestSuite {
     }
 
     @TestCase
-    public func testRejectInvalidHandshakeShapes() {
+    public func testRejectInvalidHandshakeShapes(): Unit {
         let wrongType = tlsEncodeHandshakeFrame(TlsHandshakeFrame(ServerHello, [0]))
         try {
             _ = tlsDecodeClientHelloHandshake(wrongType)

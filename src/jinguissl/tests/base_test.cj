@@ -6,7 +6,7 @@ import jinguissl.crypto.error.CryptoException
 @Test
 public class BaseTestSuite {
     @TestCase
-    public func testSecureBytesCloneClearAndDestroyLifecycle() {
+    public func testSecureBytesCloneClearAndDestroyLifecycle(): Unit {
         let source: Array<Byte> = [1, 2, 3, 4]
         let secure = SecureBytes(source)
         source[0] = 9
@@ -41,7 +41,7 @@ public class BaseTestSuite {
     }
 
     @TestCase
-    public func testSecureBytesBoundsAndFactoryValidation() {
+    public func testSecureBytesBoundsAndFactoryValidation(): Unit {
         let secure = SecureBytes.withSize(3)
         let expectedZeros: Array<Byte> = [0, 0, 0]
         @Assert(secure.bytes(), expectedZeros)
@@ -62,7 +62,7 @@ public class BaseTestSuite {
     }
 
     @TestCase
-    public func testByteBufferAppendAndClear() {
+    public func testByteBufferAppendAndClear(): Unit {
         let buffer = ByteBuffer([1, 2])
         buffer.append(UInt8(3))
         buffer.append([4, 5])

@@ -19,7 +19,7 @@ import jinguissl.crypto.x509.{
 @Test
 public class ContractTestSuite {
     @TestCase
-    public func testEnvelopeAesRoundTripJsonWithStoredAad() {
+    public func testEnvelopeAesRoundTripJsonWithStoredAad(): Unit {
         let key = incrementalBytes(32, start: 1)
         let keyRing = HashMap<String, Array<Byte>>()
         keyRing.add("k1", key)
@@ -55,7 +55,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testEnvelopeChachaRoundTripAndTamperedTagReject() {
+    public func testEnvelopeChachaRoundTripAndTamperedTagReject(): Unit {
         let key = incrementalBytes(32, start: 41)
         let keyRing = HashMap<String, Array<Byte>>()
         keyRing.add("k2", key)
@@ -89,7 +89,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testX509VerifyWithHostnameAndPinning() {
+    public func testX509VerifyWithHostnameAndPinning(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let rootPem = readText("testdata/x509/policy_root.pem")
@@ -99,7 +99,7 @@ public class ContractTestSuite {
             leafPem,
             rootPem,
             intermediatesPemBundle: intermediatePem,
-            hostname: "www.example.com",
+            hostname: TEST_HOST_WWW,
             validationTime: "230101000000Z",
             pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [spkiPin])
         )
@@ -113,7 +113,7 @@ public class ContractTestSuite {
                 leafPem,
                 rootPem,
                 intermediatesPemBundle: intermediatePem,
-                hostname: "api.example.com",
+                hostname: TEST_HOST_API,
                 validationTime: "230101000000Z"
             )
             @Fail("hostname mismatch should fail")
@@ -127,7 +127,7 @@ public class ContractTestSuite {
                 leafPem,
                 rootPem,
                 intermediatesPemBundle: intermediatePem,
-                hostname: "www.example.com",
+                hostname: TEST_HOST_WWW,
                 validationTime: "230101000000Z",
                 pinPolicy: ContractX509PinPolicy(allowedLeafDerSha256: [wrongPin])
             )
@@ -138,7 +138,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractX509ChainAndTryVerifyFacade() {
+    public func testContractX509ChainAndTryVerifyFacade(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let rootPem = readText("testdata/x509/policy_root.pem")
@@ -147,7 +147,7 @@ public class ContractTestSuite {
         let verified = contractVerifyServerCertificateChainPem(
             chainPem,
             rootPem,
-            hostname: "www.example.com",
+            hostname: TEST_HOST_WWW,
             validationTime: "230101000000Z"
         )
         @Assert(verified.chainLength, 3)
@@ -156,7 +156,7 @@ public class ContractTestSuite {
         let okOutcome = contractTryVerifyServerCertificateChainPem(
             chainPem,
             rootPem,
-            hostname: "www.example.com",
+            hostname: TEST_HOST_WWW,
             validationTime: "230101000000Z"
         )
         @Assert(okOutcome.ok, true)
@@ -176,7 +176,7 @@ public class ContractTestSuite {
         let failedOutcome = contractTryVerifyServerCertificateChainPem(
             chainPem,
             rootPem,
-            hostname: "api.example.com",
+            hostname: TEST_HOST_API,
             validationTime: "230101000000Z"
         )
         @Assert(failedOutcome.ok, false)
@@ -196,7 +196,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractValidateHttpServerTlsConfigInput() {
+    public func testContractValidateHttpServerTlsConfigInput(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let certChainPem = "${leafPem}\n${intermediatePem}"
@@ -247,7 +247,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTryValidateHttpServerTlsConfigInputOutcome() {
+    public func testContractTryValidateHttpServerTlsConfigInputOutcome(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let certChainPem = "${leafPem}\n${intermediatePem}"
@@ -285,7 +285,76 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractValidateHttpClientTlsConfigInput() {
+    public func testContractPrepareHttpServerTlsMaterial(): Unit {
+        let leafPem = readText("testdata/x509/policy_leaf.pem")
+        let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
+        let certChainPem = "${leafPem}\n${intermediatePem}"
+        let leafKeyPem = readText("testdata/x509/policy_leaf_key_pkcs8.pem")
+
+        let material = contractPrepareHttpServerTlsMaterial(
+            certChainPem,
+            leafKeyPem,
+            alpnProtocols: [" H2 ", "http/1.1", "h2"],
+            requireHttp2Alpn: true
+        )
+        @Assert(material.validation.certificateChainLength, 2)
+        @Assert(material.validation.normalizedAlpnProtocols, ["h2", "http/1.1"])
+        @Assert(material.certificateChainPemBlocks.size, 2)
+        @Assert(material.certificateChainPemBundle().contains("BEGIN CERTIFICATE"), true)
+        @Assert(material.leafCertificatePem().contains("BEGIN CERTIFICATE"), true)
+        @Assert(material.privateKeyPem.contains("BEGIN PRIVATE KEY"), true)
+
+        let failed = contractTryPrepareHttpServerTlsMaterial(
+            certChainPem,
+            leafKeyPem,
+            alpnProtocols: ["http/1.1"],
+            requireHttp2Alpn: true
+        )
+        @Assert(failed.ok, false)
+        match (failed.code) {
+            case Some(value) => @Assert(value.toString(), "BAD_INPUT")
+            case None => @Fail("TLS server material failed outcome should carry contract code")
+        }
+    }
+
+    @TestCase
+    public func testContractHttpServerTlsRequestFacades(): Unit {
+        let leafPem = readText("testdata/x509/policy_leaf.pem")
+        let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
+        let certChainPem = "${leafPem}\n${intermediatePem}"
+        let leafKeyPem = readText("testdata/x509/policy_leaf_key_pkcs8.pem")
+
+        let request = ContractHttpServerTlsConfigRequest(
+            certChainPem,
+            leafKeyPem,
+            alpnProtocols: [" H2 ", "http/1.1", "h2"],
+            requireHttp2Alpn: true
+        )
+        let validated = contractValidateHttpServerTlsConfigRequest(request)
+        @Assert(validated.certificateChainLength, 2)
+        @Assert(validated.normalizedAlpnProtocols, ["h2", "http/1.1"])
+
+        let prepared = contractPrepareHttpServerTlsMaterialRequest(request)
+        @Assert(prepared.validation.keyAlgorithm == "RSA" || prepared.validation.keyAlgorithm == "EC", true)
+        @Assert(prepared.certificateChainPemBlocks.size, 2)
+
+        let failed = contractTryPrepareHttpServerTlsMaterialRequest(
+            ContractHttpServerTlsConfigRequest(
+                certChainPem,
+                leafKeyPem,
+                alpnProtocols: ["http/1.1"],
+                requireHttp2Alpn: true
+            )
+        )
+        @Assert(failed.ok, false)
+        match (failed.code) {
+            case Some(value) => @Assert(value.toString(), "BAD_INPUT")
+            case None => @Fail("request-style TLS server material failure should carry contract code")
+        }
+    }
+
+    @TestCase
+    public func testContractValidateHttpClientTlsConfigInput(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let rootPem = readText("testdata/x509/policy_root.pem")
@@ -294,31 +363,31 @@ public class ContractTestSuite {
         let result = contractValidateHttpClientTlsConfigInput(
             rootPem,
             intermediatesPemBundle: intermediatePem,
-            hostname: " WWW.EXAMPLE.COM ",
+            hostname: TEST_HOST_WWW_UPPER_PADDED,
             validationTime: "230101000000Z",
             pinPolicy: ContractX509PinPolicy(allowedLeafDerSha256: [derPin]),
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: [" www.example.com ", "WWW.EXAMPLE.COM"],
+                allowedServerNames: [TEST_HOST_WWW_LOWER_PADDED, TEST_HOST_WWW_UPPER],
                 alpnPreference: [" H2 ", "http/1.1"]
             )
         )
         @Assert(result.trustAnchorCount, 1)
         @Assert(result.intermediateCount, 1)
-        @Assert(result.normalizedHostname, "www.example.com")
+        @Assert(result.normalizedHostname, TEST_HOST_WWW)
         @Assert(result.hasValidationTimeOverride, true)
         @Assert(result.allowedLeafDerPinCount, 1)
         @Assert(result.allowedLeafSpkiPinCount, 0)
-        @Assert(result.negotiationPolicy.normalizedAllowedServerNames, ["www.example.com"])
+        @Assert(result.negotiationPolicy.normalizedAllowedServerNames, [TEST_HOST_WWW])
         @Assert(result.negotiationPolicy.normalizedAlpnPreference, ["h2", "http/1.1"])
 
         try {
             _ = contractValidateHttpClientTlsConfigInput(
                 rootPem,
-                hostname: "www.example.com",
+                hostname: TEST_HOST_WWW,
                 policy: ContractTlsHttpNegotiationPolicy(
                     requireServerName: true,
-                    allowedServerNames: ["api.example.com"]
+                    allowedServerNames: [TEST_HOST_API]
                 )
             )
             @Fail("hostname outside allowed server names should fail")
@@ -328,7 +397,51 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTryValidateHttpClientTlsConfigInputOutcome() {
+    public func testContractPrepareHttpClientTlsTrustMaterial(): Unit {
+        let leafPem = readText("testdata/x509/policy_leaf.pem")
+        let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
+        let rootPem = readText("testdata/x509/policy_root.pem")
+        let (derPin, _spkiPin) = contractComputeLeafPinsFromPem(leafPem)
+
+        let material = contractPrepareHttpClientTlsTrustMaterial(
+            rootPem,
+            intermediatesPemBundle: intermediatePem,
+            hostname: TEST_HOST_WWW_UPPER_PADDED,
+            validationTime: "230101000000Z",
+            pinPolicy: ContractX509PinPolicy(allowedLeafDerSha256: [derPin]),
+            policy: ContractTlsHttpNegotiationPolicy(
+                requireServerName: true,
+                allowedServerNames: [TEST_HOST_WWW_LOWER_PADDED, TEST_HOST_WWW_UPPER],
+                alpnPreference: [" H2 ", "http/1.1"]
+            )
+        )
+        @Assert(material.validation.trustAnchorCount, 1)
+        @Assert(material.validation.intermediateCount, 1)
+        @Assert(material.validation.normalizedHostname, TEST_HOST_WWW)
+        @Assert(material.trustAnchorPemBlocks.size, 1)
+        @Assert(material.intermediatePemBlocks.size, 1)
+        @Assert(material.trustAnchorsPemBundle().contains("BEGIN CERTIFICATE"), true)
+        @Assert(material.intermediatesPemBundle().contains("BEGIN CERTIFICATE"), true)
+        @Assert(material.pinPolicy.allowedLeafDerSha256.size, 1)
+        @Assert(material.validation.negotiationPolicy.normalizedAlpnPreference, ["h2", "http/1.1"])
+
+        let failed = contractTryPrepareHttpClientTlsTrustMaterial(
+            rootPem,
+            hostname: TEST_HOST_WWW,
+            policy: ContractTlsHttpNegotiationPolicy(
+                requireServerName: true,
+                allowedServerNames: [TEST_HOST_API]
+            )
+        )
+        @Assert(failed.ok, false)
+        match (failed.code) {
+            case Some(value) => @Assert(value.toString(), "BAD_INPUT")
+            case None => @Fail("TLS client material failed outcome should carry contract code")
+        }
+    }
+
+    @TestCase
+    public func testContractTryValidateHttpClientTlsConfigInputOutcome(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let rootPem = readText("testdata/x509/policy_root.pem")
@@ -337,12 +450,12 @@ public class ContractTestSuite {
         let ok = contractTryValidateHttpClientTlsConfigInput(
             rootPem,
             intermediatesPemBundle: intermediatePem,
-            hostname: "www.example.com",
+            hostname: TEST_HOST_WWW,
             validationTime: "230101000000Z",
             pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [spkiPin]),
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2"]
             )
         )
@@ -373,7 +486,66 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractVerifyHttpClientPeerCertificateFacades() {
+    public func testContractHttpClientTlsRequestFacades(): Unit {
+        let leafPem = readText("testdata/x509/policy_leaf.pem")
+        let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
+        let rootPem = readText("testdata/x509/policy_root.pem")
+        let chainPem = "${leafPem}\n${intermediatePem}"
+        let (_derPin, spkiPin) = contractComputeLeafPinsFromPem(leafPem)
+
+        let trustRequest = ContractHttpClientTlsTrustRequest(
+            rootPem,
+            intermediatesPemBundle: intermediatePem,
+            hostname: TEST_HOST_WWW_UPPER_PADDED,
+            validationTime: "230101000000Z",
+            pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [spkiPin]),
+            policy: ContractTlsHttpNegotiationPolicy(
+                requireServerName: true,
+                allowedServerNames: [TEST_HOST_WWW_LOWER_PADDED],
+                alpnPreference: [" H2 ", "http/1.1"]
+            )
+        )
+
+        let validated = contractValidateHttpClientTlsTrustRequest(trustRequest)
+        @Assert(validated.normalizedHostname, TEST_HOST_WWW)
+        @Assert(validated.negotiationPolicy.normalizedAlpnPreference, ["h2", "http/1.1"])
+
+        let material = contractPrepareHttpClientTlsTrustMaterialRequest(trustRequest)
+        @Assert(material.trustAnchorPemBlocks.size, 1)
+        @Assert(material.intermediatePemBlocks.size, 1)
+        @Assert(material.pinPolicy.allowedLeafSpkiSha256.size, 1)
+
+        let verifiedLeaf = contractVerifyHttpClientPeerCertificatePemRequest(
+            ContractHttpClientTlsPeerPemRequest(leafPem, trustRequest)
+        )
+        @Assert(verifiedLeaf.chainLength, 3)
+
+        let verifiedChain = contractVerifyHttpClientPeerCertificateChainPemRequest(
+            ContractHttpClientTlsPeerChainRequest(chainPem, trustRequest)
+        )
+        @Assert(verifiedChain.trustAnchorCommonName, "Policy Root")
+
+        let failed = contractTryVerifyHttpClientPeerCertificateChainPemRequest(
+            ContractHttpClientTlsPeerChainRequest(
+                chainPem,
+                ContractHttpClientTlsTrustRequest(
+                    rootPem,
+                    intermediatesPemBundle: intermediatePem,
+                    hostname: TEST_HOST_API,
+                    validationTime: "230101000000Z",
+                    policy: ContractTlsHttpNegotiationPolicy(
+                        requireServerName: true,
+                        allowedServerNames: [TEST_HOST_API]
+                    )
+                )
+            )
+        )
+        @Assert(failed.ok, false)
+        @Assert(failed.code.toString(), "VERIFY_FAILED")
+    }
+
+    @TestCase
+    public func testContractVerifyHttpClientPeerCertificateFacades(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let rootPem = readText("testdata/x509/policy_root.pem")
@@ -384,12 +556,12 @@ public class ContractTestSuite {
             leafPem,
             rootPem,
             intermediatesPemBundle: intermediatePem,
-            hostname: " WWW.EXAMPLE.COM ",
+            hostname: TEST_HOST_WWW_UPPER_PADDED,
             validationTime: "230101000000Z",
             pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [spkiPin]),
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
@@ -399,24 +571,24 @@ public class ContractTestSuite {
         let verifiedChain = contractVerifyHttpClientPeerCertificateChainPem(
             chainPem,
             rootPem,
-            hostname: "www.example.com",
+            hostname: TEST_HOST_WWW,
             validationTime: "230101000000Z",
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"]
+                allowedServerNames: [TEST_HOST_WWW]
             )
         )
         @Assert(verifiedChain.chainLength, 3)
-        @Assert(verifiedChain.leafSubjectCommonName, "www.example.com")
+        @Assert(verifiedChain.leafSubjectCommonName, TEST_HOST_WWW)
 
         let failed = contractTryVerifyHttpClientPeerCertificateChainPem(
             chainPem,
             rootPem,
-            hostname: "api.example.com",
+            hostname: TEST_HOST_API,
             validationTime: "230101000000Z",
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["api.example.com"]
+                allowedServerNames: [TEST_HOST_API]
             )
         )
         @Assert(failed.ok, false)
@@ -428,16 +600,16 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractValidateTlsHttpNegotiationPolicy() {
+    public func testContractValidateTlsHttpNegotiationPolicy(): Unit {
         let result = contractValidateTlsHttpNegotiationPolicy(
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: [" API.EXAMPLE.COM ", "api.example.com", "WWW.EXAMPLE.COM"],
+                allowedServerNames: [TEST_HOST_API_UPPER_PADDED, TEST_HOST_API, TEST_HOST_WWW_UPPER],
                 alpnPreference: [" H2 ", "http/1.1", "h2"]
             )
         )
         @Assert(result.requireServerName, true)
-        @Assert(result.normalizedAllowedServerNames, ["api.example.com", "www.example.com"])
+        @Assert(result.normalizedAllowedServerNames, [TEST_HOST_API, TEST_HOST_WWW])
         @Assert(result.normalizedAlpnPreference, ["h2", "http/1.1"])
 
         let defaults = contractValidateTlsHttpNegotiationPolicy(
@@ -451,18 +623,18 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTryValidateTlsHttpNegotiationPolicyOutcome() {
+    public func testContractTryValidateTlsHttpNegotiationPolicyOutcome(): Unit {
         let ok = contractTryValidateTlsHttpNegotiationPolicy(
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["api.example.com"],
+                allowedServerNames: [TEST_HOST_API],
                 alpnPreference: ["h2"]
             )
         )
         @Assert(ok.ok, true)
         match (ok.result) {
             case Some(value) =>
-                @Assert(value.normalizedAllowedServerNames, ["api.example.com"])
+                @Assert(value.normalizedAllowedServerNames, [TEST_HOST_API])
             case None =>
                 @Fail("TLS HTTP policy success outcome should carry result")
         }
@@ -486,7 +658,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13HttpX25519FlightFacadeRoundTrip() {
+    public func testContractTls13HttpX25519FlightFacadeRoundTrip(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let rootPem = readText("testdata/x509/policy_root.pem")
@@ -494,7 +666,7 @@ public class ContractTestSuite {
         let (leafDerPin, leafSpkiPin) = contractComputeLeafPinsFromPem(leafPem)
 
         let clientHello = contractTls13BuildHttpClientHelloX25519(
-            "www.example.com",
+            TEST_HOST_WWW,
             alpnProtocols: ["h2", "http/1.1"],
             clientPrivateKey: Some(incrementalBytes(32, start: 91))
         )
@@ -509,12 +681,12 @@ public class ContractTestSuite {
             leafKeyPem,
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
         @Assert(flight.selectedAlpn, "h2")
-        @Assert(flight.requestedServerName, "www.example.com")
+        @Assert(flight.requestedServerName, TEST_HOST_WWW)
         @Assert(flight.acknowledgedServerName, true)
 
         let verified = contractTls13VerifyHttpServerFlightX25519(
@@ -522,17 +694,17 @@ public class ContractTestSuite {
             flight,
             rootPem,
             intermediatesPemBundle: intermediatePem,
-            hostname: "www.example.com",
+            hostname: TEST_HOST_WWW,
             validationTime: "230101000000Z",
             pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [leafSpkiPin]),
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
         @Assert(verified.selectedAlpn, "h2")
-        @Assert(verified.requestedServerName, "www.example.com")
+        @Assert(verified.requestedServerName, TEST_HOST_WWW)
         @Assert(verified.chainLength, 3)
         @Assert(verified.leafDerSha256, leafDerPin)
         @Assert(verified.leafSpkiSha256, leafSpkiPin)
@@ -545,12 +717,12 @@ public class ContractTestSuite {
                 flight,
                 rootPem,
                 intermediatesPemBundle: intermediatePem,
-                hostname: "api.example.com",
+                hostname: TEST_HOST_API,
                 validationTime: "230101000000Z",
                 pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [leafSpkiPin]),
                 policy: ContractTlsHttpNegotiationPolicy(
                     requireServerName: true,
-                    allowedServerNames: ["www.example.com"],
+                    allowedServerNames: [TEST_HOST_WWW],
                     alpnPreference: ["h2", "http/1.1"]
                 )
             )
@@ -561,14 +733,14 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13HttpVerifiedSessionAndExporterFacade() {
+    public func testContractTls13HttpVerifiedSessionAndExporterFacade(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let rootPem = readText("testdata/x509/policy_root.pem")
         let leafKeyPem = readText("testdata/x509/policy_leaf_key_pkcs8.pem")
 
         let clientHello = contractTls13BuildHttpClientHelloX25519(
-            "www.example.com",
+            TEST_HOST_WWW,
             alpnProtocols: ["h2", "http/1.1"],
             clientPrivateKey: Some(incrementalBytes(32, start: 121))
         )
@@ -579,7 +751,7 @@ public class ContractTestSuite {
             leafKeyPem,
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
@@ -588,11 +760,11 @@ public class ContractTestSuite {
             flight,
             rootPem,
             intermediatesPemBundle: intermediatePem,
-            hostname: "www.example.com",
+            hostname: TEST_HOST_WWW,
             validationTime: "230101000000Z",
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
@@ -628,7 +800,88 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls12HttpRsaFacadeRoundTrip() {
+    public func testContractTls13HttpRequestFacades(): Unit {
+        let leafPem = readText("testdata/x509/policy_leaf.pem")
+        let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
+        let rootPem = readText("testdata/x509/policy_root.pem")
+        let leafKeyPem = readText("testdata/x509/policy_leaf_key_pkcs8.pem")
+        let (_leafDerPin, leafSpkiPin) = contractComputeLeafPinsFromPem(leafPem)
+
+        let clientHello = contractTls13BuildHttpClientHelloX25519Request(
+            ContractTls13HttpClientHelloX25519Request(
+                TEST_HOST_WWW,
+                alpnProtocols: ["h2", "http/1.1"],
+                clientPrivateKey: Some(incrementalBytes(32, start: 211))
+            )
+        )
+        @Assert(clientHello.clientPrivateKey.size, 32)
+
+        let flight = contractTls13BuildHttpServerFlightX25519Request(
+            ContractTls13HttpServerFlightX25519Request(
+                clientHello.encodedClientHello,
+                incrementalBytes(32, start: 227),
+                "${leafPem}\n${intermediatePem}",
+                leafKeyPem,
+                policy: ContractTlsHttpNegotiationPolicy(
+                    requireServerName: true,
+                    allowedServerNames: [TEST_HOST_WWW],
+                    alpnPreference: ["h2", "http/1.1"]
+                )
+            )
+        )
+        @Assert(flight.selectedAlpn, "h2")
+
+        let verifyRequest = ContractTls13HttpVerifyServerFlightX25519Request(
+            clientHello,
+            flight,
+            ContractHttpClientTlsTrustRequest(
+                rootPem,
+                intermediatesPemBundle: intermediatePem,
+                hostname: TEST_HOST_WWW,
+                validationTime: "230101000000Z",
+                pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [leafSpkiPin]),
+                policy: ContractTlsHttpNegotiationPolicy(
+                    requireServerName: true,
+                    allowedServerNames: [TEST_HOST_WWW],
+                    alpnPreference: ["h2", "http/1.1"]
+                )
+            )
+        )
+
+        let verified = contractTls13VerifyHttpServerFlightX25519Request(verifyRequest)
+        @Assert(verified.selectedAlpn, "h2")
+        @Assert(verified.chainLength, 3)
+
+        let verifiedSession = contractTls13VerifyHttpServerFlightX25519WithSessionRequest(verifyRequest)
+        @Assert(verifiedSession.result.selectedAlpn, "h2")
+        @Assert(verifiedSession.masterSecret.size > 0, true)
+
+        let failed = contractTryTls13VerifyHttpServerFlightX25519Request(
+            ContractTls13HttpVerifyServerFlightX25519Request(
+                clientHello,
+                flight,
+                ContractHttpClientTlsTrustRequest(
+                    rootPem,
+                    intermediatesPemBundle: intermediatePem,
+                    hostname: TEST_HOST_API,
+                    validationTime: "230101000000Z",
+                    policy: ContractTlsHttpNegotiationPolicy(
+                        requireServerName: true,
+                        allowedServerNames: [TEST_HOST_API],
+                        alpnPreference: ["h2", "http/1.1"]
+                    )
+                )
+            )
+        )
+        @Assert(failed.ok, false)
+        match (failed.code) {
+            case Some(value) => @Assert(value.toString(), "VERIFY_FAILED")
+            case None => @Fail("TLS1.3 request-style verify failure should carry contract code")
+        }
+    }
+
+    @TestCase
+    public func testContractTls12HttpRsaFacadeRoundTrip(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let rootPem = readText("testdata/x509/policy_root.pem")
@@ -645,7 +898,7 @@ public class ContractTestSuite {
 
         let clientHello = contractTls12BuildHttpClientHello(
             ContractTls12KeyExchange.Rsa,
-            serverName: "www.example.com",
+            serverName: TEST_HOST_WWW,
             alpnProtocols: ["http/1.1"],
             requestOcspStapling: true
         )
@@ -666,12 +919,12 @@ public class ContractTestSuite {
             certHandshake,
             rootPem,
             intermediatesPemBundle: intermediatePem,
-            hostname: "www.example.com",
+            hostname: TEST_HOST_WWW,
             validationTime: "230101000000Z",
             pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [leafSpkiPin])
         )
         @Assert(verified.chainLength, 3)
-        @Assert(verified.leafSubjectCommonName, "www.example.com")
+        @Assert(verified.leafSubjectCommonName, TEST_HOST_WWW)
 
         let clientKeyExchange = contractTls12BuildRsaClientKeyExchangeFromLeafPem(rsaLeafPem)
         @Assert(clientKeyExchange.preMasterSecret.size, 48)
@@ -700,7 +953,7 @@ public class ContractTestSuite {
                 certHandshake,
                 rootPem,
                 intermediatesPemBundle: intermediatePem,
-                hostname: "api.example.com",
+                hostname: TEST_HOST_API,
                 validationTime: "230101000000Z",
                 pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [leafSpkiPin])
             )
@@ -711,10 +964,10 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls12HttpEcdheP256FacadeRoundTrip() {
+    public func testContractTls12HttpEcdheP256FacadeRoundTrip(): Unit {
         let clientHello = contractTls12BuildHttpClientHello(
             ContractTls12KeyExchange.EcdheP256,
-            serverName: "www.example.com",
+            serverName: TEST_HOST_WWW,
             alpnProtocols: ["h2", "http/1.1"],
             requestOcspStapling: true
         )
@@ -763,10 +1016,10 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls12HttpEcdheP384FacadeRoundTrip() {
+    public func testContractTls12HttpEcdheP384FacadeRoundTrip(): Unit {
         let clientHello = contractTls12BuildHttpClientHello(
             ContractTls12KeyExchange.EcdheP384,
-            serverName: "www.example.com",
+            serverName: TEST_HOST_WWW,
             alpnProtocols: ["h2", "http/1.1"],
             requestOcspStapling: true
         )
@@ -804,7 +1057,139 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls12RecordChannelAesRoundTrip() {
+    public func testContractTls12HttpRequestFacades(): Unit {
+        let leafPem = readText("testdata/x509/policy_leaf.pem")
+        let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
+        let rootPem = readText("testdata/x509/policy_root.pem")
+        let rsaKeyPem = readText("testdata/x509/rsa_2048_pkcs8.pem")
+        let rsaPrivateKey = x509ParseRsaPrivateKeyPkcs8Pem(rsaKeyPem)
+        let rsaLeafPem = x509CreateSelfSignedRsaCertificate(
+            X509SelfSignedConfig(
+                "rsa.example.com",
+                serialNumber: [UInt8(0x09)]
+            ),
+            rsaPrivateKey
+        ).toPem()
+        let (_leafDerPin, leafSpkiPin) = contractComputeLeafPinsFromPem(leafPem)
+
+        let clientHello = contractTls12BuildHttpClientHelloRequest(
+            ContractTls12HttpClientHelloRequest(
+                ContractTls12KeyExchange.Rsa,
+                serverName: TEST_HOST_WWW,
+                alpnProtocols: ["http/1.1"],
+                requestOcspStapling: true
+            )
+        )
+        @Assert(clientHello.clientRandom.size, 32)
+
+        let serverHello = contractTls12BuildHttpServerHelloRequest(
+            ContractTls12HttpServerHelloRequest(
+                clientHello.encodedClientHello,
+                ContractTls12KeyExchange.Rsa
+            )
+        )
+        @Assert(serverHello.serverRandom.size, 32)
+
+        let certHandshake = contractTls12BuildCertificateHandshakeFromPemChainRequest(
+            ContractTls12CertificateHandshakeFromPemChainRequest("${leafPem}\n${intermediatePem}")
+        )
+        let verified = contractTls12VerifyCertificateHandshakeForHttpRequest(
+            ContractTls12VerifyCertificateHandshakeForHttpRequest(
+                certHandshake,
+                ContractHttpClientTlsTrustRequest(
+                    rootPem,
+                    intermediatesPemBundle: intermediatePem,
+                    hostname: TEST_HOST_WWW,
+                    validationTime: "230101000000Z",
+                    pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [leafSpkiPin])
+                )
+            )
+        )
+        @Assert(verified.chainLength, 3)
+
+        let rsaExchange = contractTls12BuildRsaClientKeyExchangeFromLeafPemRequest(
+            ContractTls12RsaClientKeyExchangeFromLeafPemRequest(rsaLeafPem)
+        )
+        let serverPreMaster = contractTls12ProcessRsaClientKeyExchangeRequest(
+            ContractTls12ProcessRsaClientKeyExchangeRequest(
+                rsaKeyPem,
+                rsaExchange.encodedClientKeyExchange
+            )
+        )
+        let clientSecrets = contractTls12DeriveSecretsFromPreMasterRequest(
+            ContractTls12DeriveSecretsFromPreMasterRequest(
+                rsaExchange.preMasterSecret,
+                clientHello.clientRandom,
+                serverHello.serverRandom
+            )
+        )
+        let serverSecrets = contractTls12DeriveSecretsFromPreMasterRequest(
+            ContractTls12DeriveSecretsFromPreMasterRequest(
+                serverPreMaster,
+                clientHello.clientRandom,
+                serverHello.serverRandom
+            )
+        )
+        @Assert(clientSecrets.masterSecret, serverSecrets.masterSecret)
+
+        let ecdheClientHello = contractTls12BuildHttpClientHelloRequest(
+            ContractTls12HttpClientHelloRequest(
+                ContractTls12KeyExchange.EcdheP256,
+                serverName: TEST_HOST_WWW,
+                alpnProtocols: ["h2", "http/1.1"],
+                requestOcspStapling: true
+            )
+        )
+        let ecdheServerHello = contractTls12BuildHttpServerHelloRequest(
+            ContractTls12HttpServerHelloRequest(
+                ecdheClientHello.encodedClientHello,
+                ContractTls12KeyExchange.EcdheP256
+            )
+        )
+        let serverExchange = contractTls12BuildEcdheServerKeyExchangeRequest(
+            ContractTls12EcdheServerKeyExchangeRequest(
+                ContractTls12KeyExchange.EcdheP256,
+                serverPrivateScalar: Some(incrementalBytes(32, start: 131))
+            )
+        )
+        let clientExchange = contractTls12BuildEcdheClientKeyExchangeRequest(
+            ContractTls12EcdheClientKeyExchangeRequest(
+                ContractTls12KeyExchange.EcdheP256,
+                clientPrivateScalar: Some(incrementalBytes(32, start: 163))
+            )
+        )
+        let ecdheClientSecrets = contractTls12DeriveClientSecretsFromEcdheRequest(
+            ContractTls12DeriveClientSecretsFromEcdheRequest(
+                ContractTls12KeyExchange.EcdheP256,
+                clientExchange.clientPrivateScalar,
+                serverExchange.encodedServerKeyExchange,
+                ecdheClientHello.clientRandom,
+                ecdheServerHello.serverRandom
+            )
+        )
+        let ecdheServerSecrets = contractTls12DeriveServerSecretsFromEcdheRequest(
+            ContractTls12DeriveServerSecretsFromEcdheRequest(
+                ContractTls12KeyExchange.EcdheP256,
+                serverExchange.serverPrivateScalar,
+                clientExchange.encodedClientKeyExchange,
+                ecdheClientHello.clientRandom,
+                ecdheServerHello.serverRandom
+            )
+        )
+        @Assert(ecdheClientSecrets.masterSecret, ecdheServerSecrets.masterSecret)
+
+        try {
+            _ = contractTls12BuildHttpServerHelloRequest(
+                ContractTls12HttpServerHelloRequest([], ContractTls12KeyExchange.Rsa)
+            )
+            @Fail("TLS1.2 HTTP ServerHello request should reject empty ClientHello")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "BAD_INPUT")
+        }
+    }
+
+    @TestCase
+    public func testContractTls12RecordChannelAesRoundTrip(): Unit {
         let secrets = contractTls12DeriveSecretsFromPreMaster(
             incrementalBytes(48, start: 7),
             incrementalBytes(32, start: 51),
@@ -844,7 +1229,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13RecordChannelChachaFragmentsRoundTrip() {
+    public func testContractTls13RecordChannelChachaFragmentsRoundTrip(): Unit {
         let keyMaterial = ContractTls13ApplicationKeyMaterial(
             incrementalBytes(32, start: 31),
             incrementalBytes(12, start: 101),
@@ -880,7 +1265,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTlsRecordAlertFacadeAndCloseNotify() {
+    public func testContractTlsRecordAlertFacadeAndCloseNotify(): Unit {
         let plainAlertRecord = contractTlsEncodeAlertRecord(
             ContractTlsVersion.Tls13,
             ContractTlsAlertLevel.AlertWarning,
@@ -906,11 +1291,11 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTlsSessionTicketAndCacheFacade() {
+    public func testContractTlsSessionTicketAndCacheFacade(): Unit {
         let identity = ContractTlsSessionIdentity(
             ContractTlsVersion.Tls13,
             incrementalBytes(16, start: 17),
-            serverName: "WWW.EXAMPLE.COM",
+            serverName: TEST_HOST_WWW_UPPER,
             alpnProtocol: "H2"
         )
         let ticket = contractTlsCreateSessionTicket(
@@ -920,7 +1305,7 @@ public class ContractTestSuite {
             nowUnixSeconds: 100,
             ttlSeconds: 600
         )
-        @Assert(ticket.identity.serverName, "www.example.com")
+        @Assert(ticket.identity.serverName, TEST_HOST_WWW)
         @Assert(ticket.identity.alpnProtocol, "h2")
         @Assert(contractTlsIsSessionTicketExpired(ticket, nowUnixSeconds: 699), false)
         @Assert(contractTlsIsSessionTicketExpired(ticket, nowUnixSeconds: 700), true)
@@ -949,7 +1334,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13NewSessionTicketBridgeFacade() {
+    public func testContractTls13NewSessionTicketBridgeFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -975,7 +1360,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13SessionCachePskClientHelloFacade() {
+    public func testContractTls13SessionCachePskClientHelloFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1036,7 +1421,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13SessionCachePskClientHelloOutcomeFacade() {
+    public func testContractTls13SessionCachePskClientHelloOutcomeFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1089,7 +1474,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13SessionTicketLifecyclePolicyFacade() {
+    public func testContractTls13SessionTicketLifecyclePolicyFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1120,7 +1505,7 @@ public class ContractTestSuite {
         @Assert(nearExpiry.remainingTtlSeconds, 150)
 
         let mismatchPolicy = ContractTls13SessionTicketPolicy(
-            requiredServerName: "api.example.com"
+            requiredServerName: TEST_HOST_API
         )
         let mismatch = contractTls13EvaluateSessionTicketLifecycle(
             ticket,
@@ -1145,7 +1530,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13SessionCachePskClientHelloPolicyFacade() {
+    public func testContractTls13SessionCachePskClientHelloPolicyFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1209,7 +1594,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13SessionCachePskClientHelloPolicyOutcomeFacade() {
+    public func testContractTls13SessionCachePskClientHelloPolicyOutcomeFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1267,7 +1652,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13PskEarlyDataPlanFacade() {
+    public func testContractTls13PskEarlyDataPlanFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1343,7 +1728,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13PskEarlyDataReplayCacheFacade() {
+    public func testContractTls13PskEarlyDataReplayCacheFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1395,7 +1780,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13PskEarlyDataHttpBindingFacade() {
+    public func testContractTls13PskEarlyDataHttpBindingFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1424,7 +1809,7 @@ public class ContractTestSuite {
         try {
             _ = contractTls13AcceptPskEarlyDataForHttp(
                 clientPlan.encodedClientHello,
-                expectedServerName: "api.example.com",
+                expectedServerName: TEST_HOST_API,
                 expectedAlpnProtocol: "h2",
                 nowUnixSeconds: 4100
             )
@@ -1470,14 +1855,14 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13KeyUpdateAndCipherBindingFacade() {
+    public func testContractTls13KeyUpdateAndCipherBindingFacade(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let rootPem = readText("testdata/x509/policy_root.pem")
         let leafKeyPem = readText("testdata/x509/policy_leaf_key_pkcs8.pem")
 
         let clientHello = contractTls13BuildHttpClientHelloX25519(
-            "www.example.com",
+            TEST_HOST_WWW,
             alpnProtocols: ["h2", "http/1.1"],
             clientPrivateKey: Some(incrementalBytes(32, start: 19))
         )
@@ -1488,7 +1873,7 @@ public class ContractTestSuite {
             leafKeyPem,
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
@@ -1497,11 +1882,11 @@ public class ContractTestSuite {
             flight,
             rootPem,
             intermediatesPemBundle: intermediatePem,
-            hostname: "www.example.com",
+            hostname: TEST_HOST_WWW,
             validationTime: "230101000000Z",
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
@@ -1532,7 +1917,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13PskSessionResumptionFacade() {
+    public func testContractTls13PskSessionResumptionFacade(): Unit {
         let expired = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1591,7 +1976,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13PskX25519DerivedSecretsAndRecordChannelFacade() {
+    public func testContractTls13PskX25519DerivedSecretsAndRecordChannelFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1665,7 +2050,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13PskX25519ChannelSetAndTrafficRotationFacade() {
+    public func testContractTls13PskX25519ChannelSetAndTrafficRotationFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1788,7 +2173,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13PskX25519PeerUpdateOrchestrationFacade() {
+    public func testContractTls13PskX25519PeerUpdateOrchestrationFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1875,7 +2260,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13PskX25519RoleAwarePeerUpdateFacade() {
+    public func testContractTls13PskX25519RoleAwarePeerUpdateFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(
                 ContractTlsVersion.Tls13,
@@ -1987,7 +2372,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractRandomWrapperAndErrorMapping() {
+    public func testContractRandomWrapperAndErrorMapping(): Unit {
         @Assert(contractMapCryptoErrorCode(CryptoErrorCode.InvalidArgument).toString(), "BAD_INPUT")
         @Assert(contractMapCryptoErrorCode(CryptoErrorCode.ParseError).toString(), "VERIFY_FAILED")
         @Assert(
@@ -2010,7 +2395,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractHkdfFacade() {
+    public func testContractHkdfFacade(): Unit {
         let ikm = incrementalBytes(32, start: 9)
         let salt = incrementalBytes(16, start: 101)
         let info = "http-ssh-key-derivation".toArray()
@@ -2042,7 +2427,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractHkdfHttpSshKeySetFacade() {
+    public func testContractHkdfHttpSshKeySetFacade(): Unit {
         let ikm = incrementalBytes(32, start: 37)
         let salt = incrementalBytes(16, start: 81)
         let keySet = contractHkdfDeriveHttpSshKeySet(
@@ -2062,7 +2447,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractFacadeInfo() {
+    public func testContractFacadeInfo(): Unit {
         let info = contractFacadeInfo()
         @Assert(info.apiVersion, CONTRACT_FACADE_API_VERSION)
         @Assert(info.stabilityLevel, "L1")
@@ -2073,14 +2458,17 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractCapabilityInfo() {
+    public func testContractCapabilityInfo(): Unit {
         let info = contractCapabilityInfo()
         @Assert(containsString(info.stableDomains, "ssh"), true)
         @Assert(containsString(info.httpTlsFeatures, "tls13-x25519"), true)
         @Assert(containsString(info.httpTlsFeatures, "http-server-tls-config-validation"), true)
+        @Assert(containsString(info.httpTlsFeatures, "http-server-tls-material-preparation"), true)
         @Assert(containsString(info.httpTlsFeatures, "http-client-tls-config-validation"), true)
+        @Assert(containsString(info.httpTlsFeatures, "http-client-trust-material-preparation"), true)
         @Assert(containsString(info.sshFeatures, "ed25519-hostkey"), true)
         @Assert(containsString(info.x509Features, "hostname-policy"), true)
+        @Assert(containsString(info.x509Features, "pem-bundle-normalization"), true)
         @Assert(containsString(info.x509Features, "http-client-peer-certificate-verify"), true)
         @Assert(info.directStdxTlsServerConfigBridge, false)
         @Assert(
@@ -2093,7 +2481,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractIgniteCompatibilityFacade() {
+    public func testContractIgniteCompatibilityFacade(): Unit {
         let key = incrementalBytes(32, start: 11)
         let plaintext = "ignite-contract-bridge".toArray()
 
@@ -2127,7 +2515,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractIgniteErrorMappingFacade() {
+    public func testContractIgniteErrorMappingFacade(): Unit {
         @Assert(
             contractMapToIgniteCryptoErrorCode(ContractErrorCode.BadInput).toString(),
             "BAD_ENVELOPE"
@@ -2179,7 +2567,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractEnvelopeTryOutcomeFacade() {
+    public func testContractEnvelopeTryOutcomeFacade(): Unit {
         let key = incrementalBytes(32, start: 201)
         let plaintext = "ignite-outcome-envelope".toArray()
         let keyRing = HashMap<String, Array<Byte>>()
@@ -2230,14 +2618,14 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractTls13TryOutcomeFacade() {
+    public func testContractTls13TryOutcomeFacade(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
         let rootPem = readText("testdata/x509/policy_root.pem")
         let leafKeyPem = readText("testdata/x509/policy_leaf_key_pkcs8.pem")
 
         let clientHello = contractTls13BuildHttpClientHelloX25519(
-            "www.example.com",
+            TEST_HOST_WWW,
             alpnProtocols: ["h2", "http/1.1"],
             clientPrivateKey: Some(incrementalBytes(32, start: 221))
         )
@@ -2248,7 +2636,7 @@ public class ContractTestSuite {
             leafKeyPem,
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
@@ -2258,11 +2646,11 @@ public class ContractTestSuite {
             flight,
             rootPem,
             intermediatesPemBundle: intermediatePem,
-            hostname: "www.example.com",
+            hostname: TEST_HOST_WWW,
             validationTime: "230101000000Z",
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
@@ -2279,11 +2667,11 @@ public class ContractTestSuite {
             flight,
             rootPem,
             intermediatesPemBundle: intermediatePem,
-            hostname: "api.example.com",
+            hostname: TEST_HOST_API,
             validationTime: "230101000000Z",
             policy: ContractTlsHttpNegotiationPolicy(
                 requireServerName: true,
-                allowedServerNames: ["www.example.com"],
+                allowedServerNames: [TEST_HOST_WWW],
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
@@ -2299,7 +2687,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractSshTryOutcomeFacade() {
+    public func testContractSshTryOutcomeFacade(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let transcript = SshKexExchangeTranscript(
@@ -2379,10 +2767,46 @@ public class ContractTestSuite {
             case Some(value) => @Assert(value.toString(), "DECRYPT_FAILED")
             case None => @Fail("SSH failed outcome should carry ignite code")
         }
+
+        let serverOk = contractTrySshCompleteServerInitialHandshakeX25519Rsa(
+            transcript,
+            serverPrivate,
+            encodedInit,
+            rsaPrivateKey,
+            negotiated,
+            sshEncodeNewKeys(),
+            sshEncodeNewKeys()
+        )
+        @Assert(serverOk.ok, true)
+        match (serverOk.result) {
+            case Some(value) =>
+                @Assert(value.hostKeyAlgorithm, "ssh-rsa")
+            case None =>
+                @Fail("SSH server success outcome should carry handshake result")
+        }
+
+        let serverFailed = contractTrySshCompleteServerInitialHandshakeX25519Rsa(
+            transcript,
+            serverPrivate,
+            [0],
+            rsaPrivateKey,
+            negotiated,
+            sshEncodeNewKeys(),
+            sshEncodeNewKeys()
+        )
+        @Assert(serverFailed.ok, false)
+        match (serverFailed.code) {
+            case Some(value) => @Assert(value.toString(), "VERIFY_FAILED")
+            case None => @Fail("SSH server failed outcome should carry contract code")
+        }
+        match (serverFailed.igniteCode) {
+            case Some(value) => @Assert(value.toString(), "DECRYPT_FAILED")
+            case None => @Fail("SSH server failed outcome should carry ignite code")
+        }
     }
 
     @TestCase
-    public func testContractSshHostVerificationFacadeModes() {
+    public func testContractSshHostVerificationFacadeModes(): Unit {
         let exchangeHash = incrementalBytes(32, start: 19)
         let serverHostKey = buildDummySshRsaHostKeyBlob()
         let hostSignature = buildDummySshHostSignatureBlob(
@@ -2443,7 +2867,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractSshHostVerificationErrorConsistencyAcrossAlgorithms() {
+    public func testContractSshHostVerificationErrorConsistencyAcrossAlgorithms(): Unit {
         let exchangeHash = incrementalBytes(32, start: 33)
         let serverHostKey = buildDummySshRsaHostKeyBlob()
 
@@ -2470,7 +2894,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractSshHostSigningFacadeHelpers() {
+    public func testContractSshHostSigningFacadeHelpers(): Unit {
         let exchangeHash = sha256("contract-ssh-host-signing".toArray())
 
         let rsaPrivateKeyPem = readText("testdata/x509/rsa_2048_pkcs8.pem")
@@ -2527,7 +2951,84 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractSshServerInitialHandshakeFacadeHelpers() {
+    public func testContractSshHostSigningMaterialFacade(): Unit {
+        let exchangeHash = sha256("contract-ssh-host-signing-material".toArray())
+
+        let rsaPrivateKeyPem = readText("testdata/x509/rsa_2048_pkcs8.pem")
+        let rsaPrivateKey = x509ParseRsaPrivateKeyPkcs8Pem(rsaPrivateKeyPem)
+        let rsaResult = contractPrepareSshHostSigningRsa(rsaPrivateKey, exchangeHash)
+        @Assert(rsaResult.hostKeyAlgorithm, "ssh-rsa")
+        @Assert(rsaResult.hostSignatureAlgorithm, "rsa-sha2-256")
+        @Assert(rsaResult.hostKeySha256, contractSshComputeHostKeySha256(rsaResult.serverHostKey))
+
+        let rsaOutcome = contractTryPrepareSshHostSigningRsa(rsaPrivateKey, exchangeHash)
+        @Assert(rsaOutcome.ok, true)
+        match (rsaOutcome.result) {
+            case Some(value) =>
+                @Assert(value.hostKeyAlgorithm, "ssh-rsa")
+            case None =>
+                @Fail("RSA host signing outcome should carry result")
+        }
+
+        let rsaRequestResult = contractPrepareSshHostSigningRsaPkcs8Request(
+            ContractSshHostSigningRsaPkcs8Request(rsaPrivateKeyPem, exchangeHash)
+        )
+        @Assert(rsaRequestResult.hostKeyAlgorithm, "ssh-rsa")
+        let rsaRequestOutcome = contractTryPrepareSshHostSigningRsaPkcs8Request(
+            ContractSshHostSigningRsaPkcs8Request("bad pem", exchangeHash)
+        )
+        @Assert(rsaRequestOutcome.ok, false)
+        match (rsaRequestOutcome.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "VERIFY_FAILED")
+            case None =>
+                @Fail("RSA host signing request outcome should carry contract code")
+        }
+
+        let ecdsaPrivateKeyPem = readText("testdata/x509/policy_leaf_key_pkcs8.pem")
+        let ecdsaPrivateKey = x509ParseEcPrivateKeyPkcs8Pem(ecdsaPrivateKeyPem)
+        let ecdsaResult = contractPrepareSshHostSigningEcdsa(ecdsaPrivateKey, exchangeHash)
+        @Assert(ecdsaResult.hostKeyAlgorithm, "ecdsa-sha2-nistp256")
+        @Assert(ecdsaResult.hostSignatureAlgorithm, "ecdsa-sha2-nistp256")
+        @Assert(ecdsaResult.hostKeySha256, contractSshComputeHostKeySha256(ecdsaResult.serverHostKey))
+
+        let ecdsaOutcome = contractTryPrepareSshHostSigningEcdsa(ecdsaPrivateKey, exchangeHash)
+        @Assert(ecdsaOutcome.ok, true)
+        match (ecdsaOutcome.result) {
+            case Some(value) =>
+                @Assert(value.hostKeyAlgorithm, "ecdsa-sha2-nistp256")
+            case None =>
+                @Fail("ECDSA host signing outcome should carry result")
+        }
+
+        let ecdsaRequestResult = contractPrepareSshHostSigningEcdsaPkcs8Request(
+            ContractSshHostSigningEcdsaPkcs8Request(ecdsaPrivateKeyPem, exchangeHash)
+        )
+        @Assert(ecdsaRequestResult.hostKeyAlgorithm, "ecdsa-sha2-nistp256")
+
+        let ed25519Seed = hexToBytes("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+        let ed25519Result = contractPrepareSshHostSigningEd25519(ed25519Seed, exchangeHash)
+        @Assert(ed25519Result.hostKeyAlgorithm, "ssh-ed25519")
+        @Assert(ed25519Result.hostSignatureAlgorithm, "ssh-ed25519")
+        @Assert(ed25519Result.hostKeySha256, contractSshComputeHostKeySha256(ed25519Result.serverHostKey))
+
+        let ed25519Outcome = contractTryPrepareSshHostSigningEd25519(ed25519Seed, exchangeHash)
+        @Assert(ed25519Outcome.ok, true)
+        match (ed25519Outcome.result) {
+            case Some(value) =>
+                @Assert(value.hostKeyAlgorithm, "ssh-ed25519")
+            case None =>
+                @Fail("Ed25519 host signing outcome should carry result")
+        }
+
+        let ed25519RequestResult = contractPrepareSshHostSigningEd25519SeedRequest(
+            ContractSshHostSigningEd25519SeedRequest(ed25519Seed, exchangeHash)
+        )
+        @Assert(ed25519RequestResult.hostKeyAlgorithm, "ssh-ed25519")
+    }
+
+    @TestCase
+    public func testContractSshServerInitialHandshakeFacadeHelpers(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let transcript = SshKexExchangeTranscript(
@@ -2620,7 +3121,7 @@ public class ContractTestSuite {
     }
 
     @TestCase
-    public func testContractSshClientInitialHandshakeFacadeModes() {
+    public func testContractSshClientInitialHandshakeFacadeModes(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
         let transcript = SshKexExchangeTranscript(

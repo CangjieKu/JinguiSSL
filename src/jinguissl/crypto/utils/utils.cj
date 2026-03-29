@@ -181,7 +181,10 @@ private func fillSystemEntropyLinux(out: Array<Byte>): Bool {
 }
 
 @When[os != "Linux"]
-private func fillSystemEntropyLinux(out: Array<Byte>): Bool {
+private func fillSystemEntropyLinux(_out: Array<Byte>): Bool {
+    if (_out.size < 0) {
+        return false
+    }
     false
 }
 

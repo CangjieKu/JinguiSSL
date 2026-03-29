@@ -15,14 +15,14 @@ type X509KeyValueVector = HashMap<String, String>
 @Test
 public class X509TestSuite {
     @TestCase
-    public func testParseBoringSslPemAndDerRoundTrip() {
+    public func testParseBoringSslPemAndDerRoundTrip(): Unit {
         let pem = readText("testdata/x509/policy_leaf.pem")
         let cert = x509ParsePem(pem)
 
         @Assert(cert.serialHexLower(), "03")
-        @Assert(cert.subject.commonName(), "www.example.com")
+        @Assert(cert.subject.commonName(), TEST_HOST_WWW)
         @Assert(cert.issuer.commonName(), "Policy Intermediate")
-        @Assert(cert.signatureAlgorithmOid, "1.2.840.10045.4.3.2")
+        @Assert(cert.signatureAlgorithmOid, X509_OID_ECDSA_WITH_SHA256)
         @Assert(cert.extensions.size > 0, true)
 
         let parsedFromDer = x509ParseDer(cert.der)
@@ -35,7 +35,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testParsePemChainAndBuildSimpleChain() {
+    public func testParsePemChainAndBuildSimpleChain(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -51,7 +51,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testGenerateSelfSignedRsaCertificateWithKeyUsage() {
+    public func testGenerateSelfSignedRsaCertificateWithKeyUsage(): Unit {
         let privateKey = loadRsa2048PrivateKey()
         let config = X509SelfSignedConfig(
             "jinkui.local",
@@ -79,7 +79,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testGenerateSelfSignedEcP384CertificateWithKeyUsage() {
+    public func testGenerateSelfSignedEcP384CertificateWithKeyUsage(): Unit {
         let privateKey = EcPrivateKey(P384, BigNum.one())
         let config = X509SelfSignedConfig(
             "jinkui-p384.local",
@@ -113,7 +113,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyBoringSslPolicyChain() {
+    public func testVerifyBoringSslPolicyChain(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -125,12 +125,12 @@ public class X509TestSuite {
         )
         let result = x509VerifyCertificateChain(leaf, policy)
         @Assert(result.chain.size, 3)
-        @Assert(result.chain[0].subject.commonName(), "www.example.com")
+        @Assert(result.chain[0].subject.commonName(), TEST_HOST_WWW)
         @Assert(result.trustAnchor.subject.commonName(), "Policy Root")
     }
 
     @TestCase
-    public func testVerifyBoringSslPolicyChainWithFipsProfile() {
+    public func testVerifyBoringSslPolicyChainWithFipsProfile(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -146,7 +146,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainWithFipsProfileRejectsBlockedAlgorithms() {
+    public func testVerifyChainWithFipsProfileRejectsBlockedAlgorithms(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -174,7 +174,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainRejectsRevokedAndUnknownAnchor() {
+    public func testVerifyChainRejectsRevokedAndUnknownAnchor(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -206,7 +206,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainRejectsTamperedSignature() {
+    public func testVerifyChainRejectsTamperedSignature(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -241,7 +241,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainRejectsIssuerWithoutBasicConstraints() {
+    public func testVerifyChainRejectsIssuerWithoutBasicConstraints(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -265,7 +265,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainRejectsIssuerWithCaFalse() {
+    public func testVerifyChainRejectsIssuerWithCaFalse(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -290,7 +290,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainRejectsPathLenViolation() {
+    public func testVerifyChainRejectsPathLenViolation(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -320,7 +320,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testRejectBrokenPem() {
+    public func testRejectBrokenPem(): Unit {
         try {
             _ = x509ParsePem("-----BEGIN CERTIFICATE-----\nabc\n")
             @Fail("broken PEM should be rejected")
@@ -330,7 +330,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testParseCrlAndVerifySignature() {
+    public func testParseCrlAndVerifySignature(): Unit {
         let root = x509ParsePem(readText("testdata/x509/crl_test_root.pem"))
         let leaf = x509ParsePem(readText("testdata/x509/crl_test_leaf.pem"))
         let basicCrl = x509ParseCrlPem(readText("testdata/x509/crl_basic.pem"))
@@ -363,7 +363,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainWithCrlRevocation() {
+    public func testVerifyChainWithCrlRevocation(): Unit {
         let root = x509ParsePem(readText("testdata/x509/crl_test_root.pem"))
         let leaf = x509ParsePem(readText("testdata/x509/crl_test_leaf.pem"))
         let basicCrl = x509ParseCrlPem(readText("testdata/x509/crl_basic.pem"))
@@ -420,7 +420,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testDecodeCrlDistributionPointsAndPolicyGate() {
+    public func testDecodeCrlDistributionPointsAndPolicyGate(): Unit {
         let root = x509ParsePem(readText("testdata/x509/crl_test_root.pem"))
         let leaf = x509ParsePem(readText("testdata/x509/crl_test_leaf.pem"))
         let basicCrl = x509ParseCrlPem(readText("testdata/x509/crl_basic.pem"))
@@ -463,7 +463,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testDecodeSubjectAndAuthorityKeyIdentifier() {
+    public func testDecodeSubjectAndAuthorityKeyIdentifier(): Unit {
         let keyId = [UInt8(0x11), UInt8(0x22), UInt8(0x33), UInt8(0x44), UInt8(0x55)]
         let skiExt = createSubjectKeyIdentifierExtension(keyId)
         let akiExt = createAuthorityKeyIdentifierExtension(keyId)
@@ -484,7 +484,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testDecodeExtendedKeyUsageAndSubjectAltName() {
+    public func testDecodeExtendedKeyUsageAndSubjectAltName(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
 
         let ekuExt = x509FindExtension(leaf, X509_OID_EXTENDED_KEY_USAGE) ?? throw Exception("leaf EKU extension missing")
@@ -494,7 +494,7 @@ public class X509TestSuite {
         let sanExt = x509FindExtension(leaf, X509_OID_SUBJECT_ALT_NAME) ?? throw Exception("leaf SAN extension missing")
         let sanDns = x509DecodeSubjectAlternativeNameDnsFromExtension(sanExt)
         @Assert(sanDns.size, 1)
-        @Assert(sanDns[0], "www.example.com")
+        @Assert(sanDns[0], TEST_HOST_WWW)
 
         let extractedEku = x509ExtractExtendedKeyUsageOids(leaf)
         @Assert(arrayContains(extractedEku, X509_OID_EKU_SERVER_AUTH), true)
@@ -504,7 +504,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainWithLeafDnsAndEkuPolicy() {
+    public func testVerifyChainWithLeafDnsAndEkuPolicy(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -512,7 +512,7 @@ public class X509TestSuite {
         let strictPolicy = X509VerificationPolicy(
             [root],
             intermediates: [intermediate],
-            requiredLeafDnsName: "www.example.com",
+            requiredLeafDnsName: TEST_HOST_WWW,
             requiredLeafExtendedKeyUsages: [X509_OID_EKU_SERVER_AUTH],
             validationTime: "230101000000Z"
         )
@@ -522,7 +522,7 @@ public class X509TestSuite {
         let mismatchDnsPolicy = X509VerificationPolicy(
             [root],
             intermediates: [intermediate],
-            requiredLeafDnsName: "api.example.com",
+            requiredLeafDnsName: TEST_HOST_API,
             validationTime: "230101000000Z"
         )
         try {
@@ -536,7 +536,7 @@ public class X509TestSuite {
         let cnFallbackPolicy = X509VerificationPolicy(
             [root],
             intermediates: [intermediate],
-            requiredLeafDnsName: "www.example.com",
+            requiredLeafDnsName: TEST_HOST_WWW,
             validationTime: "230101000000Z"
         )
         let cnFallbackResult = x509VerifyCertificateChain(leafWithoutSan, cnFallbackPolicy)
@@ -571,7 +571,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainWithLeafKeyUsagePolicy() {
+    public func testVerifyChainWithLeafKeyUsagePolicy(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -608,7 +608,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testDecodeCertificatePoliciesAndExtract() {
+    public func testDecodeCertificatePoliciesAndExtract(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let policiesExt = x509FindExtension(leaf, X509_OID_CERTIFICATE_POLICIES) ?? throw Exception("leaf certificatePolicies extension missing")
         let decodedPolicyOids = x509DecodeCertificatePoliciesFromExtension(policiesExt)
@@ -621,7 +621,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainWithLeafCertificatePolicyConstraints() {
+    public func testVerifyChainWithLeafCertificatePolicyConstraints(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let intermediate = x509ParsePem(readText("testdata/x509/policy_intermediate.pem"))
         let root = x509ParsePem(readText("testdata/x509/policy_root.pem"))
@@ -667,7 +667,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testIssuerSelectionPrefersAkiSkiMatch() {
+    public func testIssuerSelectionPrefersAkiSkiMatch(): Unit {
         let root = x509ParsePem(readText("testdata/x509/crl_test_root.pem"))
         let leaf = x509ParsePem(readText("testdata/x509/crl_test_leaf.pem"))
 
@@ -700,7 +700,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testCrlAkiSkiSelectionAndStrictMatch() {
+    public func testCrlAkiSkiSelectionAndStrictMatch(): Unit {
         let root = x509ParsePem(readText("testdata/x509/crl_test_root.pem"))
         let leaf = x509ParsePem(readText("testdata/x509/crl_test_leaf.pem"))
         let basicCrl = x509ParseCrlPem(readText("testdata/x509/crl_basic.pem"))
@@ -755,7 +755,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testExtractPublicKeysFromCertificates() {
+    public func testExtractPublicKeysFromCertificates(): Unit {
         let leaf = x509ParsePem(readText("testdata/x509/policy_leaf.pem"))
         let ecPublic = x509ExtractEcPublicKey(leaf)
         @Assert(ecPublic.curve.toString(), "P-256")
@@ -770,7 +770,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testParseRsaPrivateKeysPkcs1AndPkcs8() {
+    public func testParseRsaPrivateKeysPkcs1AndPkcs8(): Unit {
         let digest = sha256("stage5.4-rsa-key-parse".toArray())
 
         let pkcs1Pem = readText("testdata/x509/rsa512_pkcs1.pem")
@@ -795,7 +795,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testParseEcPrivateKeyPkcs8AndSignVerify() {
+    public func testParseEcPrivateKeyPkcs8AndSignVerify(): Unit {
         let keyPem = readText("testdata/x509/policy_leaf_key_pkcs8.pem")
         let privateKey = x509ParseEcPrivateKeyPkcs8Pem(keyPem)
         @Assert(privateKey.curve.toString(), "P-256")
@@ -813,7 +813,7 @@ public class X509TestSuite {
     }
 
     @TestCase
-    public func testVerifyChainWithFipsProfileRejectsWeakRsaKey() {
+    public func testVerifyChainWithFipsProfileRejectsWeakRsaKey(): Unit {
         let rsa512Key = x509ParseRsaPrivateKeyPkcs1Pem(readText("testdata/x509/rsa512_pkcs1.pem"))
         let cert = x509CreateSelfSignedRsaCertificate(
             X509SelfSignedConfig(

@@ -13,7 +13,7 @@ type Poly1305Vector = (Array<Byte>, Array<Byte>, Array<Byte>)
 @Test
 public class Chacha20TestSuite {
     @TestCase
-    public func testChacha20BlockRfc8439Vector() {
+    public func testChacha20BlockRfc8439Vector(): Unit {
         let key = hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         let nonce = hexToBytes("000000090000004a00000000")
         let expected = "10f1e7e4d13b5915500fdd1fa32071c4" +
@@ -26,7 +26,7 @@ public class Chacha20TestSuite {
     }
 
     @TestCase
-    public func testChacha20StreamRfc8439Vector() {
+    public func testChacha20StreamRfc8439Vector(): Unit {
         let key = hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         let nonce = hexToBytes("000000000000004a00000000")
         let plaintext = (
@@ -48,7 +48,7 @@ public class Chacha20TestSuite {
     }
 
     @TestCase
-    public func testPoly1305RfcVector() {
+    public func testPoly1305RfcVector(): Unit {
         let key = hexToBytes("85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b")
         let input = "Cryptographic Forum Research Group".toArray()
         let tag = poly1305Mac(key, input)
@@ -56,7 +56,7 @@ public class Chacha20TestSuite {
     }
 
     @TestCase
-    public func testBoringSslPoly1305Vectors() {
+    public func testBoringSslPoly1305Vectors(): Unit {
         let vectors = parsePoly1305Vectors("testdata/chacha20/poly1305_tests.txt")
         @Assert(vectors.size >= 30, true)
 
@@ -67,7 +67,7 @@ public class Chacha20TestSuite {
     }
 
     @TestCase
-    public func testBoringSslChacha20Poly1305Vectors() {
+    public func testBoringSslChacha20Poly1305Vectors(): Unit {
         let vectors = parseChacha20Poly1305Vectors("testdata/chacha20/chacha20_poly1305_tests.txt")
         @Assert(vectors.size >= 80, true)
 
@@ -95,7 +95,7 @@ public class Chacha20TestSuite {
     }
 
     @TestCase
-    public func testChacha20Poly1305ComplianceGate() {
+    public func testChacha20Poly1305ComplianceGate(): Unit {
         let key = hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
         let nonce = hexToBytes("000000000000004a00000000")
         let plain = "hello-chacha20-poly1305".toArray()
