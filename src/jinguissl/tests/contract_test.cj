@@ -3380,6 +3380,77 @@ public class ContractTestSuite {
     }
 
     @TestCase
+    public func testContractSshVersionBannerAndTransportPacketFacadeHelpers(): Unit {
+        let banner = contractSshBuildVersionBannerRequest(
+            ContractSshBuildVersionBannerRequest(
+                "jinkuiSSL_0.6.0",
+                comments: "contract-test"
+            )
+        )
+        let serverBanner = contractSshBuildVersionBanner("OpenSSH_9.8", comments: "server")
+        let encodedBanner = contractSshEncodeVersionBannerRequest(
+            ContractSshEncodeVersionBannerRequest(banner)
+        )
+        let decodedBanner = contractSshDecodeVersionBannerRequest(
+            ContractSshDecodeVersionBannerRequest(encodedBanner)
+        )
+
+        @Assert(decodedBanner.protocolVersion, "2.0")
+        @Assert(decodedBanner.softwareVersion, "jinkuiSSL_0.6.0")
+        @Assert(decodedBanner.comments, "contract-test")
+        @Assert(
+            String.fromUtf8(encodedBanner),
+            "SSH-2.0-jinkuiSSL_0.6.0 contract-test\r\n"
+        )
+
+        let payload = "abc".toArray()
+        let randomPadding = incrementalBytes(4, start: 1456)
+        let encodedPacket = contractSshEncodeTransportPacketRequest(
+            ContractSshEncodeTransportPacketRequest(
+                payload,
+                blockSize: 8,
+                randomPadding: randomPadding
+            )
+        )
+        let decodedPacket = contractSshDecodeTransportPacketRequest(
+            ContractSshDecodeTransportPacketRequest(encodedPacket, blockSize: 8)
+        )
+
+        @Assert(decodedPacket.packetLength, 8)
+        @Assert(decodedPacket.payload, payload)
+        @Assert(decodedPacket.padding, randomPadding)
+
+        let clientKexInit = contractSshBuildDefaultKexInitRequest(
+            ContractSshBuildDefaultKexInitRequest(cookie: incrementalBytes(16, start: 1504))
+        )
+        let serverKexInit = contractSshBuildDefaultKexInitRequest(
+            ContractSshBuildDefaultKexInitRequest(cookie: incrementalBytes(16, start: 1520))
+        )
+        let transcript = contractSshBuildKexExchangeTranscriptFromPreludeRequest(
+            ContractSshBuildTranscriptFromPreludeRequest(
+                banner,
+                serverBanner,
+                clientKexInit,
+                serverKexInit
+            )
+        )
+
+        @Assert(transcript.clientBannerLine, encodedBanner)
+        @Assert(
+            transcript.serverBannerLine,
+            contractSshEncodeVersionBanner(serverBanner)
+        )
+        @Assert(
+            transcript.clientKexInitPayload,
+            contractSshEncodeKexInit(clientKexInit)
+        )
+        @Assert(
+            transcript.serverKexInitPayload,
+            contractSshEncodeKexInit(serverKexInit)
+        )
+    }
+
+    @TestCase
     public func testContractSshKexInitNegotiationFacadeHelpers(): Unit {
         let clientMessage = ContractSshKexInitMessage(
             incrementalBytes(16, start: 1400),

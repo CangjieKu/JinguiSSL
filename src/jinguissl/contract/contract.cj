@@ -10,6 +10,7 @@ import jinguissl.crypto.ecc.{EcPrivateKey, EcPublicKey, NamedCurve, ecPublicFrom
 import jinguissl.crypto.error.*
 import jinguissl.crypto.rsa.{RsaPrivateKey, RsaPublicKey}
 import jinguissl.crypto.ssh.{
+    SSH_DEFAULT_PACKET_BLOCK_SIZE,
     SshClientInitialHandshakeResult,
     SshHandshakeCoordinator,
     SshHostVerificationPolicy,
@@ -19,9 +20,11 @@ import jinguissl.crypto.ssh.{
     SshNegotiatedAlgorithms,
     SshServerInitialHandshakeResult,
     SshTransportPacket,
+    SshVersionBanner,
     SshX25519KexResult,
     sshBuildKexEcdhInitX25519,
     sshBuildDefaultKexInit,
+    sshBuildVersionBanner,
     sshClientProcessKexEcdhReplyX25519,
     sshBuildEd25519HostKeyBlobFromSeed,
     sshCompleteClientInitialHandshakeX25519WithHostVerificationRequirement,
@@ -29,9 +32,13 @@ import jinguissl.crypto.ssh.{
     sshCompleteServerInitialHandshakeX25519Ed25519,
     sshCompleteServerInitialHandshakeX25519Rsa,
     sshComputeHostKeySha256,
+    sshDecodeTransportPacket,
+    sshDecodeVersionBanner,
     sshDecodeKexInit,
     sshEncodeEcdsaHostPublicKey,
     sshEncodeKexInit,
+    sshEncodeTransportPacket,
+    sshEncodeVersionBanner,
     sshEncodeRsaHostPublicKey,
     sshExtractHostKeyAlgorithm,
     sshExtractHostSignatureAlgorithm,
@@ -1234,6 +1241,63 @@ public class ContractSshKexExchangeTranscript {
     }
 }
 
+public class ContractSshVersionBanner {
+    public let protocolVersion: String
+    public let softwareVersion: String
+    public let comments: String
+
+    public init(protocolVersion: String, softwareVersion: String, comments!: String = "") {
+        this.protocolVersion = protocolVersion
+        this.softwareVersion = softwareVersion
+        this.comments = comments
+    }
+}
+
+public class ContractSshBuildVersionBannerRequest {
+    public let softwareVersion: String
+    public let comments: String
+
+    public init(softwareVersion: String, comments!: String = "") {
+        this.softwareVersion = softwareVersion
+        this.comments = comments
+    }
+}
+
+public class ContractSshEncodeVersionBannerRequest {
+    public let banner: ContractSshVersionBanner
+
+    public init(banner: ContractSshVersionBanner) {
+        this.banner = banner
+    }
+}
+
+public class ContractSshDecodeVersionBannerRequest {
+    public let encodedLine: Array<Byte>
+
+    public init(encodedLine: Array<Byte>) {
+        this.encodedLine = encodedLine.clone()
+    }
+}
+
+public class ContractSshBuildTranscriptFromPreludeRequest {
+    public let clientBanner: ContractSshVersionBanner
+    public let serverBanner: ContractSshVersionBanner
+    public let clientKexInit: ContractSshKexInitMessage
+    public let serverKexInit: ContractSshKexInitMessage
+
+    public init(
+        clientBanner: ContractSshVersionBanner,
+        serverBanner: ContractSshVersionBanner,
+        clientKexInit: ContractSshKexInitMessage,
+        serverKexInit: ContractSshKexInitMessage
+    ) {
+        this.clientBanner = clientBanner
+        this.serverBanner = serverBanner
+        this.clientKexInit = clientKexInit
+        this.serverKexInit = serverKexInit
+    }
+}
+
 public class ContractSshKexInitMessage {
     public let cookie: Array<Byte>
     public let kexAlgorithms: Array<String>
@@ -2416,6 +2480,35 @@ public class ContractSshTransportPacket {
         this.packetLength = packetLength
         this.payload = payload.clone()
         this.padding = padding.clone()
+    }
+}
+
+public class ContractSshEncodeTransportPacketRequest {
+    public let payload: Array<Byte>
+    public let blockSize: Int64
+    public let randomPadding: Array<Byte>
+
+    public init(
+        payload: Array<Byte>,
+        blockSize!: Int64 = SSH_DEFAULT_PACKET_BLOCK_SIZE,
+        randomPadding!: Array<Byte> = []
+    ) {
+        this.payload = payload.clone()
+        this.blockSize = blockSize
+        this.randomPadding = randomPadding.clone()
+    }
+}
+
+public class ContractSshDecodeTransportPacketRequest {
+    public let encodedPacket: Array<Byte>
+    public let blockSize: Int64
+
+    public init(
+        encodedPacket: Array<Byte>,
+        blockSize!: Int64 = SSH_DEFAULT_PACKET_BLOCK_SIZE
+    ) {
+        this.encodedPacket = encodedPacket.clone()
+        this.blockSize = blockSize
     }
 }
 
@@ -8926,6 +9019,68 @@ public func contractSshSignExchangeHashEd25519(privateKeySeed: Array<Byte>, exch
     }
 }
 
+public func contractSshBuildVersionBanner(
+    softwareVersion: String,
+    comments!: String = ""
+): ContractSshVersionBanner {
+    try {
+        contractFromSshVersionBanner(
+            sshBuildVersionBanner(softwareVersion, comments: comments)
+        )
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH version banner build failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshBuildVersionBannerRequest(
+    request: ContractSshBuildVersionBannerRequest
+): ContractSshVersionBanner {
+    contractSshBuildVersionBanner(request.softwareVersion, comments: request.comments)
+}
+
+public func contractSshEncodeVersionBanner(
+    banner: ContractSshVersionBanner
+): Array<Byte> {
+    try {
+        sshEncodeVersionBanner(contractToSshVersionBanner(banner))
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH version banner encode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshEncodeVersionBannerRequest(
+    request: ContractSshEncodeVersionBannerRequest
+): Array<Byte> {
+    contractSshEncodeVersionBanner(request.banner)
+}
+
+public func contractSshDecodeVersionBanner(
+    encodedLine: Array<Byte>
+): ContractSshVersionBanner {
+    try {
+        contractFromSshVersionBanner(sshDecodeVersionBanner(encodedLine))
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH version banner decode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshDecodeVersionBannerRequest(
+    request: ContractSshDecodeVersionBannerRequest
+): ContractSshVersionBanner {
+    contractSshDecodeVersionBanner(request.encodedLine)
+}
+
 public func contractSshBuildDefaultKexInit(
     cookie!: Array<Byte> = []
 ): ContractSshKexInitMessage {
@@ -9032,6 +9187,31 @@ public func contractSshBuildKexExchangeTranscriptRequest(
     contractSshBuildKexExchangeTranscript(
         request.clientBannerLine,
         request.serverBannerLine,
+        request.clientKexInit,
+        request.serverKexInit
+    )
+}
+
+public func contractSshBuildKexExchangeTranscriptFromPrelude(
+    clientBanner: ContractSshVersionBanner,
+    serverBanner: ContractSshVersionBanner,
+    clientKexInit: ContractSshKexInitMessage,
+    serverKexInit: ContractSshKexInitMessage
+): ContractSshKexExchangeTranscript {
+    ContractSshKexExchangeTranscript(
+        contractSshEncodeVersionBanner(clientBanner),
+        contractSshEncodeVersionBanner(serverBanner),
+        contractSshEncodeKexInit(clientKexInit),
+        contractSshEncodeKexInit(serverKexInit)
+    )
+}
+
+public func contractSshBuildKexExchangeTranscriptFromPreludeRequest(
+    request: ContractSshBuildTranscriptFromPreludeRequest
+): ContractSshKexExchangeTranscript {
+    contractSshBuildKexExchangeTranscriptFromPrelude(
+        request.clientBanner,
+        request.serverBanner,
         request.clientKexInit,
         request.serverKexInit
     )
@@ -9792,6 +9972,57 @@ public func contractSshVerifyHostIdentityRequired(
     }
 }
 
+public func contractSshEncodeTransportPacket(
+    payload: Array<Byte>,
+    blockSize!: Int64 = SSH_DEFAULT_PACKET_BLOCK_SIZE,
+    randomPadding!: Array<Byte> = []
+): Array<Byte> {
+    try {
+        sshEncodeTransportPacket(
+            payload,
+            blockSize: blockSize,
+            randomPadding: randomPadding
+        )
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH transport packet encode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshEncodeTransportPacketRequest(
+    request: ContractSshEncodeTransportPacketRequest
+): Array<Byte> {
+    contractSshEncodeTransportPacket(
+        request.payload,
+        blockSize: request.blockSize,
+        randomPadding: request.randomPadding
+    )
+}
+
+public func contractSshDecodeTransportPacket(
+    encodedPacket: Array<Byte>,
+    blockSize!: Int64 = SSH_DEFAULT_PACKET_BLOCK_SIZE
+): ContractSshTransportPacket {
+    try {
+        contractFromSshTransportPacket(
+            sshDecodeTransportPacket(encodedPacket, blockSize: blockSize)
+        )
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH transport packet decode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshDecodeTransportPacketRequest(
+    request: ContractSshDecodeTransportPacketRequest
+): ContractSshTransportPacket {
+    contractSshDecodeTransportPacket(request.encodedPacket, blockSize: request.blockSize)
+}
+
 public func contractTrySshVerifyHostIdentityRequired(
     exchangeHash: Array<Byte>,
     serverHostKey: Array<Byte>,
@@ -9942,6 +10173,29 @@ private func contractFromSshClientInitialHandshakeResult(
 
 private func contractFromSshTransportPacket(packet: SshTransportPacket): ContractSshTransportPacket {
     ContractSshTransportPacket(packet.packetLength, packet.payload, packet.padding)
+}
+
+private func contractFromSshVersionBanner(banner: SshVersionBanner): ContractSshVersionBanner {
+    ContractSshVersionBanner(
+        banner.protocolVersion,
+        banner.softwareVersion,
+        comments: banner.comments
+    )
+}
+
+private func contractToSshVersionBanner(banner: ContractSshVersionBanner): SshVersionBanner {
+    try {
+        SshVersionBanner(
+            banner.protocolVersion,
+            banner.softwareVersion,
+            comments: banner.comments
+        )
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH version banner is invalid: ${e.message}"
+        )
+    }
 }
 
 private func contractTryFromSshHostVerificationResult(

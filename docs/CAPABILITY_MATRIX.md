@@ -50,6 +50,9 @@
 - KEX / transport：
   - X25519 KEX
   - ECDH P-256 KEX
+  - version banner build / decode / encode
+  - decoded banner + KEXINIT prelude to transcript builder
+  - plaintext transport packet encode / decode
   - NEWKEYS gate
   - transport packet protection / rekey
 - host verification：
@@ -71,6 +74,7 @@
   - request-style transcript / negotiated algorithms wrappers
   - X25519 KEX init/process helpers and session-state rekey entrypoints
   - KEXINIT default builder / codec / negotiation / transcript helper
+  - version banner / prelude transcript request helpers
 
 ## Integrator Guidance
 

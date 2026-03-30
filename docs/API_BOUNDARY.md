@@ -26,6 +26,7 @@
 - SSH runtime 已覆盖 current-session snapshot 与 X25519 rekey facade
 - SSH request-style facade 已补到 transcript / negotiated algorithms / X25519 KEX helpers / session-state rekey
 - SSH KEXINIT message build / encode / decode / negotiate / transcript builder 已进入稳定 contract 面
+- SSH version banner build / codec、plaintext transport packet codec、decoded prelude -> transcript builder 已进入稳定 contract 面
 - 当前不把 `jinguissl.crypto.*`、`bridges/`、`_helper/` 视为公开稳定契约的一部分
 
 ## Evolution Rule
@@ -50,5 +51,6 @@
 - SSH runtime current-session / rekey facade（mutable session snapshot）
 - SSH transcript / negotiated algorithms / X25519 KEX request facade
 - SSH KEXINIT negotiation facade（default builder / codec / transcript helper）
+- SSH version banner / plaintext transport packet / prelude transcript facade
 - X.509 `try/outcome` 统一结果模型与 PEM bundle normalization
 - HKDF 的 HTTP / SSH key-set 导出入口
