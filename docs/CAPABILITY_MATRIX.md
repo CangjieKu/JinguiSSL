@@ -53,6 +53,7 @@
   - version banner build / decode / encode
   - decoded banner + KEXINIT prelude to transcript builder
   - KEX_ECDH_INIT / KEX_ECDH_REPLY encode / decode
+  - NEWKEYS encode / decode
   - plaintext transport packet encode / decode
   - NEWKEYS gate
   - transport packet protection / rekey
@@ -77,6 +78,7 @@
   - KEXINIT default builder / codec / negotiation / transcript helper
   - version banner / prelude transcript request helpers
   - KEX_ECDH init/reply request helpers
+  - NEWKEYS request helpers
 
 ## Integrator Guidance
 

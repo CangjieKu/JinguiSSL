@@ -3522,6 +3522,17 @@ public class ContractTestSuite {
         @Assert(decodedReply.serverHostKey, "server-host-key".toArray())
         @Assert(decodedReply.serverEphemeralPublicKey, serverPublic)
         @Assert(decodedReply.signature, "signature-blob".toArray())
+
+        let encodedNewKeys = contractSshEncodeNewKeysRequest(ContractSshEncodeNewKeysRequest())
+        @Assert(encodedNewKeys, sshEncodeNewKeys())
+        contractSshDecodeNewKeysRequest(ContractSshDecodeNewKeysRequest(encodedNewKeys))
+
+        try {
+            contractSshDecodeNewKeys([UInt8(1), UInt8(2)])
+            @Fail("invalid NEWKEYS payload should fail")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "VERIFY_FAILED")
+        }
     }
 
     @TestCase

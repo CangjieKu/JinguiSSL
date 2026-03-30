@@ -28,6 +28,7 @@
 - SSH KEXINIT message build / encode / decode / negotiate / transcript builder 已进入稳定 contract 面
 - SSH version banner build / codec、plaintext transport packet codec、decoded prelude -> transcript builder 已进入稳定 contract 面
 - SSH `KEX_ECDH_INIT` / `KEX_ECDH_REPLY` message codec 已进入稳定 contract 面
+- SSH `NEWKEYS` message codec 已进入稳定 contract 面
 - 当前不把 `jinguissl.crypto.*`、`bridges/`、`_helper/` 视为公开稳定契约的一部分
 
 ## Evolution Rule
@@ -54,5 +55,6 @@
 - SSH KEXINIT negotiation facade（default builder / codec / transcript helper）
 - SSH version banner / plaintext transport packet / prelude transcript facade
 - SSH KEX_ECDH init/reply codec facade
+- SSH NEWKEYS codec facade
 - X.509 `try/outcome` 统一结果模型与 PEM bundle normalization
 - HKDF 的 HTTP / SSH key-set 导出入口

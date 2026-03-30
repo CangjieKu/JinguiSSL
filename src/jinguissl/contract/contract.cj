@@ -36,11 +36,13 @@ import jinguissl.crypto.ssh.{
     sshComputeHostKeySha256,
     sshDecodeKexEcdhInit,
     sshDecodeKexEcdhReply,
+    sshDecodeNewKeys,
     sshDecodeTransportPacket,
     sshDecodeVersionBanner,
     sshDecodeKexInit,
     sshEncodeKexEcdhInit,
     sshEncodeKexEcdhReply,
+    sshEncodeNewKeys,
     sshEncodeEcdsaHostPublicKey,
     sshEncodeKexInit,
     sshEncodeTransportPacket,
@@ -1382,6 +1384,24 @@ public class ContractSshDecodeKexEcdhReplyRequest {
             throw ContractException(
                 ContractErrorCode.BadInput,
                 "SSH encoded KEX_ECDH_REPLY payload must not be empty"
+            )
+        }
+        this.encoded = encoded.clone()
+    }
+}
+
+public class ContractSshEncodeNewKeysRequest {
+    public init() {}
+}
+
+public class ContractSshDecodeNewKeysRequest {
+    public let encoded: Array<Byte>
+
+    public init(encoded: Array<Byte>) {
+        if (encoded.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH encoded NEWKEYS payload must not be empty"
             )
         }
         this.encoded = encoded.clone()
@@ -9385,6 +9405,40 @@ public func contractSshDecodeKexEcdhReplyRequest(
     request: ContractSshDecodeKexEcdhReplyRequest
 ): ContractSshKexEcdhReplyMessage {
     contractSshDecodeKexEcdhReply(request.encoded)
+}
+
+public func contractSshEncodeNewKeys(): Array<Byte> {
+    try {
+        sshEncodeNewKeys()
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH NEWKEYS encode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshEncodeNewKeysRequest(
+    request: ContractSshEncodeNewKeysRequest
+): Array<Byte> {
+    contractSshEncodeNewKeys()
+}
+
+public func contractSshDecodeNewKeys(encoded: Array<Byte>): Unit {
+    try {
+        sshDecodeNewKeys(encoded)
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH NEWKEYS decode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshDecodeNewKeysRequest(
+    request: ContractSshDecodeNewKeysRequest
+): Unit {
+    contractSshDecodeNewKeys(request.encoded)
 }
 
 public func contractSshBuildKexEcdhInitX25519(clientPrivateKey: Array<Byte>): ContractSshX25519InitResult {
