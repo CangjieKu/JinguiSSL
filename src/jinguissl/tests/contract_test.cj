@@ -3380,23 +3380,60 @@ public class ContractTestSuite {
     }
 
     @TestCase
+    public func testContractSshKexInitNegotiationFacadeHelpers(): Unit {
+        let clientMessage = ContractSshKexInitMessage(
+            incrementalBytes(16, start: 1400),
+            ["curve25519-sha256", "ecdh-sha2-nistp256"],
+            ["rsa-sha2-256", "ssh-ed25519"],
+            ["aes128-ctr", "chacha20-poly1305@openssh.com"],
+            ["aes128-ctr", "chacha20-poly1305@openssh.com"],
+            ["hmac-sha2-256"],
+            ["hmac-sha2-256"],
+            ["none"],
+            ["none"]
+        )
+        let serverMessage = contractSshBuildDefaultKexInitRequest(
+            ContractSshBuildDefaultKexInitRequest(cookie: incrementalBytes(16, start: 1432))
+        )
+        let encodedClient = contractSshEncodeKexInitRequest(ContractSshEncodeKexInitRequest(clientMessage))
+        let decodedClient = contractSshDecodeKexInitRequest(ContractSshDecodeKexInitRequest(encodedClient))
+        let negotiated = contractSshNegotiateKexInitRequest(
+            ContractSshNegotiateKexInitRequest(decodedClient, serverMessage)
+        )
+        let transcript = contractSshBuildKexExchangeTranscriptRequest(
+            ContractSshBuildTranscriptFromKexInitRequest(
+                "SSH-2.0-contract-client-kexinit\r\n".toArray(),
+                "SSH-2.0-contract-server-kexinit\r\n".toArray(),
+                decodedClient,
+                serverMessage
+            )
+        )
+
+        @Assert(decodedClient.cookie, clientMessage.cookie)
+        @Assert(decodedClient.kexAlgorithms, clientMessage.kexAlgorithms)
+        @Assert(negotiated.kexAlgorithm, "curve25519-sha256")
+        @Assert(negotiated.serverHostKeyAlgorithm, "ssh-ed25519")
+        @Assert(negotiated.macAlgorithmClientToServer, "hmac-sha2-256")
+        @Assert(transcript.clientKexInitPayload, encodedClient)
+        @Assert(
+            transcript.serverKexInitPayload,
+            contractSshEncodeKexInit(serverMessage)
+        )
+    }
+
+    @TestCase
     public func testContractSshRequestStyleHandshakeAndKexHelpers(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
-        let transcript = ContractSshKexExchangeTranscript(
+        let clientKexInit = contractSshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1600))
+        let serverKexInit = contractSshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1632))
+        let transcript = contractSshBuildKexExchangeTranscript(
             "SSH-2.0-contract-client-request\r\n".toArray(),
             "SSH-2.0-contract-server-request\r\n".toArray(),
-            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1600))),
-            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1632)))
+            clientKexInit,
+            serverKexInit
         )
-        let negotiated = ContractSshNegotiatedAlgorithms(
-            "curve25519-sha256",
-            "rsa-sha2-256",
-            "aes128-ctr",
-            "aes128-ctr",
-            "hmac-sha2-256",
-            "hmac-sha2-256"
-        )
+        let negotiated = contractSshNegotiateKexInit(clientKexInit, serverKexInit)
         let initResult = contractSshBuildKexEcdhInitX25519Request(
             ContractSshBuildKexEcdhInitX25519Request(clientPrivate)
         )

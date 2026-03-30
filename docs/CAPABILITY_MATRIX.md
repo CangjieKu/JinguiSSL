@@ -70,6 +70,7 @@
   - X25519 runtime rekey facade
   - request-style transcript / negotiated algorithms wrappers
   - X25519 KEX init/process helpers and session-state rekey entrypoints
+  - KEXINIT default builder / codec / negotiation / transcript helper
 
 ## Integrator Guidance
 

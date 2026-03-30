@@ -15,11 +15,13 @@ import jinguissl.crypto.ssh.{
     SshHostVerificationPolicy,
     SshHostVerificationResult,
     SshKexExchangeTranscript,
+    SshKexInitMessage,
     SshNegotiatedAlgorithms,
     SshServerInitialHandshakeResult,
     SshTransportPacket,
     SshX25519KexResult,
     sshBuildKexEcdhInitX25519,
+    sshBuildDefaultKexInit,
     sshClientProcessKexEcdhReplyX25519,
     sshBuildEd25519HostKeyBlobFromSeed,
     sshCompleteClientInitialHandshakeX25519WithHostVerificationRequirement,
@@ -27,10 +29,13 @@ import jinguissl.crypto.ssh.{
     sshCompleteServerInitialHandshakeX25519Ed25519,
     sshCompleteServerInitialHandshakeX25519Rsa,
     sshComputeHostKeySha256,
+    sshDecodeKexInit,
     sshEncodeEcdsaHostPublicKey,
+    sshEncodeKexInit,
     sshEncodeRsaHostPublicKey,
     sshExtractHostKeyAlgorithm,
     sshExtractHostSignatureAlgorithm,
+    sshNegotiateKexInit,
     sshServerProcessKexEcdhInitX25519,
     sshSignExchangeHashEcdsa,
     sshSignExchangeHashEd25519,
@@ -1226,6 +1231,138 @@ public class ContractSshKexExchangeTranscript {
         this.serverBannerLine = serverBannerLine.clone()
         this.clientKexInitPayload = clientKexInitPayload.clone()
         this.serverKexInitPayload = serverKexInitPayload.clone()
+    }
+}
+
+public class ContractSshKexInitMessage {
+    public let cookie: Array<Byte>
+    public let kexAlgorithms: Array<String>
+    public let serverHostKeyAlgorithms: Array<String>
+    public let encryptionAlgorithmsClientToServer: Array<String>
+    public let encryptionAlgorithmsServerToClient: Array<String>
+    public let macAlgorithmsClientToServer: Array<String>
+    public let macAlgorithmsServerToClient: Array<String>
+    public let compressionAlgorithmsClientToServer: Array<String>
+    public let compressionAlgorithmsServerToClient: Array<String>
+    public let languagesClientToServer: Array<String>
+    public let languagesServerToClient: Array<String>
+    public let firstKexPacketFollows: Bool
+    public let reserved: Int64
+
+    public init(
+        cookie: Array<Byte>,
+        kexAlgorithms: Array<String>,
+        serverHostKeyAlgorithms: Array<String>,
+        encryptionAlgorithmsClientToServer: Array<String>,
+        encryptionAlgorithmsServerToClient: Array<String>,
+        macAlgorithmsClientToServer: Array<String>,
+        macAlgorithmsServerToClient: Array<String>,
+        compressionAlgorithmsClientToServer: Array<String>,
+        compressionAlgorithmsServerToClient: Array<String>,
+        languagesClientToServer!: Array<String> = [],
+        languagesServerToClient!: Array<String> = [],
+        firstKexPacketFollows!: Bool = false,
+        reserved!: Int64 = 0
+    ) {
+        _ = contractToSshKexInitMessage(
+            cookie,
+            kexAlgorithms,
+            serverHostKeyAlgorithms,
+            encryptionAlgorithmsClientToServer,
+            encryptionAlgorithmsServerToClient,
+            macAlgorithmsClientToServer,
+            macAlgorithmsServerToClient,
+            compressionAlgorithmsClientToServer,
+            compressionAlgorithmsServerToClient,
+            languagesClientToServer: languagesClientToServer,
+            languagesServerToClient: languagesServerToClient,
+            firstKexPacketFollows: firstKexPacketFollows,
+            reserved: reserved
+        )
+        this.cookie = cookie.clone()
+        this.kexAlgorithms = contractCloneStringArray(kexAlgorithms)
+        this.serverHostKeyAlgorithms = contractCloneStringArray(serverHostKeyAlgorithms)
+        this.encryptionAlgorithmsClientToServer = contractCloneStringArray(encryptionAlgorithmsClientToServer)
+        this.encryptionAlgorithmsServerToClient = contractCloneStringArray(encryptionAlgorithmsServerToClient)
+        this.macAlgorithmsClientToServer = contractCloneStringArray(macAlgorithmsClientToServer)
+        this.macAlgorithmsServerToClient = contractCloneStringArray(macAlgorithmsServerToClient)
+        this.compressionAlgorithmsClientToServer = contractCloneStringArray(compressionAlgorithmsClientToServer)
+        this.compressionAlgorithmsServerToClient = contractCloneStringArray(compressionAlgorithmsServerToClient)
+        this.languagesClientToServer = contractCloneStringArray(languagesClientToServer)
+        this.languagesServerToClient = contractCloneStringArray(languagesServerToClient)
+        this.firstKexPacketFollows = firstKexPacketFollows
+        this.reserved = reserved
+    }
+}
+
+public class ContractSshBuildDefaultKexInitRequest {
+    public let cookie: Array<Byte>
+
+    public init(cookie!: Array<Byte> = []) {
+        if (cookie.size != 0 && cookie.size != 16) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH default KEXINIT cookie must be empty or 16 bytes"
+            )
+        }
+        this.cookie = cookie.clone()
+    }
+}
+
+public class ContractSshEncodeKexInitRequest {
+    public let message: ContractSshKexInitMessage
+
+    public init(message: ContractSshKexInitMessage) {
+        this.message = message
+    }
+}
+
+public class ContractSshDecodeKexInitRequest {
+    public let encoded: Array<Byte>
+
+    public init(encoded: Array<Byte>) {
+        if (encoded.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH encoded KEXINIT payload must not be empty"
+            )
+        }
+        this.encoded = encoded.clone()
+    }
+}
+
+public class ContractSshNegotiateKexInitRequest {
+    public let client: ContractSshKexInitMessage
+    public let server: ContractSshKexInitMessage
+
+    public init(client: ContractSshKexInitMessage, server: ContractSshKexInitMessage) {
+        this.client = client
+        this.server = server
+    }
+}
+
+public class ContractSshBuildTranscriptFromKexInitRequest {
+    public let clientBannerLine: Array<Byte>
+    public let serverBannerLine: Array<Byte>
+    public let clientKexInit: ContractSshKexInitMessage
+    public let serverKexInit: ContractSshKexInitMessage
+
+    public init(
+        clientBannerLine: Array<Byte>,
+        serverBannerLine: Array<Byte>,
+        clientKexInit: ContractSshKexInitMessage,
+        serverKexInit: ContractSshKexInitMessage
+    ) {
+        if (clientBannerLine.size == 0 || serverBannerLine.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH transcript banners must not be empty"
+            )
+        }
+        this.clientBannerLine = clientBannerLine.clone()
+        this.serverBannerLine = serverBannerLine.clone()
+        this.clientKexInit = clientKexInit
+        this.serverKexInit = serverKexInit
     }
 }
 
@@ -8789,6 +8926,117 @@ public func contractSshSignExchangeHashEd25519(privateKeySeed: Array<Byte>, exch
     }
 }
 
+public func contractSshBuildDefaultKexInit(
+    cookie!: Array<Byte> = []
+): ContractSshKexInitMessage {
+    try {
+        contractFromSshKexInitMessage(sshBuildDefaultKexInit(cookie: cookie))
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH default KEXINIT build failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshBuildDefaultKexInitRequest(
+    request: ContractSshBuildDefaultKexInitRequest
+): ContractSshKexInitMessage {
+    contractSshBuildDefaultKexInit(cookie: request.cookie)
+}
+
+public func contractSshEncodeKexInit(
+    message: ContractSshKexInitMessage
+): Array<Byte> {
+    try {
+        sshEncodeKexInit(contractToSshKexInitMessage(message))
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEXINIT encode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshEncodeKexInitRequest(
+    request: ContractSshEncodeKexInitRequest
+): Array<Byte> {
+    contractSshEncodeKexInit(request.message)
+}
+
+public func contractSshDecodeKexInit(
+    encoded: Array<Byte>
+): ContractSshKexInitMessage {
+    try {
+        contractFromSshKexInitMessage(sshDecodeKexInit(encoded))
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEXINIT decode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshDecodeKexInitRequest(
+    request: ContractSshDecodeKexInitRequest
+): ContractSshKexInitMessage {
+    contractSshDecodeKexInit(request.encoded)
+}
+
+public func contractSshNegotiateKexInit(
+    client: ContractSshKexInitMessage,
+    server: ContractSshKexInitMessage
+): ContractSshNegotiatedAlgorithms {
+    try {
+        contractFromSshNegotiatedAlgorithms(
+            sshNegotiateKexInit(
+                contractToSshKexInitMessage(client),
+                contractToSshKexInitMessage(server)
+            )
+        )
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEXINIT negotiation failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshNegotiateKexInitRequest(
+    request: ContractSshNegotiateKexInitRequest
+): ContractSshNegotiatedAlgorithms {
+    contractSshNegotiateKexInit(request.client, request.server)
+}
+
+public func contractSshBuildKexExchangeTranscript(
+    clientBannerLine: Array<Byte>,
+    serverBannerLine: Array<Byte>,
+    clientKexInit: ContractSshKexInitMessage,
+    serverKexInit: ContractSshKexInitMessage
+): ContractSshKexExchangeTranscript {
+    ContractSshKexExchangeTranscript(
+        clientBannerLine,
+        serverBannerLine,
+        contractSshEncodeKexInit(clientKexInit),
+        contractSshEncodeKexInit(serverKexInit)
+    )
+}
+
+public func contractSshBuildKexExchangeTranscriptRequest(
+    request: ContractSshBuildTranscriptFromKexInitRequest
+): ContractSshKexExchangeTranscript {
+    contractSshBuildKexExchangeTranscript(
+        request.clientBannerLine,
+        request.serverBannerLine,
+        request.clientKexInit,
+        request.serverKexInit
+    )
+}
+
 public func contractSshBuildKexEcdhInitX25519(clientPrivateKey: Array<Byte>): ContractSshX25519InitResult {
     try {
         let (encodedInit, clientPublicKey) = sshBuildKexEcdhInitX25519(clientPrivateKey)
@@ -9716,6 +9964,41 @@ private func contractFromSshHostVerificationResult(
     )
 }
 
+private func contractFromSshKexInitMessage(
+    message: SshKexInitMessage
+): ContractSshKexInitMessage {
+    ContractSshKexInitMessage(
+        message.cookie,
+        message.kexAlgorithms,
+        message.serverHostKeyAlgorithms,
+        message.encryptionAlgorithmsClientToServer,
+        message.encryptionAlgorithmsServerToClient,
+        message.macAlgorithmsClientToServer,
+        message.macAlgorithmsServerToClient,
+        message.compressionAlgorithmsClientToServer,
+        message.compressionAlgorithmsServerToClient,
+        languagesClientToServer: message.languagesClientToServer,
+        languagesServerToClient: message.languagesServerToClient,
+        firstKexPacketFollows: message.firstKexPacketFollows,
+        reserved: message.reserved
+    )
+}
+
+private func contractFromSshNegotiatedAlgorithms(
+    negotiated: SshNegotiatedAlgorithms
+): ContractSshNegotiatedAlgorithms {
+    ContractSshNegotiatedAlgorithms(
+        negotiated.kexAlgorithm,
+        negotiated.serverHostKeyAlgorithm,
+        negotiated.encryptionAlgorithmClientToServer,
+        negotiated.encryptionAlgorithmServerToClient,
+        negotiated.macAlgorithmClientToServer,
+        negotiated.macAlgorithmServerToClient,
+        compressionAlgorithmClientToServer: negotiated.compressionAlgorithmClientToServer,
+        compressionAlgorithmServerToClient: negotiated.compressionAlgorithmServerToClient
+    )
+}
+
 private func contractToSshNegotiatedAlgorithms(
     negotiated: ContractSshNegotiatedAlgorithms
 ): SshNegotiatedAlgorithms {
@@ -9729,6 +10012,65 @@ private func contractToSshNegotiatedAlgorithms(
         negotiated.compressionAlgorithmClientToServer,
         negotiated.compressionAlgorithmServerToClient
     )
+}
+
+private func contractToSshKexInitMessage(
+    message: ContractSshKexInitMessage
+): SshKexInitMessage {
+    contractToSshKexInitMessage(
+        message.cookie,
+        message.kexAlgorithms,
+        message.serverHostKeyAlgorithms,
+        message.encryptionAlgorithmsClientToServer,
+        message.encryptionAlgorithmsServerToClient,
+        message.macAlgorithmsClientToServer,
+        message.macAlgorithmsServerToClient,
+        message.compressionAlgorithmsClientToServer,
+        message.compressionAlgorithmsServerToClient,
+        languagesClientToServer: message.languagesClientToServer,
+        languagesServerToClient: message.languagesServerToClient,
+        firstKexPacketFollows: message.firstKexPacketFollows,
+        reserved: message.reserved
+    )
+}
+
+private func contractToSshKexInitMessage(
+    cookie: Array<Byte>,
+    kexAlgorithms: Array<String>,
+    serverHostKeyAlgorithms: Array<String>,
+    encryptionAlgorithmsClientToServer: Array<String>,
+    encryptionAlgorithmsServerToClient: Array<String>,
+    macAlgorithmsClientToServer: Array<String>,
+    macAlgorithmsServerToClient: Array<String>,
+    compressionAlgorithmsClientToServer: Array<String>,
+    compressionAlgorithmsServerToClient: Array<String>,
+    languagesClientToServer!: Array<String> = [],
+    languagesServerToClient!: Array<String> = [],
+    firstKexPacketFollows!: Bool = false,
+    reserved!: Int64 = 0
+): SshKexInitMessage {
+    try {
+        SshKexInitMessage(
+            cookie,
+            kexAlgorithms,
+            serverHostKeyAlgorithms,
+            encryptionAlgorithmsClientToServer,
+            encryptionAlgorithmsServerToClient,
+            macAlgorithmsClientToServer,
+            macAlgorithmsServerToClient,
+            compressionAlgorithmsClientToServer,
+            compressionAlgorithmsServerToClient,
+            languagesClientToServer: languagesClientToServer,
+            languagesServerToClient: languagesServerToClient,
+            firstKexPacketFollows: firstKexPacketFollows,
+            reserved: reserved
+        )
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEXINIT message is invalid: ${e.message}"
+        )
+    }
 }
 
 private func contractToSshKexExchangeTranscript(
@@ -9761,6 +10103,14 @@ private func contractToSshKexExchangeTranscript(
             "SSH KEX transcript is invalid: ${e.message}"
         )
     }
+}
+
+private func contractCloneStringArray(values: Array<String>): Array<String> {
+    let out = ArrayList<String>()
+    for (value in values) {
+        out.add(value)
+    }
+    out.toArray()
 }
 
 private func contractToSshX25519KexResult(
