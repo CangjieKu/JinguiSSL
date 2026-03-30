@@ -2591,7 +2591,7 @@ private func sshDecodeEcdsaHostPublicKey(
     let (curveNameBytes, curveOffset) = decodeString(serverHostKey, offset, "host key curve name")
     let curveName = sshDecodeAlgorithmToken(curveNameBytes, "host key curve name")
     if (curveName != expectedCurveName) {
-        throw CryptoException(ParseError, "SSH ECDSA host key curve is unsupported: ${curveName}")
+        throw CryptoException(Unsupported, "SSH ECDSA host key curve is unsupported: ${curveName}")
     }
 
     let (encodedPoint, nextOffset) = decodeString(serverHostKey, curveOffset, "host key EC point")

@@ -3294,6 +3294,32 @@ public class ContractTestSuite {
             case Some(value) => @Assert(value.toString(), "CRYPTO_UNAVAILABLE")
             case None => @Fail("unsupported SSH host verification outcome should carry ignite code")
         }
+
+        let ecdsaPrivateKey = EcPrivateKey(NamedCurve.P256, BigNum.one())
+        let invalidCurveHostKey = contractSshEncodeEcdsaHostPublicKey(ecPublicFromPrivateKey(ecdsaPrivateKey))
+        let invalidCurveName = "nistp999".toArray()
+        var invalidCurveOffset = 4 + "ecdsa-sha2-nistp256".size + 4
+        var invalidCurveIndex = 0
+        while (invalidCurveIndex < invalidCurveName.size) {
+            invalidCurveHostKey[invalidCurveOffset + invalidCurveIndex] = invalidCurveName[invalidCurveIndex]
+            invalidCurveIndex += 1
+        }
+        let ecdsaSignature = contractSshSignExchangeHashEcdsa(ecdsaPrivateKey, exchangeHash)
+        try {
+            _ = contractSshVerifyHostIdentityRequired(
+                exchangeHash,
+                invalidCurveHostKey,
+                ecdsaSignature,
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "ecdsa-sha2-nistp256",
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+            @Fail("unsupported SSH ECDSA host key curve should surface as Unsupported")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
     }
 
     @TestCase

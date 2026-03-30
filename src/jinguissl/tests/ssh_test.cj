@@ -806,6 +806,26 @@ public class SshTestSuite {
             ),
             false
         )
+
+        let invalidCurveHostKeyBlob = hostKeyBlob.clone()
+        let invalidCurveName = "nistp999".toArray()
+        var curveNameOffset = 4 + SSH_HOST_KEY_ALGORITHM_ECDSA_NISTP256.size + 4
+        var curveIndex = 0
+        while (curveIndex < invalidCurveName.size) {
+            invalidCurveHostKeyBlob[curveNameOffset + curveIndex] = invalidCurveName[curveIndex]
+            curveIndex += 1
+        }
+        try {
+            _ = sshVerifyServerHostSignature(
+                exchangeHash,
+                invalidCurveHostKeyBlob,
+                signatureBlob,
+                negotiatedHostKeyAlgorithm: SSH_HOST_KEY_ALGORITHM_ECDSA_NISTP256
+            )
+            @Fail("unsupported SSH ECDSA host key curve should surface as Unsupported")
+        } catch (e: CryptoException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
     }
 
     @TestCase
