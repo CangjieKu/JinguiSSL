@@ -2391,6 +2391,103 @@ public class ContractTls13KeyUpdatePlan {
     }
 }
 
+public class ContractTls13ExporterMasterSecretRequest {
+    public let masterSecret: Array<Byte>
+    public let transcriptHash: Array<Byte>
+
+    public init(masterSecret: Array<Byte>, transcriptHash: Array<Byte>) {
+        if (masterSecret.size == 0 || transcriptHash.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 exporter master secret request fields must not be empty"
+            )
+        }
+        this.masterSecret = masterSecret.clone()
+        this.transcriptHash = transcriptHash.clone()
+    }
+}
+
+public class ContractTls13ExportKeyingMaterialRequest {
+    public let exporterMasterSecret: Array<Byte>
+    public let exporterLabel: String
+    public let context: Array<Byte>
+    public let outputLen: Int64
+
+    public init(
+        exporterMasterSecret: Array<Byte>,
+        exporterLabel: String,
+        context!: Array<Byte> = [],
+        outputLen!: Int64 = 32
+    ) {
+        if (exporterMasterSecret.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 export keying material request exporter master secret must not be empty"
+            )
+        }
+        if (exporterLabel.trimAscii().size == 0 || outputLen <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 export keying material request fields are invalid"
+            )
+        }
+        this.exporterMasterSecret = exporterMasterSecret.clone()
+        this.exporterLabel = exporterLabel.trimAscii()
+        this.context = context.clone()
+        this.outputLen = outputLen
+    }
+}
+
+public class ContractTls13KeyUpdateRequest {
+    public let currentTrafficSecret: Array<Byte>
+    public let requestPeerUpdate: Bool
+    public let keyLen: Int64
+    public let ivLen: Int64
+
+    public init(
+        currentTrafficSecret: Array<Byte>,
+        requestPeerUpdate!: Bool = false,
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12
+    ) {
+        if (currentTrafficSecret.size == 0 || keyLen <= 0 || ivLen <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 key update request fields are invalid"
+            )
+        }
+        this.currentTrafficSecret = currentTrafficSecret.clone()
+        this.requestPeerUpdate = requestPeerUpdate
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+    }
+}
+
+public class ContractTls13PeerKeyUpdateRequest {
+    public let currentTrafficSecret: Array<Byte>
+    public let encodedKeyUpdate: Array<Byte>
+    public let keyLen: Int64
+    public let ivLen: Int64
+
+    public init(
+        currentTrafficSecret: Array<Byte>,
+        encodedKeyUpdate: Array<Byte>,
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12
+    ) {
+        if (currentTrafficSecret.size == 0 || encodedKeyUpdate.size == 0 || keyLen <= 0 || ivLen <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 peer key update request fields are invalid"
+            )
+        }
+        this.currentTrafficSecret = currentTrafficSecret.clone()
+        this.encodedKeyUpdate = encodedKeyUpdate.clone()
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+    }
+}
+
 public class ContractTls13PskX25519DerivedSecrets {
     public let cipherBinding: ContractTls13CipherBinding
     public let keyMaterial: ContractTls13ApplicationKeyMaterial
@@ -2871,6 +2968,32 @@ public class ContractTlsRecordChannel {
             )
         }
         contractTlsDecodeAlertPayload(plain.fragment)
+    }
+}
+
+public class ContractTls12RecordChannelRequest {
+    public let secrets: ContractTls12HandshakeSecrets
+    public let algorithm: ContractAeadAlgorithm
+
+    public init(
+        secrets: ContractTls12HandshakeSecrets,
+        algorithm!: ContractAeadAlgorithm = ContractAeadAlgorithm.Aes256Gcm
+    ) {
+        this.secrets = secrets
+        this.algorithm = algorithm
+    }
+}
+
+public class ContractTls13RecordChannelRequest {
+    public let keyMaterial: ContractTls13ApplicationKeyMaterial
+    public let algorithm: ContractAeadAlgorithm
+
+    public init(
+        keyMaterial: ContractTls13ApplicationKeyMaterial,
+        algorithm!: ContractAeadAlgorithm = ContractAeadAlgorithm.Aes256Gcm
+    ) {
+        this.keyMaterial = keyMaterial
+        this.algorithm = algorithm
     }
 }
 
@@ -3619,6 +3742,15 @@ public func contractTls13DeriveExporterMasterSecret(
     }
 }
 
+public func contractTls13DeriveExporterMasterSecretRequest(
+    request: ContractTls13ExporterMasterSecretRequest
+): Array<Byte> {
+    contractTls13DeriveExporterMasterSecret(
+        request.masterSecret,
+        request.transcriptHash
+    )
+}
+
 public func contractTls13ExportKeyingMaterial(
     exporterMasterSecret: Array<Byte>,
     exporterLabel: String,
@@ -3638,6 +3770,17 @@ public func contractTls13ExportKeyingMaterial(
             "TLS1.3 keying material export failed: ${e.message}"
         )
     }
+}
+
+public func contractTls13ExportKeyingMaterialRequest(
+    request: ContractTls13ExportKeyingMaterialRequest
+): Array<Byte> {
+    contractTls13ExportKeyingMaterial(
+        request.exporterMasterSecret,
+        request.exporterLabel,
+        context: request.context,
+        outputLen: request.outputLen
+    )
 }
 
 public func contractTls13DeriveNextApplicationTrafficSecret(
@@ -3998,6 +4141,17 @@ public func contractTls13PrepareKeyUpdate(
     )
 }
 
+public func contractTls13PrepareKeyUpdateRequest(
+    request: ContractTls13KeyUpdateRequest
+): ContractTls13KeyUpdatePlan {
+    contractTls13PrepareKeyUpdate(
+        request.currentTrafficSecret,
+        requestPeerUpdate: request.requestPeerUpdate,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen
+    )
+}
+
 public func contractTls13ApplyPeerKeyUpdate(
     currentTrafficSecret: Array<Byte>,
     encodedKeyUpdate: Array<Byte>,
@@ -4009,6 +4163,17 @@ public func contractTls13ApplyPeerKeyUpdate(
         encodedKeyUpdate,
         keyLen,
         ivLen
+    )
+}
+
+public func contractTls13ApplyPeerKeyUpdateRequest(
+    request: ContractTls13PeerKeyUpdateRequest
+): ContractTls13KeyUpdatePlan {
+    contractTls13ApplyPeerKeyUpdate(
+        request.currentTrafficSecret,
+        request.encodedKeyUpdate,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen
     )
 }
 
@@ -6405,6 +6570,15 @@ public func contractTls12CreateClientRecordChannel(
     }
 }
 
+public func contractTls12CreateClientRecordChannelRequest(
+    request: ContractTls12RecordChannelRequest
+): ContractTlsRecordChannel {
+    contractTls12CreateClientRecordChannel(
+        request.secrets,
+        algorithm: request.algorithm
+    )
+}
+
 public func contractTls12CreateServerRecordChannel(
     secrets: ContractTls12HandshakeSecrets,
     algorithm!: ContractAeadAlgorithm = ContractAeadAlgorithm.Aes256Gcm
@@ -6435,6 +6609,15 @@ public func contractTls12CreateServerRecordChannel(
             "TLS1.2 server record channel creation failed: ${e.message}"
         )
     }
+}
+
+public func contractTls12CreateServerRecordChannelRequest(
+    request: ContractTls12RecordChannelRequest
+): ContractTlsRecordChannel {
+    contractTls12CreateServerRecordChannel(
+        request.secrets,
+        algorithm: request.algorithm
+    )
 }
 
 public func contractTls13CreateClientRecordChannel(
@@ -6480,6 +6663,15 @@ public func contractTls13CreateClientRecordChannel(
     }
 }
 
+public func contractTls13CreateClientRecordChannelRequest(
+    request: ContractTls13RecordChannelRequest
+): ContractTlsRecordChannel {
+    contractTls13CreateClientRecordChannel(
+        request.keyMaterial,
+        algorithm: request.algorithm
+    )
+}
+
 public func contractTls13CreateServerRecordChannel(
     keyMaterial: ContractTls13ApplicationKeyMaterial,
     algorithm!: ContractAeadAlgorithm = ContractAeadAlgorithm.Aes256Gcm
@@ -6521,6 +6713,15 @@ public func contractTls13CreateServerRecordChannel(
             "TLS1.3 server record channel creation failed: ${e.message}"
         )
     }
+}
+
+public func contractTls13CreateServerRecordChannelRequest(
+    request: ContractTls13RecordChannelRequest
+): ContractTlsRecordChannel {
+    contractTls13CreateServerRecordChannel(
+        request.keyMaterial,
+        algorithm: request.algorithm
+    )
 }
 
 public func contractTls13BuildHttpClientHelloX25519(

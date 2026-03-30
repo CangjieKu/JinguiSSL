@@ -797,6 +797,24 @@ public class ContractTestSuite {
         )
         @Assert(nextClientWriteKey.size, verifiedSession.result.keyMaterial.clientWriteKey.size)
         @Assert(nextClientWriteIv.size, verifiedSession.result.keyMaterial.clientWriteIv.size)
+
+        let exporterMasterByRequest = contractTls13DeriveExporterMasterSecretRequest(
+            ContractTls13ExporterMasterSecretRequest(
+                verifiedSession.masterSecret,
+                verifiedSession.transcriptHash
+            )
+        )
+        @Assert(exporterMasterByRequest, exporterMaster)
+
+        let exportedByRequest = contractTls13ExportKeyingMaterialRequest(
+            ContractTls13ExportKeyingMaterialRequest(
+                exporterMasterByRequest,
+                "EXPORTER-jinkui/http",
+                context: "http-ctx".toArray(),
+                outputLen: 42
+            )
+        )
+        @Assert(exportedByRequest, exported)
     }
 
     @TestCase
@@ -1226,6 +1244,16 @@ public class ContractTestSuite {
         } catch (e: ContractException) {
             @Assert(e.code.toString(), "BAD_INPUT")
         }
+
+        let request = ContractTls12RecordChannelRequest(
+            secrets,
+            algorithm: ContractAeadAlgorithm.Aes256Gcm
+        )
+        let clientChannelByRequest = contractTls12CreateClientRecordChannelRequest(request)
+        let serverChannelByRequest = contractTls12CreateServerRecordChannelRequest(request)
+        let requestRecord = clientChannelByRequest.sealApplicationData("tls12-request-facade".toArray())
+        let requestOpened = serverChannelByRequest.openApplicationData(requestRecord)
+        @Assert(requestOpened, "tls12-request-facade".toArray())
     }
 
     @TestCase
@@ -1262,6 +1290,16 @@ public class ContractTestSuite {
         serverChannel.resetSequences()
         @Assert(clientChannel.writeSequence, 0)
         @Assert(serverChannel.readSequence, 0)
+
+        let request = ContractTls13RecordChannelRequest(
+            keyMaterial,
+            algorithm: ContractAeadAlgorithm.Chacha20Poly1305
+        )
+        let clientChannelByRequest = contractTls13CreateClientRecordChannelRequest(request)
+        let serverChannelByRequest = contractTls13CreateServerRecordChannelRequest(request)
+        let reqEncoded = clientChannelByRequest.sealApplicationData("req-round-trip".toArray())
+        let reqOpened = serverChannelByRequest.openApplicationData(reqEncoded)
+        @Assert(reqOpened, "req-round-trip".toArray())
     }
 
     @TestCase
@@ -1914,6 +1952,29 @@ public class ContractTestSuite {
         @Assert(applied.requestPeerUpdate, true)
         @Assert(applied.nextWriteKey.size, binding.keyLen)
         @Assert(applied.nextWriteIv.size, binding.ivLen)
+
+        let keyUpdateByRequest = contractTls13PrepareKeyUpdateRequest(
+            ContractTls13KeyUpdateRequest(
+                verifiedSession.clientAppTrafficSecret,
+                requestPeerUpdate: true,
+                keyLen: binding.keyLen,
+                ivLen: binding.ivLen
+            )
+        )
+        @Assert(contractTls13DecodeKeyUpdateHandshake(keyUpdateByRequest.encodedKeyUpdate), true)
+        @Assert(keyUpdateByRequest.requestPeerUpdate, true)
+
+        let appliedByRequest = contractTls13ApplyPeerKeyUpdateRequest(
+            ContractTls13PeerKeyUpdateRequest(
+                verifiedSession.serverAppTrafficSecret,
+                keyUpdateByRequest.encodedKeyUpdate,
+                keyLen: binding.keyLen,
+                ivLen: binding.ivLen
+            )
+        )
+        @Assert(appliedByRequest.requestPeerUpdate, true)
+        @Assert(appliedByRequest.nextWriteKey.size, binding.keyLen)
+        @Assert(appliedByRequest.nextWriteIv.size, binding.ivLen)
     }
 
     @TestCase
