@@ -23,6 +23,7 @@
   - verified-session result
   - PSK / session ticket / session cache
   - request-style session ticket / cache / PSK facade
+  - request-style 0-RTT prepare / accept / HTTP accept facade
   - 0-RTT acceptance gate + replay cache
   - KeyUpdate / traffic secret rotation
   - Exporter / cipher-binding helpers

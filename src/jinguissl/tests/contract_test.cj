@@ -2025,6 +2025,87 @@ public class ContractTestSuite {
     }
 
     @TestCase
+    public func testContractTls13PskEarlyDataRequestFacades(): Unit {
+        let ticket = contractTlsCreateSessionTicket(
+            ContractTlsSessionIdentity(
+                ContractTlsVersion.Tls13,
+                incrementalBytes(20, start: 41),
+                serverName: "resume.example.com",
+                alpnProtocol: "h2"
+            ),
+            incrementalBytes(48, start: 151),
+            nonce: incrementalBytes(8, start: 99),
+            nowUnixSeconds: 5000,
+            ttlSeconds: 600
+        )
+
+        let prepareRequest = ContractTls13PskEarlyDataFromSessionTicketRequest(
+            ticket,
+            sessionId: incrementalBytes(8, start: 21)
+        )
+        let clientPlan = contractTls13PreparePskEarlyDataFromSessionTicketRequest(prepareRequest)
+        let accepted = contractTls13AcceptPskEarlyDataFromClientHelloRequest(
+            ContractTls13PskEarlyDataAcceptRequest(
+                clientPlan.encodedClientHello,
+                nowUnixSeconds: 5100
+            )
+        )
+        @Assert(accepted.clientEarlyTrafficSecret, clientPlan.clientEarlyTrafficSecret)
+
+        let cache = ContractTlsSessionCache(maxEntries: 2, defaultTtlSeconds: 60)
+        _ = cache.store(ticket)
+        let fromCachePlan = contractTls13PreparePskEarlyDataFromSessionCacheRequest(
+            ContractTls13PskEarlyDataFromSessionCacheRequest(
+                cache,
+                ticket.identity,
+                nowUnixSeconds: 5100,
+                sessionId: incrementalBytes(8, start: 23)
+            )
+        )
+        @Assert(fromCachePlan.ticket.identity.resumptionId, ticket.identity.resumptionId)
+
+        let replayCache = ContractTls13EarlyDataReplayCache(maxEntries: 2, defaultWindowSeconds: 120)
+        let replayAccepted = contractTls13AcceptPskEarlyDataFromClientHelloWithReplayCacheRequest(
+            ContractTls13PskEarlyDataAcceptWithReplayCacheRequest(
+                fromCachePlan.encodedClientHello,
+                replayCache,
+                nowUnixSeconds: 5101,
+                replayTtlSeconds: 60
+            )
+        )
+        @Assert(replayAccepted.clientEarlyWriteKey, fromCachePlan.clientEarlyWriteKey)
+
+        let httpAccepted = contractTls13AcceptPskEarlyDataForHttpRequest(
+            ContractTls13PskEarlyDataHttpAcceptRequest(
+                clientPlan.encodedClientHello,
+                expectedServerName: "RESUME.EXAMPLE.COM",
+                expectedAlpnProtocol: "H2",
+                nowUnixSeconds: 5100
+            )
+        )
+        @Assert(httpAccepted.clientEarlyWriteIv, clientPlan.clientEarlyWriteIv)
+
+        let httpReplayCache = ContractTls13EarlyDataReplayCache(maxEntries: 2, defaultWindowSeconds: 120)
+        let httpReplayRequest = ContractTls13PskEarlyDataHttpAcceptWithReplayCacheRequest(
+            clientPlan.encodedClientHello,
+            httpReplayCache,
+            expectedServerName: "resume.example.com",
+            expectedAlpnProtocol: "h2",
+            nowUnixSeconds: 5102,
+            replayTtlSeconds: 60
+        )
+        let httpReplayAccepted = contractTls13AcceptPskEarlyDataForHttpWithReplayCacheRequest(httpReplayRequest)
+        @Assert(httpReplayAccepted.clientEarlyTrafficSecret, clientPlan.clientEarlyTrafficSecret)
+
+        try {
+            _ = contractTls13AcceptPskEarlyDataForHttpWithReplayCacheRequest(httpReplayRequest)
+            @Fail("request-style HTTP early data replay should fail")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "VERIFY_FAILED")
+        }
+    }
+
+    @TestCase
     public func testContractTls13KeyUpdateAndCipherBindingFacade(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")

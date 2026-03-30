@@ -4706,6 +4706,17 @@ public func contractTls13PreparePskEarlyDataFromSessionTicket(
     )
 }
 
+public func contractTls13PreparePskEarlyDataFromSessionTicketRequest(
+    request: ContractTls13PskEarlyDataFromSessionTicketRequest
+): ContractTls13PskEarlyDataPlan {
+    contractTls13PreparePskEarlyDataFromSessionTicket(
+        request.ticket,
+        sessionId: request.sessionId,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen
+    )
+}
+
 public func contractTls13PreparePskEarlyDataFromSessionCache(
     cache: ContractTlsSessionCache,
     identity: ContractTlsSessionIdentity,
@@ -4726,6 +4737,19 @@ public func contractTls13PreparePskEarlyDataFromSessionCache(
         0,
         keyLen,
         ivLen
+    )
+}
+
+public func contractTls13PreparePskEarlyDataFromSessionCacheRequest(
+    request: ContractTls13PskEarlyDataFromSessionCacheRequest
+): ContractTls13PskEarlyDataPlan {
+    contractTls13PreparePskEarlyDataFromSessionCache(
+        request.cache,
+        request.identity,
+        nowUnixSeconds: request.nowUnixSeconds,
+        sessionId: request.sessionId,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen
     )
 }
 
@@ -4783,6 +4807,18 @@ public func contractTls13AcceptPskEarlyDataFromClientHello(
     )
 }
 
+public func contractTls13AcceptPskEarlyDataFromClientHelloRequest(
+    request: ContractTls13PskEarlyDataAcceptRequest
+): ContractTls13PskEarlyDataPlan {
+    contractTls13AcceptPskEarlyDataFromClientHello(
+        request.encodedClientHello,
+        nowUnixSeconds: request.nowUnixSeconds,
+        selectedIdentityIndex: request.selectedIdentityIndex,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen
+    )
+}
+
 public func contractTls13BuildPskEarlyDataReplayKey(
     plan: ContractTls13PskEarlyDataPlan
 ): String {
@@ -4817,6 +4853,20 @@ public func contractTls13AcceptPskEarlyDataFromClientHelloWithReplayCache(
     plan
 }
 
+public func contractTls13AcceptPskEarlyDataFromClientHelloWithReplayCacheRequest(
+    request: ContractTls13PskEarlyDataAcceptWithReplayCacheRequest
+): ContractTls13PskEarlyDataPlan {
+    contractTls13AcceptPskEarlyDataFromClientHelloWithReplayCache(
+        request.encodedClientHello,
+        request.replayCache,
+        nowUnixSeconds: request.nowUnixSeconds,
+        selectedIdentityIndex: request.selectedIdentityIndex,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen,
+        replayTtlSeconds: request.replayTtlSeconds
+    )
+}
+
 public func contractTls13AcceptPskEarlyDataForHttp(
     encodedClientHello: Array<Byte>,
     expectedServerName!: String = "",
@@ -4839,6 +4889,20 @@ public func contractTls13AcceptPskEarlyDataForHttp(
         expectedAlpnProtocol
     )
     plan
+}
+
+public func contractTls13AcceptPskEarlyDataForHttpRequest(
+    request: ContractTls13PskEarlyDataHttpAcceptRequest
+): ContractTls13PskEarlyDataPlan {
+    contractTls13AcceptPskEarlyDataForHttp(
+        request.encodedClientHello,
+        expectedServerName: request.expectedServerName,
+        expectedAlpnProtocol: request.expectedAlpnProtocol,
+        nowUnixSeconds: request.nowUnixSeconds,
+        selectedIdentityIndex: request.selectedIdentityIndex,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen
+    )
 }
 
 public func contractTls13AcceptPskEarlyDataForHttpWithReplayCache(
@@ -4868,6 +4932,22 @@ public func contractTls13AcceptPskEarlyDataForHttpWithReplayCache(
         replayTtlSeconds
     )
     plan
+}
+
+public func contractTls13AcceptPskEarlyDataForHttpWithReplayCacheRequest(
+    request: ContractTls13PskEarlyDataHttpAcceptWithReplayCacheRequest
+): ContractTls13PskEarlyDataPlan {
+    contractTls13AcceptPskEarlyDataForHttpWithReplayCache(
+        request.encodedClientHello,
+        request.replayCache,
+        expectedServerName: request.expectedServerName,
+        expectedAlpnProtocol: request.expectedAlpnProtocol,
+        nowUnixSeconds: request.nowUnixSeconds,
+        selectedIdentityIndex: request.selectedIdentityIndex,
+        keyLen: request.keyLen,
+        ivLen: request.ivLen,
+        replayTtlSeconds: request.replayTtlSeconds
+    )
 }
 
 private func contractTls13RememberEarlyDataReplayOrThrow(
@@ -5257,6 +5337,198 @@ public class ContractTls13PskEarlyDataPlan {
         this.clientEarlyTrafficSecret = clientEarlyTrafficSecret.clone()
         this.clientEarlyWriteKey = clientEarlyWriteKey.clone()
         this.clientEarlyWriteIv = clientEarlyWriteIv.clone()
+    }
+}
+
+public class ContractTls13PskEarlyDataFromSessionTicketRequest {
+    public let ticket: ContractTlsSessionTicket
+    public let sessionId: Array<Byte>
+    public let keyLen: Int64
+    public let ivLen: Int64
+
+    public init(
+        ticket: ContractTlsSessionTicket,
+        sessionId!: Array<Byte> = [],
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12
+    ) {
+        if (keyLen <= 0 || ivLen <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 PSK early data request key/iv lengths must be > 0"
+            )
+        }
+        this.ticket = ticket
+        this.sessionId = sessionId.clone()
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+    }
+}
+
+public class ContractTls13PskEarlyDataFromSessionCacheRequest {
+    public let cache: ContractTlsSessionCache
+    public let identity: ContractTlsSessionIdentity
+    public let nowUnixSeconds: Int64
+    public let sessionId: Array<Byte>
+    public let keyLen: Int64
+    public let ivLen: Int64
+
+    public init(
+        cache: ContractTlsSessionCache,
+        identity: ContractTlsSessionIdentity,
+        nowUnixSeconds!: Int64 = 0,
+        sessionId!: Array<Byte> = [],
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12
+    ) {
+        if (keyLen <= 0 || ivLen <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 PSK early data cache request key/iv lengths must be > 0"
+            )
+        }
+        this.cache = cache
+        this.identity = identity
+        this.nowUnixSeconds = nowUnixSeconds
+        this.sessionId = sessionId.clone()
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+    }
+}
+
+public class ContractTls13PskEarlyDataAcceptRequest {
+    public let encodedClientHello: Array<Byte>
+    public let nowUnixSeconds: Int64
+    public let selectedIdentityIndex: Int64
+    public let keyLen: Int64
+    public let ivLen: Int64
+
+    public init(
+        encodedClientHello: Array<Byte>,
+        nowUnixSeconds!: Int64 = 0,
+        selectedIdentityIndex!: Int64 = -1,
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12
+    ) {
+        if (encodedClientHello.size == 0 || keyLen <= 0 || ivLen <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 PSK early data accept request fields are invalid"
+            )
+        }
+        this.encodedClientHello = encodedClientHello.clone()
+        this.nowUnixSeconds = nowUnixSeconds
+        this.selectedIdentityIndex = selectedIdentityIndex
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+    }
+}
+
+public class ContractTls13PskEarlyDataAcceptWithReplayCacheRequest {
+    public let encodedClientHello: Array<Byte>
+    public let replayCache: ContractTls13EarlyDataReplayCache
+    public let nowUnixSeconds: Int64
+    public let selectedIdentityIndex: Int64
+    public let keyLen: Int64
+    public let ivLen: Int64
+    public let replayTtlSeconds: Int64
+
+    public init(
+        encodedClientHello: Array<Byte>,
+        replayCache: ContractTls13EarlyDataReplayCache,
+        nowUnixSeconds!: Int64 = 0,
+        selectedIdentityIndex!: Int64 = -1,
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12,
+        replayTtlSeconds!: Int64 = 0
+    ) {
+        if (encodedClientHello.size == 0 || keyLen <= 0 || ivLen <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 PSK early data replay-cache request fields are invalid"
+            )
+        }
+        this.encodedClientHello = encodedClientHello.clone()
+        this.replayCache = replayCache
+        this.nowUnixSeconds = nowUnixSeconds
+        this.selectedIdentityIndex = selectedIdentityIndex
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+        this.replayTtlSeconds = replayTtlSeconds
+    }
+}
+
+public class ContractTls13PskEarlyDataHttpAcceptRequest {
+    public let encodedClientHello: Array<Byte>
+    public let expectedServerName: String
+    public let expectedAlpnProtocol: String
+    public let nowUnixSeconds: Int64
+    public let selectedIdentityIndex: Int64
+    public let keyLen: Int64
+    public let ivLen: Int64
+
+    public init(
+        encodedClientHello: Array<Byte>,
+        expectedServerName!: String = "",
+        expectedAlpnProtocol!: String = "",
+        nowUnixSeconds!: Int64 = 0,
+        selectedIdentityIndex!: Int64 = -1,
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12
+    ) {
+        if (encodedClientHello.size == 0 || keyLen <= 0 || ivLen <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 HTTP early data accept request fields are invalid"
+            )
+        }
+        this.encodedClientHello = encodedClientHello.clone()
+        this.expectedServerName = expectedServerName.trimAscii().toAsciiLower()
+        this.expectedAlpnProtocol = expectedAlpnProtocol.trimAscii().toAsciiLower()
+        this.nowUnixSeconds = nowUnixSeconds
+        this.selectedIdentityIndex = selectedIdentityIndex
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+    }
+}
+
+public class ContractTls13PskEarlyDataHttpAcceptWithReplayCacheRequest {
+    public let encodedClientHello: Array<Byte>
+    public let replayCache: ContractTls13EarlyDataReplayCache
+    public let expectedServerName: String
+    public let expectedAlpnProtocol: String
+    public let nowUnixSeconds: Int64
+    public let selectedIdentityIndex: Int64
+    public let keyLen: Int64
+    public let ivLen: Int64
+    public let replayTtlSeconds: Int64
+
+    public init(
+        encodedClientHello: Array<Byte>,
+        replayCache: ContractTls13EarlyDataReplayCache,
+        expectedServerName!: String = "",
+        expectedAlpnProtocol!: String = "",
+        nowUnixSeconds!: Int64 = 0,
+        selectedIdentityIndex!: Int64 = -1,
+        keyLen!: Int64 = 16,
+        ivLen!: Int64 = 12,
+        replayTtlSeconds!: Int64 = 0
+    ) {
+        if (encodedClientHello.size == 0 || keyLen <= 0 || ivLen <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 HTTP early data replay-cache request fields are invalid"
+            )
+        }
+        this.encodedClientHello = encodedClientHello.clone()
+        this.replayCache = replayCache
+        this.expectedServerName = expectedServerName.trimAscii().toAsciiLower()
+        this.expectedAlpnProtocol = expectedAlpnProtocol.trimAscii().toAsciiLower()
+        this.nowUnixSeconds = nowUnixSeconds
+        this.selectedIdentityIndex = selectedIdentityIndex
+        this.keyLen = keyLen
+        this.ivLen = ivLen
+        this.replayTtlSeconds = replayTtlSeconds
     }
 }
 
