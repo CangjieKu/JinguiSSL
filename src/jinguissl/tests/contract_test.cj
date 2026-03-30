@@ -3696,6 +3696,144 @@ public class ContractTestSuite {
         )
         @Assert(clientRuntimeByRequest.transport().sessionId(), clientHandshake.sessionId)
     }
+
+    @TestCase
+    public func testContractSshRuntimeRekeyFacadeHelpers(): Unit {
+        let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+        let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+        let negotiated = SshNegotiatedAlgorithms(
+            "curve25519-sha256",
+            "rsa-sha2-256",
+            "aes128-ctr",
+            "aes128-ctr",
+            "hmac-sha2-256",
+            "hmac-sha2-256",
+            "none",
+            "none"
+        )
+        let rsaPrivateKey = x509ParseRsaPrivateKeyPkcs8Pem(readText("testdata/x509/rsa_2048_pkcs8.pem"))
+
+        let initialTranscript = SshKexExchangeTranscript(
+            "SSH-2.0-contract-client-rekey0\r\n".toArray(),
+            "SSH-2.0-contract-server-rekey0\r\n".toArray(),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1880))),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1912)))
+        )
+        let (initialEncodedInit, _) = sshBuildKexEcdhInitX25519(clientPrivate)
+        let initialServerHandshake = contractSshCompleteServerInitialHandshakeX25519Rsa(
+            initialTranscript,
+            serverPrivate,
+            initialEncodedInit,
+            rsaPrivateKey,
+            negotiated,
+            sshEncodeNewKeys(),
+            sshEncodeNewKeys()
+        )
+        let initialClientHandshake = contractSshCompleteClientInitialHandshakeX25519(
+            initialTranscript,
+            clientPrivate,
+            initialEncodedInit,
+            initialServerHandshake.encodedReply,
+            negotiated,
+            sshEncodeNewKeys(),
+            sshEncodeNewKeys(),
+            policy: ContractSshHostVerificationPolicy(
+                negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                expectedHostKeySha256: initialServerHandshake.hostKeySha256,
+                requireKnownHost: true,
+                requireHostSignature: true,
+                requireVerifiedHost: true
+            )
+        )
+        let clientRuntime = contractSshCreateClientRuntime(initialClientHandshake)
+        let serverRuntime = contractSshCreateServerRuntime(initialServerHandshake)
+        let initialSessionId = clientRuntime.sessionId()
+        let initialExchangeHash = clientRuntime.currentSession().exchangeHash
+
+        let rekeyTranscript = SshKexExchangeTranscript(
+            "SSH-2.0-contract-client-rekey1\r\n".toArray(),
+            "SSH-2.0-contract-server-rekey1\r\n".toArray(),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1944))),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1976)))
+        )
+        let (rekeyEncodedInit, _) = sshBuildKexEcdhInitX25519(hexToBytes("5c3a3d02825f2a5f6905aef0d8c8d3f0a4f8df94d153c5e8e91c1f1f9a8e6f71"))
+        let rekeyServerHandshake = sshCompleteServerInitialHandshakeX25519Rsa(
+            rekeyTranscript,
+            hexToBytes("4f2f6c59b0d4f52b8c0db0ce1d77c4f1e1dcb3ea65b31f8f5a6c6e7f8899aabb"),
+            rekeyEncodedInit,
+            rsaPrivateKey,
+            negotiated,
+            sshEncodeNewKeys(),
+            sshEncodeNewKeys()
+        )
+        let rekeyClientHandshake = sshCompleteClientInitialHandshakeX25519(
+            rekeyTranscript,
+            hexToBytes("5c3a3d02825f2a5f6905aef0d8c8d3f0a4f8df94d153c5e8e91c1f1f9a8e6f71"),
+            rekeyEncodedInit,
+            rekeyServerHandshake.encodedReply,
+            negotiated,
+            sshEncodeNewKeys(),
+            sshEncodeNewKeys()
+        )
+
+        let serverRekey = contractSshRekeyServerRuntimeX25519Request(
+            ContractSshServerRuntimeRekeyRequest(
+                serverRuntime,
+                rekeyServerHandshake.kexResult,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys()
+            )
+        )
+        let clientRekey = contractSshRekeyClientRuntimeX25519Request(
+            ContractSshClientRuntimeRekeyRequest(
+                clientRuntime,
+                rekeyClientHandshake.kexResult,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                    expectedHostKeySha256: initialServerHandshake.hostKeySha256,
+                    requireKnownHost: true,
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+
+        @Assert(serverRekey.session.sessionId, initialSessionId)
+        @Assert(clientRekey.session.sessionId, initialSessionId)
+        @Assert(serverRekey.runtime.currentSession().sessionId, initialSessionId)
+        @Assert(clientRekey.runtime.currentSession().sessionId, initialSessionId)
+        @Assert(clientRekey.runtime.currentSession().exchangeHash, rekeyClientHandshake.kexResult.exchangeHash)
+        @Assert(serverRekey.runtime.currentSession().exchangeHash, rekeyServerHandshake.kexResult.exchangeHash)
+        @Assert(clientRekey.runtime.currentSession().exchangeHash == initialExchangeHash, false)
+        @Assert(clientRekey.runtime.requireHostVerification().hostSignatureVerified, true)
+
+        let rekeyPacket = clientRekey.runtime.seal(
+            "contract-runtime-rekey".toArray(),
+            randomPadding: incrementalBytes(64, start: 2008)
+        )
+        let rekeyOpened = serverRekey.runtime.open(rekeyPacket)
+        @Assert(rekeyOpened.payload, "contract-runtime-rekey".toArray())
+
+        let optionalClientRekey = contractSshRekeyClientRuntimeX25519(
+            clientRuntime,
+            rekeyClientHandshake.kexResult,
+            sshEncodeNewKeys(),
+            sshEncodeNewKeys(),
+            policy: ContractSshHostVerificationPolicy(
+                negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                expectedHostKeySha256: incrementalBytes(32, start: 2040),
+                requireKnownHost: true,
+                requireHostSignature: true,
+                requireVerifiedHost: false
+            )
+        )
+        match (optionalClientRekey.session.hostVerification) {
+            case Some(_) => @Fail("optional SSH runtime rekey should tolerate verification miss")
+            case None => ()
+        }
+    }
 }
 
 private func readText(path: String): String {

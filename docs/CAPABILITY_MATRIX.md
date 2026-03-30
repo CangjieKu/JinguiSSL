@@ -66,6 +66,8 @@
   - result / outcome wrappers for request-style upper layers
   - client/server runtime bundle
   - transport convenience facade（session id / sequence / seal / open / reset counters）
+  - current session snapshot
+  - X25519 runtime rekey facade
 
 ## Integrator Guidance
 

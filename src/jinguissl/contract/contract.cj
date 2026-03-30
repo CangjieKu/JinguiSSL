@@ -18,6 +18,7 @@ import jinguissl.crypto.ssh.{
     SshNegotiatedAlgorithms,
     SshServerInitialHandshakeResult,
     SshTransportPacket,
+    SshX25519KexResult,
     sshBuildEd25519HostKeyBlobFromSeed,
     sshCompleteClientInitialHandshakeX25519WithHostVerificationRequirement,
     sshCompleteServerInitialHandshakeX25519Ecdsa,
@@ -1584,11 +1585,87 @@ public class ContractSshClientInitialHandshakeOutcome {
     }
 }
 
+public class ContractSshSessionState {
+    public let sharedSecret: Array<Byte>
+    public let exchangeHash: Array<Byte>
+    public let sessionId: Array<Byte>
+    public let clientEphemeralPublicKey: Array<Byte>
+    public let serverEphemeralPublicKey: Array<Byte>
+    public let serverHostKey: Array<Byte>
+    public let hostSignature: Array<Byte>
+    public let hostKeyAlgorithm: String
+    public let hostSignatureAlgorithm: String
+    public let hostKeySha256: Array<Byte>
+    public let hostVerification: ?ContractSshHostVerificationResult
+
+    public init(
+        sharedSecret: Array<Byte>,
+        exchangeHash: Array<Byte>,
+        sessionId: Array<Byte>,
+        clientEphemeralPublicKey: Array<Byte>,
+        serverEphemeralPublicKey: Array<Byte>,
+        serverHostKey: Array<Byte>,
+        hostSignature: Array<Byte>,
+        hostKeyAlgorithm: String,
+        hostSignatureAlgorithm: String,
+        hostKeySha256: Array<Byte>,
+        hostVerification!: ?ContractSshHostVerificationResult = None
+    ) {
+        if (
+            sharedSecret.size == 0 ||
+            exchangeHash.size == 0 ||
+            sessionId.size == 0 ||
+            clientEphemeralPublicKey.size == 0 ||
+            serverEphemeralPublicKey.size == 0 ||
+            serverHostKey.size == 0 ||
+            hostSignature.size == 0
+        ) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH session state fields must not be empty")
+        }
+        if (hostKeyAlgorithm.size == 0 || hostSignatureAlgorithm.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH session state algorithms must not be empty")
+        }
+        if (hostKeySha256.size != 32) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH session state fingerprint must be SHA-256 sized")
+        }
+        this.sharedSecret = sharedSecret.clone()
+        this.exchangeHash = exchangeHash.clone()
+        this.sessionId = sessionId.clone()
+        this.clientEphemeralPublicKey = clientEphemeralPublicKey.clone()
+        this.serverEphemeralPublicKey = serverEphemeralPublicKey.clone()
+        this.serverHostKey = serverHostKey.clone()
+        this.hostSignature = hostSignature.clone()
+        this.hostKeyAlgorithm = hostKeyAlgorithm
+        this.hostSignatureAlgorithm = hostSignatureAlgorithm
+        this.hostKeySha256 = hostKeySha256.clone()
+        this.hostVerification = hostVerification
+    }
+
+    public func requireHostVerification(): ContractSshHostVerificationResult {
+        match (hostVerification) {
+            case Some(value) => value
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.VerifyFailed,
+                    "SSH host identity verification is unavailable"
+                )
+        }
+    }
+}
+
 public class ContractSshServerRuntime {
     public let initialHandshake: ContractSshServerInitialHandshakeResult
+    let _currentSession: ContractSshSessionState
 
-    public init(initialHandshake: ContractSshServerInitialHandshakeResult) {
+    public init(
+        initialHandshake: ContractSshServerInitialHandshakeResult,
+        currentSession!: ?ContractSshSessionState = None
+    ) {
         this.initialHandshake = initialHandshake
+        this._currentSession = contractResolveSshServerRuntimeSessionState(
+            initialHandshake,
+            currentSession
+        )
     }
 
     public prop writeSequence: Int64 {
@@ -1605,6 +1682,10 @@ public class ContractSshServerRuntime {
 
     public func sessionId(): Array<Byte> {
         initialHandshake.transport().sessionId()
+    }
+
+    public func currentSession(): ContractSshSessionState {
+        _currentSession
     }
 
     public func transport(): ContractSshTransportChannel {
@@ -1626,9 +1707,17 @@ public class ContractSshServerRuntime {
 
 public class ContractSshClientRuntime {
     public let initialHandshake: ContractSshClientInitialHandshakeResult
+    let _currentSession: ContractSshSessionState
 
-    public init(initialHandshake: ContractSshClientInitialHandshakeResult) {
+    public init(
+        initialHandshake: ContractSshClientInitialHandshakeResult,
+        currentSession!: ?ContractSshSessionState = None
+    ) {
         this.initialHandshake = initialHandshake
+        this._currentSession = contractResolveSshClientRuntimeSessionState(
+            initialHandshake,
+            currentSession
+        )
     }
 
     public prop writeSequence: Int64 {
@@ -1647,16 +1736,20 @@ public class ContractSshClientRuntime {
         initialHandshake.transport().sessionId()
     }
 
+    public func currentSession(): ContractSshSessionState {
+        _currentSession
+    }
+
     public func transport(): ContractSshTransportChannel {
         initialHandshake.transport()
     }
 
     public func hostVerification(): ?ContractSshHostVerificationResult {
-        initialHandshake.hostVerification
+        _currentSession.hostVerification
     }
 
     public func requireHostVerification(): ContractSshHostVerificationResult {
-        initialHandshake.requireHostVerification()
+        _currentSession.requireHostVerification()
     }
 
     public func resetTransportCounters(): Unit {
@@ -1685,6 +1778,85 @@ public class ContractSshClientRuntimeRequest {
 
     public init(result: ContractSshClientInitialHandshakeResult) {
         this.result = result
+    }
+}
+
+public class ContractSshServerRuntimeRekeyRequest {
+    public let runtime: ContractSshServerRuntime
+    public let kexResult: SshX25519KexResult
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+
+    public init(
+        runtime: ContractSshServerRuntime,
+        kexResult: SshX25519KexResult,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>
+    ) {
+        if (encodedClientNewKeys.size == 0 || encodedServerNewKeys.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH server runtime rekey NEWKEYS frames must not be empty"
+            )
+        }
+        this.runtime = runtime
+        this.kexResult = kexResult
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+    }
+}
+
+public class ContractSshClientRuntimeRekeyRequest {
+    public let runtime: ContractSshClientRuntime
+    public let kexResult: SshX25519KexResult
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+    public let policy: ContractSshHostVerificationPolicy
+
+    public init(
+        runtime: ContractSshClientRuntime,
+        kexResult: SshX25519KexResult,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>,
+        policy!: ContractSshHostVerificationPolicy = ContractSshHostVerificationPolicy()
+    ) {
+        if (encodedClientNewKeys.size == 0 || encodedServerNewKeys.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH client runtime rekey NEWKEYS frames must not be empty"
+            )
+        }
+        this.runtime = runtime
+        this.kexResult = kexResult
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+        this.policy = policy
+    }
+}
+
+public class ContractSshServerRuntimeRekeyResult {
+    public let runtime: ContractSshServerRuntime
+    public let session: ContractSshSessionState
+
+    public init(
+        runtime: ContractSshServerRuntime,
+        session: ContractSshSessionState
+    ) {
+        this.runtime = runtime
+        this.session = session
+    }
+}
+
+public class ContractSshClientRuntimeRekeyResult {
+    public let runtime: ContractSshClientRuntime
+    public let session: ContractSshSessionState
+
+    public init(
+        runtime: ContractSshClientRuntime,
+        session: ContractSshSessionState
+    ) {
+        this.runtime = runtime
+        this.session = session
     }
 }
 
@@ -8491,6 +8663,114 @@ public func contractSshCreateClientRuntimeRequest(
     contractSshCreateClientRuntime(request.result)
 }
 
+public func contractSshRekeyServerRuntimeX25519(
+    runtime: ContractSshServerRuntime,
+    kexResult: SshX25519KexResult,
+    encodedClientNewKeys: Array<Byte>,
+    encodedServerNewKeys: Array<Byte>
+): ContractSshServerRuntimeRekeyResult {
+    try {
+        _ = runtime.transport()._coordinator.rekeyWithX25519(
+            kexResult,
+            encodedClientNewKeys,
+            encodedServerNewKeys
+        )
+        let session = contractBuildSshSessionStateFromKexResult(
+            kexResult,
+            runtime.transport().sessionId()
+        )
+        let updatedRuntime = ContractSshServerRuntime(
+            runtime.initialHandshake,
+            currentSession: Some(session)
+        )
+        ContractSshServerRuntimeRekeyResult(updatedRuntime, session)
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH server runtime rekey failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshRekeyServerRuntimeX25519Request(
+    request: ContractSshServerRuntimeRekeyRequest
+): ContractSshServerRuntimeRekeyResult {
+    contractSshRekeyServerRuntimeX25519(
+        request.runtime,
+        request.kexResult,
+        request.encodedClientNewKeys,
+        request.encodedServerNewKeys
+    )
+}
+
+public func contractSshRekeyClientRuntimeX25519(
+    runtime: ContractSshClientRuntime,
+    kexResult: SshX25519KexResult,
+    encodedClientNewKeys: Array<Byte>,
+    encodedServerNewKeys: Array<Byte>,
+    policy!: ContractSshHostVerificationPolicy = ContractSshHostVerificationPolicy()
+): ContractSshClientRuntimeRekeyResult {
+    try {
+        let verification = if (policy.requireVerifiedHost) {
+            _ = runtime.transport()._coordinator.rekeyWithX25519Verified(
+                kexResult,
+                encodedClientNewKeys,
+                encodedServerNewKeys,
+                policy: contractToSshHostVerificationPolicy(policy)
+            )
+            Some(
+                contractSshVerifyHostIdentityRequired(
+                    kexResult.exchangeHash,
+                    kexResult.serverHostKey,
+                    kexResult.hostSignature,
+                    policy: policy
+                )
+            )
+        } else {
+            _ = runtime.transport()._coordinator.rekeyWithX25519(
+                kexResult,
+                encodedClientNewKeys,
+                encodedServerNewKeys
+            )
+            contractSshVerifyHostIdentity(
+                kexResult.exchangeHash,
+                kexResult.serverHostKey,
+                kexResult.hostSignature,
+                policy: policy
+            )
+        }
+        let session = contractBuildSshSessionStateFromKexResult(
+            kexResult,
+            runtime.transport().sessionId(),
+            hostVerification: verification
+        )
+        let updatedRuntime = ContractSshClientRuntime(
+            runtime.initialHandshake,
+            currentSession: Some(session)
+        )
+        ContractSshClientRuntimeRekeyResult(updatedRuntime, session)
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH client runtime rekey failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshRekeyClientRuntimeX25519Request(
+    request: ContractSshClientRuntimeRekeyRequest
+): ContractSshClientRuntimeRekeyResult {
+    contractSshRekeyClientRuntimeX25519(
+        request.runtime,
+        request.kexResult,
+        request.encodedClientNewKeys,
+        request.encodedServerNewKeys,
+        policy: request.policy
+    )
+}
+
 public func contractSshVerifyHostIdentity(
     exchangeHash: Array<Byte>,
     serverHostKey: Array<Byte>,
@@ -8618,6 +8898,84 @@ private func contractFromSshServerInitialHandshakeResult(
         hostSignatureAlgorithm,
         hostKeySha256,
         ContractSshTransportChannel(result.coordinator)
+    )
+}
+
+private func contractResolveSshServerRuntimeSessionState(
+    initialHandshake: ContractSshServerInitialHandshakeResult,
+    currentSession: ?ContractSshSessionState
+): ContractSshSessionState {
+    match (currentSession) {
+        case Some(value) => value
+        case None => contractBuildSshSessionStateFromServerInitialHandshake(initialHandshake)
+    }
+}
+
+private func contractResolveSshClientRuntimeSessionState(
+    initialHandshake: ContractSshClientInitialHandshakeResult,
+    currentSession: ?ContractSshSessionState
+): ContractSshSessionState {
+    match (currentSession) {
+        case Some(value) => value
+        case None => contractBuildSshSessionStateFromClientInitialHandshake(initialHandshake)
+    }
+}
+
+private func contractBuildSshSessionStateFromServerInitialHandshake(
+    result: ContractSshServerInitialHandshakeResult
+): ContractSshSessionState {
+    ContractSshSessionState(
+        result.sharedSecret,
+        result.exchangeHash,
+        result.sessionId,
+        result.clientEphemeralPublicKey,
+        result.serverEphemeralPublicKey,
+        result.serverHostKey,
+        result.hostSignature,
+        result.hostKeyAlgorithm,
+        result.hostSignatureAlgorithm,
+        result.hostKeySha256
+    )
+}
+
+private func contractBuildSshSessionStateFromClientInitialHandshake(
+    result: ContractSshClientInitialHandshakeResult
+): ContractSshSessionState {
+    ContractSshSessionState(
+        result.sharedSecret,
+        result.exchangeHash,
+        result.sessionId,
+        result.clientEphemeralPublicKey,
+        result.serverEphemeralPublicKey,
+        result.serverHostKey,
+        result.hostSignature,
+        result.hostKeyAlgorithm,
+        result.hostSignatureAlgorithm,
+        result.hostKeySha256,
+        hostVerification: result.hostVerification
+    )
+}
+
+private func contractBuildSshSessionStateFromKexResult(
+    kexResult: SshX25519KexResult,
+    sessionId: Array<Byte>,
+    hostVerification!: ?ContractSshHostVerificationResult = None
+): ContractSshSessionState {
+    let hostKeyAlgorithm = sshExtractHostKeyAlgorithm(kexResult.serverHostKey)
+    let hostSignatureAlgorithm = sshExtractHostSignatureAlgorithm(kexResult.hostSignature)
+    let hostKeySha256 = sshComputeHostKeySha256(kexResult.serverHostKey)
+    ContractSshSessionState(
+        kexResult.sharedSecret,
+        kexResult.exchangeHash,
+        sessionId,
+        kexResult.clientEphemeralPublicKey,
+        kexResult.serverEphemeralPublicKey,
+        kexResult.serverHostKey,
+        kexResult.hostSignature,
+        hostKeyAlgorithm,
+        hostSignatureAlgorithm,
+        hostKeySha256,
+        hostVerification: hostVerification
     )
 }
 
