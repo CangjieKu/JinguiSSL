@@ -68,6 +68,8 @@
   - transport convenience facade（session id / sequence / seal / open / reset counters）
   - current session snapshot
   - X25519 runtime rekey facade
+  - request-style transcript / negotiated algorithms wrappers
+  - X25519 KEX init/process helpers and session-state rekey entrypoints
 
 ## Integrator Guidance
 

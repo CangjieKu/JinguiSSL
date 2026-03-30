@@ -19,6 +19,8 @@ import jinguissl.crypto.ssh.{
     SshServerInitialHandshakeResult,
     SshTransportPacket,
     SshX25519KexResult,
+    sshBuildKexEcdhInitX25519,
+    sshClientProcessKexEcdhReplyX25519,
     sshBuildEd25519HostKeyBlobFromSeed,
     sshCompleteClientInitialHandshakeX25519WithHostVerificationRequirement,
     sshCompleteServerInitialHandshakeX25519Ecdsa,
@@ -29,6 +31,7 @@ import jinguissl.crypto.ssh.{
     sshEncodeRsaHostPublicKey,
     sshExtractHostKeyAlgorithm,
     sshExtractHostSignatureAlgorithm,
+    sshServerProcessKexEcdhInitX25519,
     sshSignExchangeHashEcdsa,
     sshSignExchangeHashEd25519,
     sshSignExchangeHashRsa,
@@ -1155,6 +1158,183 @@ public class ContractTlsHttpNegotiationPolicyValidationOutcome {
     }
 }
 
+public class ContractSshNegotiatedAlgorithms {
+    public let kexAlgorithm: String
+    public let serverHostKeyAlgorithm: String
+    public let encryptionAlgorithmClientToServer: String
+    public let encryptionAlgorithmServerToClient: String
+    public let macAlgorithmClientToServer: String
+    public let macAlgorithmServerToClient: String
+    public let compressionAlgorithmClientToServer: String
+    public let compressionAlgorithmServerToClient: String
+
+    public init(
+        kexAlgorithm: String,
+        serverHostKeyAlgorithm: String,
+        encryptionAlgorithmClientToServer: String,
+        encryptionAlgorithmServerToClient: String,
+        macAlgorithmClientToServer: String,
+        macAlgorithmServerToClient: String,
+        compressionAlgorithmClientToServer!: String = "none",
+        compressionAlgorithmServerToClient!: String = "none"
+    ) {
+        if (
+            kexAlgorithm.trimAscii().size == 0 ||
+            serverHostKeyAlgorithm.trimAscii().size == 0 ||
+            encryptionAlgorithmClientToServer.trimAscii().size == 0 ||
+            encryptionAlgorithmServerToClient.trimAscii().size == 0 ||
+            macAlgorithmClientToServer.trimAscii().size == 0 ||
+            macAlgorithmServerToClient.trimAscii().size == 0 ||
+            compressionAlgorithmClientToServer.trimAscii().size == 0 ||
+            compressionAlgorithmServerToClient.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH negotiated algorithms must not contain empty fields"
+            )
+        }
+        this.kexAlgorithm = kexAlgorithm.trimAscii()
+        this.serverHostKeyAlgorithm = serverHostKeyAlgorithm.trimAscii()
+        this.encryptionAlgorithmClientToServer = encryptionAlgorithmClientToServer.trimAscii()
+        this.encryptionAlgorithmServerToClient = encryptionAlgorithmServerToClient.trimAscii()
+        this.macAlgorithmClientToServer = macAlgorithmClientToServer.trimAscii()
+        this.macAlgorithmServerToClient = macAlgorithmServerToClient.trimAscii()
+        this.compressionAlgorithmClientToServer = compressionAlgorithmClientToServer.trimAscii()
+        this.compressionAlgorithmServerToClient = compressionAlgorithmServerToClient.trimAscii()
+    }
+}
+
+public class ContractSshKexExchangeTranscript {
+    public let clientBannerLine: Array<Byte>
+    public let serverBannerLine: Array<Byte>
+    public let clientKexInitPayload: Array<Byte>
+    public let serverKexInitPayload: Array<Byte>
+
+    public init(
+        clientBannerLine: Array<Byte>,
+        serverBannerLine: Array<Byte>,
+        clientKexInitPayload: Array<Byte>,
+        serverKexInitPayload: Array<Byte>
+    ) {
+        _ = contractToSshKexExchangeTranscript(
+            clientBannerLine,
+            serverBannerLine,
+            clientKexInitPayload,
+            serverKexInitPayload
+        )
+        this.clientBannerLine = clientBannerLine.clone()
+        this.serverBannerLine = serverBannerLine.clone()
+        this.clientKexInitPayload = clientKexInitPayload.clone()
+        this.serverKexInitPayload = serverKexInitPayload.clone()
+    }
+}
+
+public class ContractSshX25519InitResult {
+    public let encodedInit: Array<Byte>
+    public let clientPublicKey: Array<Byte>
+
+    public init(encodedInit: Array<Byte>, clientPublicKey: Array<Byte>) {
+        if (encodedInit.size == 0 || clientPublicKey.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH X25519 init result fields must not be empty"
+            )
+        }
+        this.encodedInit = encodedInit.clone()
+        this.clientPublicKey = clientPublicKey.clone()
+    }
+}
+
+public class ContractSshBuildKexEcdhInitX25519Request {
+    public let clientPrivateKey: Array<Byte>
+
+    public init(clientPrivateKey: Array<Byte>) {
+        if (clientPrivateKey.size != 32) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH X25519 client private key must be 32 bytes"
+            )
+        }
+        this.clientPrivateKey = clientPrivateKey.clone()
+    }
+}
+
+public class ContractSshServerProcessKexEcdhInitX25519Result {
+    public let encodedReply: Array<Byte>
+    public let session: ContractSshSessionState
+
+    public init(encodedReply: Array<Byte>, session: ContractSshSessionState) {
+        if (encodedReply.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH server KEX reply must not be empty"
+            )
+        }
+        this.encodedReply = encodedReply.clone()
+        this.session = session
+    }
+}
+
+public class ContractSshServerProcessKexEcdhInitX25519Request {
+    public let transcript: ContractSshKexExchangeTranscript
+    public let serverPrivateKey: Array<Byte>
+    public let encodedClientInit: Array<Byte>
+    public let hostSigning: ContractSshHostSigningResult
+    public let serverPublicKey: Array<Byte>
+
+    public init(
+        transcript: ContractSshKexExchangeTranscript,
+        serverPrivateKey: Array<Byte>,
+        encodedClientInit: Array<Byte>,
+        hostSigning: ContractSshHostSigningResult,
+        serverPublicKey!: Array<Byte> = []
+    ) {
+        if (serverPrivateKey.size != 32 || encodedClientInit.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH server KEX request fields are invalid"
+            )
+        }
+        this.transcript = transcript
+        this.serverPrivateKey = serverPrivateKey.clone()
+        this.encodedClientInit = encodedClientInit.clone()
+        this.hostSigning = hostSigning
+        this.serverPublicKey = serverPublicKey.clone()
+    }
+}
+
+public class ContractSshClientProcessKexEcdhReplyX25519Request {
+    public let transcript: ContractSshKexExchangeTranscript
+    public let clientPrivateKey: Array<Byte>
+    public let encodedClientInit: Array<Byte>
+    public let encodedServerReply: Array<Byte>
+    public let policy: ContractSshHostVerificationPolicy
+
+    public init(
+        transcript: ContractSshKexExchangeTranscript,
+        clientPrivateKey: Array<Byte>,
+        encodedClientInit: Array<Byte>,
+        encodedServerReply: Array<Byte>,
+        policy!: ContractSshHostVerificationPolicy = ContractSshHostVerificationPolicy()
+    ) {
+        if (
+            clientPrivateKey.size != 32 ||
+            encodedClientInit.size == 0 ||
+            encodedServerReply.size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH client KEX request fields are invalid"
+            )
+        }
+        this.transcript = transcript
+        this.clientPrivateKey = clientPrivateKey.clone()
+        this.encodedClientInit = encodedClientInit.clone()
+        this.encodedServerReply = encodedServerReply.clone()
+        this.policy = policy
+    }
+}
+
 public class ContractSshHostVerificationPolicy {
     public let negotiatedHostKeyAlgorithm: String
     public let expectedHostKeySha256: Array<Byte>
@@ -1378,6 +1558,180 @@ public class ContractSshHostSigningEd25519SeedRequest {
         }
         this.hostPrivateKeySeed = hostPrivateKeySeed.clone()
         this.exchangeHash = exchangeHash.clone()
+    }
+}
+
+public class ContractSshServerInitialHandshakeX25519RsaRequest {
+    public let transcript: ContractSshKexExchangeTranscript
+    public let serverPrivateKey: Array<Byte>
+    public let encodedClientInit: Array<Byte>
+    public let hostPrivateKey: RsaPrivateKey
+    public let negotiated: ContractSshNegotiatedAlgorithms
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+    public let signatureAlgorithm: String
+    public let serverPublicKey: Array<Byte>
+
+    public init(
+        transcript: ContractSshKexExchangeTranscript,
+        serverPrivateKey: Array<Byte>,
+        encodedClientInit: Array<Byte>,
+        hostPrivateKey: RsaPrivateKey,
+        negotiated: ContractSshNegotiatedAlgorithms,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>,
+        signatureAlgorithm!: String = "rsa-sha2-256",
+        serverPublicKey!: Array<Byte> = []
+    ) {
+        if (
+            serverPrivateKey.size != 32 ||
+            encodedClientInit.size == 0 ||
+            encodedClientNewKeys.size == 0 ||
+            encodedServerNewKeys.size == 0 ||
+            signatureAlgorithm.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH RSA server handshake request fields are invalid"
+            )
+        }
+        this.transcript = transcript
+        this.serverPrivateKey = serverPrivateKey.clone()
+        this.encodedClientInit = encodedClientInit.clone()
+        this.hostPrivateKey = hostPrivateKey
+        this.negotiated = negotiated
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+        this.signatureAlgorithm = signatureAlgorithm.trimAscii()
+        this.serverPublicKey = serverPublicKey.clone()
+    }
+}
+
+public class ContractSshServerInitialHandshakeX25519EcdsaRequest {
+    public let transcript: ContractSshKexExchangeTranscript
+    public let serverPrivateKey: Array<Byte>
+    public let encodedClientInit: Array<Byte>
+    public let hostPrivateKey: EcPrivateKey
+    public let negotiated: ContractSshNegotiatedAlgorithms
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+    public let serverPublicKey: Array<Byte>
+
+    public init(
+        transcript: ContractSshKexExchangeTranscript,
+        serverPrivateKey: Array<Byte>,
+        encodedClientInit: Array<Byte>,
+        hostPrivateKey: EcPrivateKey,
+        negotiated: ContractSshNegotiatedAlgorithms,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>,
+        serverPublicKey!: Array<Byte> = []
+    ) {
+        if (
+            serverPrivateKey.size != 32 ||
+            encodedClientInit.size == 0 ||
+            encodedClientNewKeys.size == 0 ||
+            encodedServerNewKeys.size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH ECDSA server handshake request fields are invalid"
+            )
+        }
+        this.transcript = transcript
+        this.serverPrivateKey = serverPrivateKey.clone()
+        this.encodedClientInit = encodedClientInit.clone()
+        this.hostPrivateKey = hostPrivateKey
+        this.negotiated = negotiated
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+        this.serverPublicKey = serverPublicKey.clone()
+    }
+}
+
+public class ContractSshServerInitialHandshakeX25519Ed25519Request {
+    public let transcript: ContractSshKexExchangeTranscript
+    public let serverPrivateKey: Array<Byte>
+    public let encodedClientInit: Array<Byte>
+    public let hostPrivateKeySeed: Array<Byte>
+    public let negotiated: ContractSshNegotiatedAlgorithms
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+    public let serverPublicKey: Array<Byte>
+
+    public init(
+        transcript: ContractSshKexExchangeTranscript,
+        serverPrivateKey: Array<Byte>,
+        encodedClientInit: Array<Byte>,
+        hostPrivateKeySeed: Array<Byte>,
+        negotiated: ContractSshNegotiatedAlgorithms,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>,
+        serverPublicKey!: Array<Byte> = []
+    ) {
+        if (
+            serverPrivateKey.size != 32 ||
+            encodedClientInit.size == 0 ||
+            hostPrivateKeySeed.size != 32 ||
+            encodedClientNewKeys.size == 0 ||
+            encodedServerNewKeys.size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH Ed25519 server handshake request fields are invalid"
+            )
+        }
+        this.transcript = transcript
+        this.serverPrivateKey = serverPrivateKey.clone()
+        this.encodedClientInit = encodedClientInit.clone()
+        this.hostPrivateKeySeed = hostPrivateKeySeed.clone()
+        this.negotiated = negotiated
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+        this.serverPublicKey = serverPublicKey.clone()
+    }
+}
+
+public class ContractSshClientInitialHandshakeX25519Request {
+    public let transcript: ContractSshKexExchangeTranscript
+    public let clientPrivateKey: Array<Byte>
+    public let encodedClientInit: Array<Byte>
+    public let encodedServerReply: Array<Byte>
+    public let negotiated: ContractSshNegotiatedAlgorithms
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+    public let policy: ContractSshHostVerificationPolicy
+
+    public init(
+        transcript: ContractSshKexExchangeTranscript,
+        clientPrivateKey: Array<Byte>,
+        encodedClientInit: Array<Byte>,
+        encodedServerReply: Array<Byte>,
+        negotiated: ContractSshNegotiatedAlgorithms,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>,
+        policy!: ContractSshHostVerificationPolicy = ContractSshHostVerificationPolicy()
+    ) {
+        if (
+            clientPrivateKey.size != 32 ||
+            encodedClientInit.size == 0 ||
+            encodedServerReply.size == 0 ||
+            encodedClientNewKeys.size == 0 ||
+            encodedServerNewKeys.size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH client handshake request fields are invalid"
+            )
+        }
+        this.transcript = transcript
+        this.clientPrivateKey = clientPrivateKey.clone()
+        this.encodedClientInit = encodedClientInit.clone()
+        this.encodedServerReply = encodedServerReply.clone()
+        this.negotiated = negotiated
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+        this.policy = policy
     }
 }
 
@@ -1828,6 +2182,59 @@ public class ContractSshClientRuntimeRekeyRequest {
         }
         this.runtime = runtime
         this.kexResult = kexResult
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+        this.policy = policy
+    }
+}
+
+public class ContractSshServerRuntimeSessionRekeyRequest {
+    public let runtime: ContractSshServerRuntime
+    public let session: ContractSshSessionState
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+
+    public init(
+        runtime: ContractSshServerRuntime,
+        session: ContractSshSessionState,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>
+    ) {
+        if (encodedClientNewKeys.size == 0 || encodedServerNewKeys.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH server runtime session rekey NEWKEYS frames must not be empty"
+            )
+        }
+        this.runtime = runtime
+        this.session = session
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+    }
+}
+
+public class ContractSshClientRuntimeSessionRekeyRequest {
+    public let runtime: ContractSshClientRuntime
+    public let session: ContractSshSessionState
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+    public let policy: ContractSshHostVerificationPolicy
+
+    public init(
+        runtime: ContractSshClientRuntime,
+        session: ContractSshSessionState,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>,
+        policy!: ContractSshHostVerificationPolicy = ContractSshHostVerificationPolicy()
+    ) {
+        if (encodedClientNewKeys.size == 0 || encodedServerNewKeys.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH client runtime session rekey NEWKEYS frames must not be empty"
+            )
+        }
+        this.runtime = runtime
+        this.session = session
         this.encodedClientNewKeys = encodedClientNewKeys.clone()
         this.encodedServerNewKeys = encodedServerNewKeys.clone()
         this.policy = policy
@@ -8382,6 +8789,111 @@ public func contractSshSignExchangeHashEd25519(privateKeySeed: Array<Byte>, exch
     }
 }
 
+public func contractSshBuildKexEcdhInitX25519(clientPrivateKey: Array<Byte>): ContractSshX25519InitResult {
+    try {
+        let (encodedInit, clientPublicKey) = sshBuildKexEcdhInitX25519(clientPrivateKey)
+        ContractSshX25519InitResult(encodedInit, clientPublicKey)
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH X25519 KEX init build failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshBuildKexEcdhInitX25519Request(
+    request: ContractSshBuildKexEcdhInitX25519Request
+): ContractSshX25519InitResult {
+    contractSshBuildKexEcdhInitX25519(request.clientPrivateKey)
+}
+
+public func contractSshServerProcessKexEcdhInitX25519(
+    transcript: ContractSshKexExchangeTranscript,
+    serverPrivateKey: Array<Byte>,
+    encodedClientInit: Array<Byte>,
+    hostSigning: ContractSshHostSigningResult,
+    serverPublicKey!: Array<Byte> = []
+): ContractSshServerProcessKexEcdhInitX25519Result {
+    try {
+        let (encodedReply, kexResult) = sshServerProcessKexEcdhInitX25519(
+            contractToSshKexExchangeTranscript(transcript),
+            serverPrivateKey,
+            encodedClientInit,
+            hostSigning.serverHostKey,
+            hostSigning.hostSignature,
+            serverPublicKey: serverPublicKey
+        )
+        ContractSshServerProcessKexEcdhInitX25519Result(
+            encodedReply,
+            contractBuildSshSessionStateFromKexResult(kexResult, kexResult.sessionId)
+        )
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH server KEX process failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshServerProcessKexEcdhInitX25519Request(
+    request: ContractSshServerProcessKexEcdhInitX25519Request
+): ContractSshServerProcessKexEcdhInitX25519Result {
+    contractSshServerProcessKexEcdhInitX25519(
+        request.transcript,
+        request.serverPrivateKey,
+        request.encodedClientInit,
+        request.hostSigning,
+        serverPublicKey: request.serverPublicKey
+    )
+}
+
+public func contractSshClientProcessKexEcdhReplyX25519(
+    transcript: ContractSshKexExchangeTranscript,
+    clientPrivateKey: Array<Byte>,
+    encodedClientInit: Array<Byte>,
+    encodedServerReply: Array<Byte>,
+    policy!: ContractSshHostVerificationPolicy = ContractSshHostVerificationPolicy()
+): ContractSshSessionState {
+    try {
+        let kexResult = sshClientProcessKexEcdhReplyX25519(
+            contractToSshKexExchangeTranscript(transcript),
+            clientPrivateKey,
+            encodedClientInit,
+            encodedServerReply
+        )
+        let verification = contractSshVerifyHostIdentity(
+            kexResult.exchangeHash,
+            kexResult.serverHostKey,
+            kexResult.hostSignature,
+            policy: policy
+        )
+        contractBuildSshSessionStateFromKexResult(
+            kexResult,
+            kexResult.sessionId,
+            hostVerification: verification
+        )
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH client KEX process failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshClientProcessKexEcdhReplyX25519Request(
+    request: ContractSshClientProcessKexEcdhReplyX25519Request
+): ContractSshSessionState {
+    contractSshClientProcessKexEcdhReplyX25519(
+        request.transcript,
+        request.clientPrivateKey,
+        request.encodedClientInit,
+        request.encodedServerReply,
+        policy: request.policy
+    )
+}
+
 public func contractSshCompleteServerInitialHandshakeX25519Rsa(
     transcript: SshKexExchangeTranscript,
     serverPrivateKey: Array<Byte>,
@@ -8415,6 +8927,22 @@ public func contractSshCompleteServerInitialHandshakeX25519Rsa(
     }
 }
 
+public func contractSshCompleteServerInitialHandshakeX25519RsaRequest(
+    request: ContractSshServerInitialHandshakeX25519RsaRequest
+): ContractSshServerInitialHandshakeResult {
+    contractSshCompleteServerInitialHandshakeX25519Rsa(
+        contractToSshKexExchangeTranscript(request.transcript),
+        request.serverPrivateKey,
+        request.encodedClientInit,
+        request.hostPrivateKey,
+        contractToSshNegotiatedAlgorithms(request.negotiated),
+        request.encodedClientNewKeys,
+        request.encodedServerNewKeys,
+        signatureAlgorithm: request.signatureAlgorithm,
+        serverPublicKey: request.serverPublicKey
+    )
+}
+
 public func contractTrySshCompleteServerInitialHandshakeX25519Rsa(
     transcript: SshKexExchangeTranscript,
     serverPrivateKey: Array<Byte>,
@@ -8438,6 +8966,22 @@ public func contractTrySshCompleteServerInitialHandshakeX25519Rsa(
             signatureAlgorithm: signatureAlgorithm,
             serverPublicKey: serverPublicKey
         )
+        ContractSshServerInitialHandshakeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerInitialHandshakeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractTrySshCompleteServerInitialHandshakeX25519RsaRequest(
+    request: ContractSshServerInitialHandshakeX25519RsaRequest
+): ContractSshServerInitialHandshakeOutcome {
+    try {
+        let result = contractSshCompleteServerInitialHandshakeX25519RsaRequest(request)
         ContractSshServerInitialHandshakeOutcome(true, "OK", result: Some(result))
     } catch (e: ContractException) {
         ContractSshServerInitialHandshakeOutcome(
@@ -8480,6 +9024,21 @@ public func contractSshCompleteServerInitialHandshakeX25519Ecdsa(
     }
 }
 
+public func contractSshCompleteServerInitialHandshakeX25519EcdsaRequest(
+    request: ContractSshServerInitialHandshakeX25519EcdsaRequest
+): ContractSshServerInitialHandshakeResult {
+    contractSshCompleteServerInitialHandshakeX25519Ecdsa(
+        contractToSshKexExchangeTranscript(request.transcript),
+        request.serverPrivateKey,
+        request.encodedClientInit,
+        request.hostPrivateKey,
+        contractToSshNegotiatedAlgorithms(request.negotiated),
+        request.encodedClientNewKeys,
+        request.encodedServerNewKeys,
+        serverPublicKey: request.serverPublicKey
+    )
+}
+
 public func contractTrySshCompleteServerInitialHandshakeX25519Ecdsa(
     transcript: SshKexExchangeTranscript,
     serverPrivateKey: Array<Byte>,
@@ -8501,6 +9060,22 @@ public func contractTrySshCompleteServerInitialHandshakeX25519Ecdsa(
             encodedServerNewKeys,
             serverPublicKey: serverPublicKey
         )
+        ContractSshServerInitialHandshakeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerInitialHandshakeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractTrySshCompleteServerInitialHandshakeX25519EcdsaRequest(
+    request: ContractSshServerInitialHandshakeX25519EcdsaRequest
+): ContractSshServerInitialHandshakeOutcome {
+    try {
+        let result = contractSshCompleteServerInitialHandshakeX25519EcdsaRequest(request)
         ContractSshServerInitialHandshakeOutcome(true, "OK", result: Some(result))
     } catch (e: ContractException) {
         ContractSshServerInitialHandshakeOutcome(
@@ -8543,6 +9118,21 @@ public func contractSshCompleteServerInitialHandshakeX25519Ed25519(
     }
 }
 
+public func contractSshCompleteServerInitialHandshakeX25519Ed25519Request(
+    request: ContractSshServerInitialHandshakeX25519Ed25519Request
+): ContractSshServerInitialHandshakeResult {
+    contractSshCompleteServerInitialHandshakeX25519Ed25519(
+        contractToSshKexExchangeTranscript(request.transcript),
+        request.serverPrivateKey,
+        request.encodedClientInit,
+        request.hostPrivateKeySeed,
+        contractToSshNegotiatedAlgorithms(request.negotiated),
+        request.encodedClientNewKeys,
+        request.encodedServerNewKeys,
+        serverPublicKey: request.serverPublicKey
+    )
+}
+
 public func contractTrySshCompleteServerInitialHandshakeX25519Ed25519(
     transcript: SshKexExchangeTranscript,
     serverPrivateKey: Array<Byte>,
@@ -8564,6 +9154,22 @@ public func contractTrySshCompleteServerInitialHandshakeX25519Ed25519(
             encodedServerNewKeys,
             serverPublicKey: serverPublicKey
         )
+        ContractSshServerInitialHandshakeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerInitialHandshakeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractTrySshCompleteServerInitialHandshakeX25519Ed25519Request(
+    request: ContractSshServerInitialHandshakeX25519Ed25519Request
+): ContractSshServerInitialHandshakeOutcome {
+    try {
+        let result = contractSshCompleteServerInitialHandshakeX25519Ed25519Request(request)
         ContractSshServerInitialHandshakeOutcome(true, "OK", result: Some(result))
     } catch (e: ContractException) {
         ContractSshServerInitialHandshakeOutcome(
@@ -8607,6 +9213,21 @@ public func contractSshCompleteClientInitialHandshakeX25519(
     }
 }
 
+public func contractSshCompleteClientInitialHandshakeX25519Request(
+    request: ContractSshClientInitialHandshakeX25519Request
+): ContractSshClientInitialHandshakeResult {
+    contractSshCompleteClientInitialHandshakeX25519(
+        contractToSshKexExchangeTranscript(request.transcript),
+        request.clientPrivateKey,
+        request.encodedClientInit,
+        request.encodedServerReply,
+        contractToSshNegotiatedAlgorithms(request.negotiated),
+        request.encodedClientNewKeys,
+        request.encodedServerNewKeys,
+        policy: request.policy
+    )
+}
+
 public func contractTrySshCompleteClientInitialHandshakeX25519(
     transcript: SshKexExchangeTranscript,
     clientPrivateKey: Array<Byte>,
@@ -8628,6 +9249,22 @@ public func contractTrySshCompleteClientInitialHandshakeX25519(
             encodedServerNewKeys,
             policy: policy
         )
+        ContractSshClientInitialHandshakeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshClientInitialHandshakeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractTrySshCompleteClientInitialHandshakeX25519Request(
+    request: ContractSshClientInitialHandshakeX25519Request
+): ContractSshClientInitialHandshakeOutcome {
+    try {
+        let result = contractSshCompleteClientInitialHandshakeX25519Request(request)
         ContractSshClientInitialHandshakeOutcome(true, "OK", result: Some(result))
     } catch (e: ContractException) {
         ContractSshClientInitialHandshakeOutcome(
@@ -8765,6 +9402,59 @@ public func contractSshRekeyClientRuntimeX25519Request(
     contractSshRekeyClientRuntimeX25519(
         request.runtime,
         request.kexResult,
+        request.encodedClientNewKeys,
+        request.encodedServerNewKeys,
+        policy: request.policy
+    )
+}
+
+public func contractSshRekeyServerRuntimeFromSessionState(
+    runtime: ContractSshServerRuntime,
+    session: ContractSshSessionState,
+    encodedClientNewKeys: Array<Byte>,
+    encodedServerNewKeys: Array<Byte>
+): ContractSshServerRuntimeRekeyResult {
+    contractSshRekeyServerRuntimeX25519(
+        runtime,
+        contractToSshX25519KexResult(session),
+        encodedClientNewKeys,
+        encodedServerNewKeys
+    )
+}
+
+public func contractSshRekeyServerRuntimeFromSessionStateRequest(
+    request: ContractSshServerRuntimeSessionRekeyRequest
+): ContractSshServerRuntimeRekeyResult {
+    contractSshRekeyServerRuntimeFromSessionState(
+        request.runtime,
+        request.session,
+        request.encodedClientNewKeys,
+        request.encodedServerNewKeys
+    )
+}
+
+public func contractSshRekeyClientRuntimeFromSessionState(
+    runtime: ContractSshClientRuntime,
+    session: ContractSshSessionState,
+    encodedClientNewKeys: Array<Byte>,
+    encodedServerNewKeys: Array<Byte>,
+    policy!: ContractSshHostVerificationPolicy = ContractSshHostVerificationPolicy()
+): ContractSshClientRuntimeRekeyResult {
+    contractSshRekeyClientRuntimeX25519(
+        runtime,
+        contractToSshX25519KexResult(session),
+        encodedClientNewKeys,
+        encodedServerNewKeys,
+        policy: policy
+    )
+}
+
+public func contractSshRekeyClientRuntimeFromSessionStateRequest(
+    request: ContractSshClientRuntimeSessionRekeyRequest
+): ContractSshClientRuntimeRekeyResult {
+    contractSshRekeyClientRuntimeFromSessionState(
+        request.runtime,
+        request.session,
         request.encodedClientNewKeys,
         request.encodedServerNewKeys,
         policy: request.policy
@@ -9023,6 +9713,67 @@ private func contractFromSshHostVerificationResult(
         result.hostSignatureAlgorithm,
         result.hostKeySha256,
         result.hostSignatureVerified
+    )
+}
+
+private func contractToSshNegotiatedAlgorithms(
+    negotiated: ContractSshNegotiatedAlgorithms
+): SshNegotiatedAlgorithms {
+    SshNegotiatedAlgorithms(
+        negotiated.kexAlgorithm,
+        negotiated.serverHostKeyAlgorithm,
+        negotiated.encryptionAlgorithmClientToServer,
+        negotiated.encryptionAlgorithmServerToClient,
+        negotiated.macAlgorithmClientToServer,
+        negotiated.macAlgorithmServerToClient,
+        negotiated.compressionAlgorithmClientToServer,
+        negotiated.compressionAlgorithmServerToClient
+    )
+}
+
+private func contractToSshKexExchangeTranscript(
+    transcript: ContractSshKexExchangeTranscript
+): SshKexExchangeTranscript {
+    contractToSshKexExchangeTranscript(
+        transcript.clientBannerLine,
+        transcript.serverBannerLine,
+        transcript.clientKexInitPayload,
+        transcript.serverKexInitPayload
+    )
+}
+
+private func contractToSshKexExchangeTranscript(
+    clientBannerLine: Array<Byte>,
+    serverBannerLine: Array<Byte>,
+    clientKexInitPayload: Array<Byte>,
+    serverKexInitPayload: Array<Byte>
+): SshKexExchangeTranscript {
+    try {
+        SshKexExchangeTranscript(
+            clientBannerLine,
+            serverBannerLine,
+            clientKexInitPayload,
+            serverKexInitPayload
+        )
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEX transcript is invalid: ${e.message}"
+        )
+    }
+}
+
+private func contractToSshX25519KexResult(
+    session: ContractSshSessionState
+): SshX25519KexResult {
+    SshX25519KexResult(
+        session.sharedSecret,
+        session.exchangeHash,
+        session.sessionId,
+        session.clientEphemeralPublicKey,
+        session.serverEphemeralPublicKey,
+        session.serverHostKey,
+        session.hostSignature
     )
 }
 

@@ -24,6 +24,7 @@
 - TLS 1.3 verified-session 结果已暴露后续 exporter、traffic secret rotation 与 session ticket 流程所需材料
 - SSH facade 已覆盖 host key fingerprint、host-signing material、client/server initial-handshake、runtime bundle 与 required-host-verification 模式
 - SSH runtime 已覆盖 current-session snapshot 与 X25519 rekey facade
+- SSH request-style facade 已补到 transcript / negotiated algorithms / X25519 KEX helpers / session-state rekey
 - 当前不把 `jinguissl.crypto.*`、`bridges/`、`_helper/` 视为公开稳定契约的一部分
 
 ## Evolution Rule
@@ -46,5 +47,6 @@
 - SSH client/server initial-handshake facade 与 required verify 模式
 - SSH client/server runtime facade（transport convenience / sequence / session accessor）
 - SSH runtime current-session / rekey facade（mutable session snapshot）
+- SSH transcript / negotiated algorithms / X25519 KEX request facade
 - X.509 `try/outcome` 统一结果模型与 PEM bundle normalization
 - HKDF 的 HTTP / SSH key-set 导出入口

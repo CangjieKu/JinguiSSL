@@ -3380,6 +3380,99 @@ public class ContractTestSuite {
     }
 
     @TestCase
+    public func testContractSshRequestStyleHandshakeAndKexHelpers(): Unit {
+        let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+        let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+        let transcript = ContractSshKexExchangeTranscript(
+            "SSH-2.0-contract-client-request\r\n".toArray(),
+            "SSH-2.0-contract-server-request\r\n".toArray(),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1600))),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1632)))
+        )
+        let negotiated = ContractSshNegotiatedAlgorithms(
+            "curve25519-sha256",
+            "rsa-sha2-256",
+            "aes128-ctr",
+            "aes128-ctr",
+            "hmac-sha2-256",
+            "hmac-sha2-256"
+        )
+        let initResult = contractSshBuildKexEcdhInitX25519Request(
+            ContractSshBuildKexEcdhInitX25519Request(clientPrivate)
+        )
+        let rsaPrivateKey = x509ParseRsaPrivateKeyPkcs8Pem(readText("testdata/x509/rsa_2048_pkcs8.pem"))
+        let serverHandshake = contractSshCompleteServerInitialHandshakeX25519RsaRequest(
+            ContractSshServerInitialHandshakeX25519RsaRequest(
+                transcript,
+                serverPrivate,
+                initResult.encodedInit,
+                rsaPrivateKey,
+                negotiated,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys()
+            )
+        )
+        let lowLevelServer = contractSshServerProcessKexEcdhInitX25519Request(
+            ContractSshServerProcessKexEcdhInitX25519Request(
+                transcript,
+                serverPrivate,
+                initResult.encodedInit,
+                ContractSshHostSigningResult(
+                    serverHandshake.serverHostKey,
+                    serverHandshake.hostSignature,
+                    serverHandshake.hostKeyAlgorithm,
+                    serverHandshake.hostSignatureAlgorithm,
+                    serverHandshake.hostKeySha256
+                )
+            )
+        )
+        let clientKexSession = contractSshClientProcessKexEcdhReplyX25519Request(
+            ContractSshClientProcessKexEcdhReplyX25519Request(
+                transcript,
+                clientPrivate,
+                initResult.encodedInit,
+                lowLevelServer.encodedReply,
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                    expectedHostKeySha256: serverHandshake.hostKeySha256,
+                    requireKnownHost: true,
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+        let clientHandshake = contractSshCompleteClientInitialHandshakeX25519Request(
+            ContractSshClientInitialHandshakeX25519Request(
+                transcript,
+                clientPrivate,
+                initResult.encodedInit,
+                serverHandshake.encodedReply,
+                negotiated,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                    expectedHostKeySha256: serverHandshake.hostKeySha256,
+                    requireKnownHost: true,
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+
+        @Assert(lowLevelServer.encodedReply, serverHandshake.encodedReply)
+        @Assert(lowLevelServer.session.sharedSecret, serverHandshake.sharedSecret)
+        @Assert(lowLevelServer.session.exchangeHash, serverHandshake.exchangeHash)
+        @Assert(clientKexSession.sharedSecret, serverHandshake.sharedSecret)
+        @Assert(clientKexSession.exchangeHash, serverHandshake.exchangeHash)
+        @Assert(clientKexSession.hostKeySha256, serverHandshake.hostKeySha256)
+        @Assert(clientHandshake.sharedSecret, clientKexSession.sharedSecret)
+        @Assert(clientHandshake.exchangeHash, clientKexSession.exchangeHash)
+        @Assert(clientHandshake.requireHostVerification().hostSignatureVerified, true)
+        @Assert(clientKexSession.requireHostVerification().hostSignatureVerified, true)
+    }
+
+    @TestCase
     public func testContractSshServerInitialHandshakeFacadeHelpers(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
@@ -3695,6 +3788,148 @@ public class ContractTestSuite {
             ContractSshClientRuntimeRequest(clientHandshake)
         )
         @Assert(clientRuntimeByRequest.transport().sessionId(), clientHandshake.sessionId)
+    }
+
+    @TestCase
+    public func testContractSshRuntimeSessionRekeyRequestHelpers(): Unit {
+        let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+        let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+        let negotiated = ContractSshNegotiatedAlgorithms(
+            "curve25519-sha256",
+            "rsa-sha2-256",
+            "aes128-ctr",
+            "aes128-ctr",
+            "hmac-sha2-256",
+            "hmac-sha2-256"
+        )
+        let rsaPrivateKey = x509ParseRsaPrivateKeyPkcs8Pem(readText("testdata/x509/rsa_2048_pkcs8.pem"))
+
+        let initialTranscript = ContractSshKexExchangeTranscript(
+            "SSH-2.0-contract-client-session-rekey0\r\n".toArray(),
+            "SSH-2.0-contract-server-session-rekey0\r\n".toArray(),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 2056))),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 2088)))
+        )
+        let initialInit = contractSshBuildKexEcdhInitX25519(clientPrivate)
+        let initialServerHandshake = contractSshCompleteServerInitialHandshakeX25519RsaRequest(
+            ContractSshServerInitialHandshakeX25519RsaRequest(
+                initialTranscript,
+                serverPrivate,
+                initialInit.encodedInit,
+                rsaPrivateKey,
+                negotiated,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys()
+            )
+        )
+        let initialClientHandshake = contractSshCompleteClientInitialHandshakeX25519Request(
+            ContractSshClientInitialHandshakeX25519Request(
+                initialTranscript,
+                clientPrivate,
+                initialInit.encodedInit,
+                initialServerHandshake.encodedReply,
+                negotiated,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                    expectedHostKeySha256: initialServerHandshake.hostKeySha256,
+                    requireKnownHost: true,
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+        let clientRuntime = contractSshCreateClientRuntime(initialClientHandshake)
+        let serverRuntime = contractSshCreateServerRuntime(initialServerHandshake)
+        let initialSessionId = clientRuntime.sessionId()
+
+        let rekeyTranscript = ContractSshKexExchangeTranscript(
+            "SSH-2.0-contract-client-session-rekey1\r\n".toArray(),
+            "SSH-2.0-contract-server-session-rekey1\r\n".toArray(),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 2120))),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 2152)))
+        )
+        let rekeyClientPrivate = hexToBytes("5c3a3d02825f2a5f6905aef0d8c8d3f0a4f8df94d153c5e8e91c1f1f9a8e6f71")
+        let rekeyServerPrivate = hexToBytes("4f2f6c59b0d4f52b8c0db0ce1d77c4f1e1dcb3ea65b31f8f5a6c6e7f8899aabb")
+        let rekeyInit = contractSshBuildKexEcdhInitX25519(rekeyClientPrivate)
+        let rekeyServerHandshake = contractSshCompleteServerInitialHandshakeX25519RsaRequest(
+            ContractSshServerInitialHandshakeX25519RsaRequest(
+                rekeyTranscript,
+                rekeyServerPrivate,
+                rekeyInit.encodedInit,
+                rsaPrivateKey,
+                negotiated,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys()
+            )
+        )
+        let rekeyServerSession = contractSshServerProcessKexEcdhInitX25519Request(
+            ContractSshServerProcessKexEcdhInitX25519Request(
+                rekeyTranscript,
+                rekeyServerPrivate,
+                rekeyInit.encodedInit,
+                ContractSshHostSigningResult(
+                    rekeyServerHandshake.serverHostKey,
+                    rekeyServerHandshake.hostSignature,
+                    rekeyServerHandshake.hostKeyAlgorithm,
+                    rekeyServerHandshake.hostSignatureAlgorithm,
+                    rekeyServerHandshake.hostKeySha256
+                )
+            )
+        )
+        let rekeyClientSession = contractSshClientProcessKexEcdhReplyX25519Request(
+            ContractSshClientProcessKexEcdhReplyX25519Request(
+                rekeyTranscript,
+                rekeyClientPrivate,
+                rekeyInit.encodedInit,
+                rekeyServerSession.encodedReply,
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                    expectedHostKeySha256: initialServerHandshake.hostKeySha256,
+                    requireKnownHost: true,
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+
+        let serverRekey = contractSshRekeyServerRuntimeFromSessionStateRequest(
+            ContractSshServerRuntimeSessionRekeyRequest(
+                serverRuntime,
+                rekeyServerSession.session,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys()
+            )
+        )
+        let clientRekey = contractSshRekeyClientRuntimeFromSessionStateRequest(
+            ContractSshClientRuntimeSessionRekeyRequest(
+                clientRuntime,
+                rekeyClientSession,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                    expectedHostKeySha256: initialServerHandshake.hostKeySha256,
+                    requireKnownHost: true,
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+
+        @Assert(serverRekey.session.sessionId, initialSessionId)
+        @Assert(clientRekey.session.sessionId, initialSessionId)
+        @Assert(serverRekey.runtime.currentSession().exchangeHash, rekeyServerSession.session.exchangeHash)
+        @Assert(clientRekey.runtime.currentSession().exchangeHash, rekeyClientSession.exchangeHash)
+        @Assert(clientRekey.runtime.requireHostVerification().hostSignatureVerified, true)
+
+        let sealed = clientRekey.runtime.seal(
+            "contract-runtime-session-rekey".toArray(),
+            randomPadding: incrementalBytes(64, start: 2184)
+        )
+        let opened = serverRekey.runtime.open(sealed)
+        @Assert(opened.payload, "contract-runtime-session-rekey".toArray())
     }
 
     @TestCase
