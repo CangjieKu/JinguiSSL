@@ -865,7 +865,7 @@ private func contentTypeFromWire(value: UInt8): TlsContentType {
     if (value == UInt8(0x17)) {
         return ApplicationData
     }
-    throw CryptoException(ParseError, "unsupported TLS content type")
+    throw CryptoException(Unsupported, "unsupported TLS content type")
 }
 
 private func alertLevelToWire(level: TlsAlertLevel): Byte {
@@ -882,7 +882,7 @@ private func alertLevelFromWire(value: UInt8): TlsAlertLevel {
     if (value == UInt8(0x02)) {
         return Fatal
     }
-    throw CryptoException(ParseError, "unsupported TLS alert level")
+    throw CryptoException(Unsupported, "unsupported TLS alert level")
 }
 
 private func alertDescriptionToWire(description: TlsAlertDescription): Byte {
@@ -999,7 +999,7 @@ private func alertDescriptionFromWire(value: UInt8): TlsAlertDescription {
     if (value == UInt8(0x78)) {
         return NoApplicationProtocol
     }
-    throw CryptoException(ParseError, "unsupported TLS alert description")
+    throw CryptoException(Unsupported, "unsupported TLS alert description")
 }
 
 private func tlsVersionToWire(version: TlsVersion): Array<Byte> {
@@ -1016,7 +1016,7 @@ private func tlsVersionFromWire(major: UInt8, minor: UInt8): TlsVersion {
     if (major == UInt8(0x03) && minor == UInt8(0x04)) {
         return TLS1_3
     }
-    throw CryptoException(ParseError, "unsupported TLS protocol version")
+    throw CryptoException(Unsupported, "unsupported TLS protocol version")
 }
 
 @OverflowWrapping

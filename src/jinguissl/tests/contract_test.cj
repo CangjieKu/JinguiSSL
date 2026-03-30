@@ -1352,6 +1352,20 @@ public class ContractTestSuite {
         let encodedEncryptedCloseNotify = clientChannel.sendCloseNotify()
         let decodedEncryptedCloseNotify = serverChannel.openAlert(encodedEncryptedCloseNotify)
         @Assert(decodedEncryptedCloseNotify.isCloseNotify, true)
+
+        try {
+            _ = contractTlsDecodeAlertPayload([UInt8(0x03), UInt8(0x00)])
+            @Fail("unsupported TLS alert level should surface as contract unsupported")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
+
+        try {
+            _ = contractTlsDecodeAlertRecord([UInt8(0x99), UInt8(0x03), UInt8(0x03), UInt8(0x00), UInt8(0x00)])
+            @Fail("unsupported TLS content type should surface as contract unsupported")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
     }
 
     @TestCase

@@ -189,14 +189,14 @@ public class TlsRecordTestSuite {
             _ = tlsDecodeAlert([UInt8(0x03), UInt8(0x00)])
             @Fail("unsupported alert level should be rejected")
         } catch (e: CryptoException) {
-            @Assert(e.code.toString(), "PARSE_ERROR")
+            @Assert(e.code.toString(), "UNSUPPORTED")
         }
 
         try {
             _ = tlsDecodeAlert([UInt8(0x02), UInt8(0xff)])
             @Fail("unsupported alert description should be rejected")
         } catch (e: CryptoException) {
-            @Assert(e.code.toString(), "PARSE_ERROR")
+            @Assert(e.code.toString(), "UNSUPPORTED")
         }
 
         let nonAlertRecord = tlsEncodeRecord(Handshake, TLS1_2, [UInt8(0x01), UInt8(0x02)])
@@ -205,6 +205,25 @@ public class TlsRecordTestSuite {
             @Fail("non-ALERT record should be rejected by alert decoder")
         } catch (e: CryptoException) {
             @Assert(e.code.toString(), "PARSE_ERROR")
+        }
+    }
+
+    @TestCase
+    public func testRecordDecodeRejectUnsupportedContentTypeAndVersion(): Unit {
+        let unsupportedTypeRecord = [UInt8(0x99), UInt8(0x03), UInt8(0x03), UInt8(0x00), UInt8(0x00)]
+        try {
+            _ = tlsDecodeRecord(unsupportedTypeRecord)
+            @Fail("unsupported TLS content type should be rejected as unsupported")
+        } catch (e: CryptoException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
+
+        let unsupportedVersionRecord = [UInt8(0x16), UInt8(0x03), UInt8(0x05), UInt8(0x00), UInt8(0x00)]
+        try {
+            _ = tlsDecodeRecord(unsupportedVersionRecord)
+            @Fail("unsupported TLS version should be rejected as unsupported")
+        } catch (e: CryptoException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
         }
     }
 

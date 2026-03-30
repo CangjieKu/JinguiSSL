@@ -191,6 +191,36 @@ public class TlsHandshakeTestSuite {
     }
 
     @TestCase
+    public func testHandshakeDecodeRejectUnsupportedTypeAndVersion(): Unit {
+        let unsupportedType = [UInt8(0xff), UInt8(0x00), UInt8(0x00), UInt8(0x00)]
+        try {
+            _ = tlsDecodeHandshakeFrame(unsupportedType)
+            @Fail("unsupported handshake type should be rejected as unsupported")
+        } catch (e: CryptoException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
+
+        let supportedClientHello = tlsEncodeClientHelloHandshake(
+            TlsClientHello(
+                incrementalBytes(32, start: 0),
+                [0x1301],
+                compressionMethods: [UInt8(0x00)],
+                extensions: [],
+                legacyVersion: TLS1_2
+            )
+        )
+        let unsupportedVersionClientHello = supportedClientHello.clone()
+        unsupportedVersionClientHello[4] = UInt8(0x03)
+        unsupportedVersionClientHello[5] = UInt8(0x05)
+        try {
+            _ = tlsDecodeClientHelloHandshake(unsupportedVersionClientHello)
+            @Fail("unsupported TLS ClientHello version should be rejected as unsupported")
+        } catch (e: CryptoException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
+    }
+
+    @TestCase
     public func testSniAlpnAndOcspExtensionCodecs(): Unit {
         let sniExt = tlsBuildServerNameExtension("WWW.Example.com")
         @Assert(sniExt.extType, TLS_EXT_SERVER_NAME)

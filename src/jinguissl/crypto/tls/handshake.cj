@@ -1117,7 +1117,7 @@ private func hsVersionFromWire(bytes: Array<Byte>, offset: Int64): TlsVersion {
     if (major == 0x03 && minor == 0x04) {
         return TLS1_3
     }
-    throw CryptoException(ParseError, "unsupported TLS protocol version")
+    throw CryptoException(Unsupported, "unsupported TLS protocol version")
 }
 
 private func handshakeTypeToWire(msgType: TlsHandshakeType): Byte {
@@ -1170,7 +1170,7 @@ private func handshakeTypeFromWire(value: UInt8): TlsHandshakeType {
     if (value == UInt8(0x18)) {
         return KeyUpdate
     }
-    throw CryptoException(ParseError, "unsupported TLS handshake type")
+    throw CryptoException(Unsupported, "unsupported TLS handshake type")
 }
 
 private func readRange(bytes: Array<Byte>, offset: Int64, length: Int64, label: String): Array<Byte> {
