@@ -3238,6 +3238,62 @@ public class ContractTestSuite {
             case None =>
                 ()
         }
+
+        let unsupportedSignature = buildDummySshHostSignatureBlob(
+            "ssh-dss",
+            incrementalBytes(40, start: 241)
+        )
+        try {
+            _ = contractSshVerifyHostIdentityRequired(
+                exchangeHash,
+                serverHostKey,
+                unsupportedSignature,
+                policy: ContractSshHostVerificationPolicy(
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+            @Fail("unsupported SSH host signature algorithm should surface as Unsupported")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
+
+        let optionalUnsupported = contractSshVerifyHostIdentity(
+            exchangeHash,
+            serverHostKey,
+            unsupportedSignature,
+            policy: ContractSshHostVerificationPolicy(
+                requireHostSignature: true,
+                requireVerifiedHost: false
+            )
+        )
+        match (optionalUnsupported) {
+            case Some(_value) =>
+                @Fail("optional SSH host verification should return None on unsupported algorithms")
+            case None =>
+                ()
+        }
+
+        let unsupportedOutcome = contractTrySshVerifyHostIdentityRequiredRequest(
+            ContractSshVerifyHostIdentityRequest(
+                exchangeHash,
+                serverHostKey,
+                unsupportedSignature,
+                policy: ContractSshHostVerificationPolicy(
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+        @Assert(unsupportedOutcome.ok, false)
+        match (unsupportedOutcome.code) {
+            case Some(value) => @Assert(value.toString(), "UNSUPPORTED")
+            case None => @Fail("unsupported SSH host verification outcome should carry contract code")
+        }
+        match (unsupportedOutcome.igniteCode) {
+            case Some(value) => @Assert(value.toString(), "CRYPTO_UNAVAILABLE")
+            case None => @Fail("unsupported SSH host verification outcome should carry ignite code")
+        }
     }
 
     @TestCase

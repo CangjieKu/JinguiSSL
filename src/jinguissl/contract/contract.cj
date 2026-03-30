@@ -12575,8 +12575,13 @@ private func mapCryptoErrorForOperation(e: CryptoException, operation: String): 
             return ContractErrorCode.Unsupported
         }
     }
-    if (operation == "ssh" && (e.code == ParseError || e.code == Unsupported)) {
-        return ContractErrorCode.VerifyFailed
+    if (operation == "ssh") {
+        if (e.code == ParseError) {
+            return ContractErrorCode.VerifyFailed
+        }
+        if (e.code == Unsupported) {
+            return ContractErrorCode.Unsupported
+        }
     }
     contractMapCryptoErrorCode(e.code)
 }

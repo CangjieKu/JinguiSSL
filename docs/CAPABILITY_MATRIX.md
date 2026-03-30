@@ -62,6 +62,7 @@
   - known-host pinning（SHA-256）
   - required-host-verification modes
   - host verification request / required / try-outcome helpers
+  - documented unsupported algorithms surface as `UNSUPPORTED`
 - host-signing material facade：
   - RSA PKCS8 request
   - ECDSA PKCS8 request

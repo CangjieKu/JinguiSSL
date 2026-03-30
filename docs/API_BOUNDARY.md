@@ -26,6 +26,7 @@
 - SSH runtime 已覆盖 current-session snapshot 与 X25519 rekey facade
 - SSH request-style facade 已补到 transcript / negotiated algorithms / X25519 KEX helpers / session-state rekey
 - SSH host verification 已补 request / required / try-outcome 风格 facade
+- SSH 已实现的文档化子集遇到不支持算法时，contract 层显式返回 `UNSUPPORTED`，不再与 `VERIFY_FAILED` 混淆
 - SSH host identity / session / runtime snapshot 已提供稳定 summary 对象，便于上层记录 sessionId、指纹与 sequence
 - SSH KEXINIT message build / encode / decode / negotiate / transcript builder 已进入稳定 contract 面
 - SSH version banner build / codec、plaintext transport packet codec、decoded prelude -> transcript builder 已进入稳定 contract 面
