@@ -1584,6 +1584,110 @@ public class ContractSshClientInitialHandshakeOutcome {
     }
 }
 
+public class ContractSshServerRuntime {
+    public let initialHandshake: ContractSshServerInitialHandshakeResult
+
+    public init(initialHandshake: ContractSshServerInitialHandshakeResult) {
+        this.initialHandshake = initialHandshake
+    }
+
+    public prop writeSequence: Int64 {
+        get() {
+            initialHandshake.transport().writeSequence
+        }
+    }
+
+    public prop readSequence: Int64 {
+        get() {
+            initialHandshake.transport().readSequence
+        }
+    }
+
+    public func sessionId(): Array<Byte> {
+        initialHandshake.transport().sessionId()
+    }
+
+    public func transport(): ContractSshTransportChannel {
+        initialHandshake.transport()
+    }
+
+    public func resetTransportCounters(): Unit {
+        initialHandshake.transport().resetTransportCounters()
+    }
+
+    public func seal(payload: Array<Byte>, randomPadding!: Array<Byte> = []): Array<Byte> {
+        initialHandshake.transport().seal(payload, randomPadding: randomPadding)
+    }
+
+    public func open(encodedPacket: Array<Byte>): ContractSshTransportPacket {
+        initialHandshake.transport().open(encodedPacket)
+    }
+}
+
+public class ContractSshClientRuntime {
+    public let initialHandshake: ContractSshClientInitialHandshakeResult
+
+    public init(initialHandshake: ContractSshClientInitialHandshakeResult) {
+        this.initialHandshake = initialHandshake
+    }
+
+    public prop writeSequence: Int64 {
+        get() {
+            initialHandshake.transport().writeSequence
+        }
+    }
+
+    public prop readSequence: Int64 {
+        get() {
+            initialHandshake.transport().readSequence
+        }
+    }
+
+    public func sessionId(): Array<Byte> {
+        initialHandshake.transport().sessionId()
+    }
+
+    public func transport(): ContractSshTransportChannel {
+        initialHandshake.transport()
+    }
+
+    public func hostVerification(): ?ContractSshHostVerificationResult {
+        initialHandshake.hostVerification
+    }
+
+    public func requireHostVerification(): ContractSshHostVerificationResult {
+        initialHandshake.requireHostVerification()
+    }
+
+    public func resetTransportCounters(): Unit {
+        initialHandshake.transport().resetTransportCounters()
+    }
+
+    public func seal(payload: Array<Byte>, randomPadding!: Array<Byte> = []): Array<Byte> {
+        initialHandshake.transport().seal(payload, randomPadding: randomPadding)
+    }
+
+    public func open(encodedPacket: Array<Byte>): ContractSshTransportPacket {
+        initialHandshake.transport().open(encodedPacket)
+    }
+}
+
+public class ContractSshServerRuntimeRequest {
+    public let result: ContractSshServerInitialHandshakeResult
+
+    public init(result: ContractSshServerInitialHandshakeResult) {
+        this.result = result
+    }
+}
+
+public class ContractSshClientRuntimeRequest {
+    public let result: ContractSshClientInitialHandshakeResult
+
+    public init(result: ContractSshClientInitialHandshakeResult) {
+        this.result = result
+    }
+}
+
 public class ContractSshTransportPacket {
     public let packetLength: Int64
     public let payload: Array<Byte>
@@ -8361,6 +8465,30 @@ public func contractTrySshCompleteClientInitialHandshakeX25519(
             igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
         )
     }
+}
+
+public func contractSshCreateServerRuntime(
+    result: ContractSshServerInitialHandshakeResult
+): ContractSshServerRuntime {
+    ContractSshServerRuntime(result)
+}
+
+public func contractSshCreateServerRuntimeRequest(
+    request: ContractSshServerRuntimeRequest
+): ContractSshServerRuntime {
+    contractSshCreateServerRuntime(request.result)
+}
+
+public func contractSshCreateClientRuntime(
+    result: ContractSshClientInitialHandshakeResult
+): ContractSshClientRuntime {
+    ContractSshClientRuntime(result)
+}
+
+public func contractSshCreateClientRuntimeRequest(
+    request: ContractSshClientRuntimeRequest
+): ContractSshClientRuntime {
+    contractSshCreateClientRuntime(request.result)
 }
 
 public func contractSshVerifyHostIdentity(

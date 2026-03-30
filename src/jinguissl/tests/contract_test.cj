@@ -3603,6 +3603,99 @@ public class ContractTestSuite {
         @Assert(ecdsaClient.hostKeyAlgorithm, "ecdsa-sha2-nistp256")
         @Assert(ecdsaClient.requireHostVerification().hostKeyAlgorithm, "ecdsa-sha2-nistp256")
     }
+
+    @TestCase
+    public func testContractSshRuntimeFacadeHelpers(): Unit {
+        let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+        let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+        let transcript = SshKexExchangeTranscript(
+            "SSH-2.0-contract-client-runtime\r\n".toArray(),
+            "SSH-2.0-contract-server-runtime\r\n".toArray(),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1660))),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1700)))
+        )
+        let (encodedInit, _) = sshBuildKexEcdhInitX25519(clientPrivate)
+        let negotiated = SshNegotiatedAlgorithms(
+            "curve25519-sha256",
+            "rsa-sha2-256",
+            "aes128-ctr",
+            "aes128-ctr",
+            "hmac-sha2-256",
+            "hmac-sha2-256",
+            "none",
+            "none"
+        )
+        let rsaPrivateKey = x509ParseRsaPrivateKeyPkcs8Pem(readText("testdata/x509/rsa_2048_pkcs8.pem"))
+        let serverHandshake = contractSshCompleteServerInitialHandshakeX25519Rsa(
+            transcript,
+            serverPrivate,
+            encodedInit,
+            rsaPrivateKey,
+            negotiated,
+            sshEncodeNewKeys(),
+            sshEncodeNewKeys()
+        )
+        let clientHandshake = contractSshCompleteClientInitialHandshakeX25519(
+            transcript,
+            clientPrivate,
+            encodedInit,
+            serverHandshake.encodedReply,
+            negotiated,
+            sshEncodeNewKeys(),
+            sshEncodeNewKeys(),
+            policy: ContractSshHostVerificationPolicy(
+                negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                expectedHostKeySha256: serverHandshake.hostKeySha256,
+                requireKnownHost: true,
+                requireHostSignature: true,
+                requireVerifiedHost: true
+            )
+        )
+
+        let clientRuntime = contractSshCreateClientRuntime(clientHandshake)
+        let serverRuntime = contractSshCreateServerRuntimeRequest(
+            ContractSshServerRuntimeRequest(serverHandshake)
+        )
+        @Assert(clientRuntime.sessionId(), clientHandshake.sessionId)
+        @Assert(serverRuntime.sessionId(), serverHandshake.sessionId)
+        @Assert(clientRuntime.requireHostVerification().hostSignatureVerified, true)
+        match (clientRuntime.hostVerification()) {
+            case Some(value) =>
+                @Assert(value.hostKeySha256, serverHandshake.hostKeySha256)
+            case None =>
+                @Fail("SSH client runtime should preserve host verification")
+        }
+
+        let clientPacket = clientRuntime.seal(
+            "contract-runtime-client".toArray(),
+            randomPadding: incrementalBytes(64, start: 1764)
+        )
+        let serverOpened = serverRuntime.open(clientPacket)
+        @Assert(serverOpened.payload, "contract-runtime-client".toArray())
+        @Assert(clientRuntime.writeSequence, 1)
+        @Assert(serverRuntime.readSequence, 1)
+
+        let serverPacket = serverRuntime.seal(
+            "contract-runtime-server".toArray(),
+            randomPadding: incrementalBytes(64, start: 1828)
+        )
+        let clientOpened = clientRuntime.open(serverPacket)
+        @Assert(clientOpened.payload, "contract-runtime-server".toArray())
+        @Assert(serverRuntime.writeSequence, 1)
+        @Assert(clientRuntime.readSequence, 1)
+
+        clientRuntime.resetTransportCounters()
+        serverRuntime.resetTransportCounters()
+        @Assert(clientRuntime.writeSequence, 0)
+        @Assert(clientRuntime.readSequence, 0)
+        @Assert(serverRuntime.writeSequence, 0)
+        @Assert(serverRuntime.readSequence, 0)
+
+        let clientRuntimeByRequest = contractSshCreateClientRuntimeRequest(
+            ContractSshClientRuntimeRequest(clientHandshake)
+        )
+        @Assert(clientRuntimeByRequest.transport().sessionId(), clientHandshake.sessionId)
+    }
 }
 
 private func readText(path: String): String {
