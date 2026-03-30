@@ -14,6 +14,8 @@ import jinguissl.crypto.ssh.{
     SshClientInitialHandshakeResult,
     SshHandshakeCoordinator,
     SshHostVerificationPolicy,
+    SshKexEcdhInitMessage,
+    SshKexEcdhReplyMessage,
     SshHostVerificationResult,
     SshKexExchangeTranscript,
     SshKexInitMessage,
@@ -32,9 +34,13 @@ import jinguissl.crypto.ssh.{
     sshCompleteServerInitialHandshakeX25519Ed25519,
     sshCompleteServerInitialHandshakeX25519Rsa,
     sshComputeHostKeySha256,
+    sshDecodeKexEcdhInit,
+    sshDecodeKexEcdhReply,
     sshDecodeTransportPacket,
     sshDecodeVersionBanner,
     sshDecodeKexInit,
+    sshEncodeKexEcdhInit,
+    sshEncodeKexEcdhReply,
     sshEncodeEcdsaHostPublicKey,
     sshEncodeKexInit,
     sshEncodeTransportPacket,
@@ -1295,6 +1301,90 @@ public class ContractSshBuildTranscriptFromPreludeRequest {
         this.serverBanner = serverBanner
         this.clientKexInit = clientKexInit
         this.serverKexInit = serverKexInit
+    }
+}
+
+public class ContractSshKexEcdhInitMessage {
+    public let clientEphemeralPublicKey: Array<Byte>
+
+    public init(clientEphemeralPublicKey: Array<Byte>) {
+        if (clientEphemeralPublicKey.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH KEX_ECDH_INIT client ephemeral public key must not be empty"
+            )
+        }
+        this.clientEphemeralPublicKey = clientEphemeralPublicKey.clone()
+    }
+}
+
+public class ContractSshKexEcdhReplyMessage {
+    public let serverHostKey: Array<Byte>
+    public let serverEphemeralPublicKey: Array<Byte>
+    public let signature: Array<Byte>
+
+    public init(
+        serverHostKey: Array<Byte>,
+        serverEphemeralPublicKey: Array<Byte>,
+        signature: Array<Byte>
+    ) {
+        if (
+            serverHostKey.size == 0 ||
+            serverEphemeralPublicKey.size == 0 ||
+            signature.size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH KEX_ECDH_REPLY fields must not be empty"
+            )
+        }
+        this.serverHostKey = serverHostKey.clone()
+        this.serverEphemeralPublicKey = serverEphemeralPublicKey.clone()
+        this.signature = signature.clone()
+    }
+}
+
+public class ContractSshEncodeKexEcdhInitRequest {
+    public let message: ContractSshKexEcdhInitMessage
+
+    public init(message: ContractSshKexEcdhInitMessage) {
+        this.message = message
+    }
+}
+
+public class ContractSshDecodeKexEcdhInitRequest {
+    public let encoded: Array<Byte>
+
+    public init(encoded: Array<Byte>) {
+        if (encoded.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH encoded KEX_ECDH_INIT payload must not be empty"
+            )
+        }
+        this.encoded = encoded.clone()
+    }
+}
+
+public class ContractSshEncodeKexEcdhReplyRequest {
+    public let message: ContractSshKexEcdhReplyMessage
+
+    public init(message: ContractSshKexEcdhReplyMessage) {
+        this.message = message
+    }
+}
+
+public class ContractSshDecodeKexEcdhReplyRequest {
+    public let encoded: Array<Byte>
+
+    public init(encoded: Array<Byte>) {
+        if (encoded.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH encoded KEX_ECDH_REPLY payload must not be empty"
+            )
+        }
+        this.encoded = encoded.clone()
     }
 }
 
@@ -9217,6 +9307,86 @@ public func contractSshBuildKexExchangeTranscriptFromPreludeRequest(
     )
 }
 
+public func contractSshEncodeKexEcdhInit(
+    message: ContractSshKexEcdhInitMessage
+): Array<Byte> {
+    try {
+        sshEncodeKexEcdhInit(contractToSshKexEcdhInitMessage(message))
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEX_ECDH_INIT encode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshEncodeKexEcdhInitRequest(
+    request: ContractSshEncodeKexEcdhInitRequest
+): Array<Byte> {
+    contractSshEncodeKexEcdhInit(request.message)
+}
+
+public func contractSshDecodeKexEcdhInit(
+    encoded: Array<Byte>
+): ContractSshKexEcdhInitMessage {
+    try {
+        contractFromSshKexEcdhInitMessage(sshDecodeKexEcdhInit(encoded))
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEX_ECDH_INIT decode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshDecodeKexEcdhInitRequest(
+    request: ContractSshDecodeKexEcdhInitRequest
+): ContractSshKexEcdhInitMessage {
+    contractSshDecodeKexEcdhInit(request.encoded)
+}
+
+public func contractSshEncodeKexEcdhReply(
+    message: ContractSshKexEcdhReplyMessage
+): Array<Byte> {
+    try {
+        sshEncodeKexEcdhReply(contractToSshKexEcdhReplyMessage(message))
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEX_ECDH_REPLY encode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshEncodeKexEcdhReplyRequest(
+    request: ContractSshEncodeKexEcdhReplyRequest
+): Array<Byte> {
+    contractSshEncodeKexEcdhReply(request.message)
+}
+
+public func contractSshDecodeKexEcdhReply(
+    encoded: Array<Byte>
+): ContractSshKexEcdhReplyMessage {
+    try {
+        contractFromSshKexEcdhReplyMessage(sshDecodeKexEcdhReply(encoded))
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEX_ECDH_REPLY decode failed: ${e.message}"
+        )
+    }
+}
+
+public func contractSshDecodeKexEcdhReplyRequest(
+    request: ContractSshDecodeKexEcdhReplyRequest
+): ContractSshKexEcdhReplyMessage {
+    contractSshDecodeKexEcdhReply(request.encoded)
+}
+
 public func contractSshBuildKexEcdhInitX25519(clientPrivateKey: Array<Byte>): ContractSshX25519InitResult {
     try {
         let (encodedInit, clientPublicKey) = sshBuildKexEcdhInitX25519(clientPrivateKey)
@@ -10173,6 +10343,52 @@ private func contractFromSshClientInitialHandshakeResult(
 
 private func contractFromSshTransportPacket(packet: SshTransportPacket): ContractSshTransportPacket {
     ContractSshTransportPacket(packet.packetLength, packet.payload, packet.padding)
+}
+
+private func contractFromSshKexEcdhInitMessage(
+    message: SshKexEcdhInitMessage
+): ContractSshKexEcdhInitMessage {
+    ContractSshKexEcdhInitMessage(message.clientEphemeralPublicKey)
+}
+
+private func contractToSshKexEcdhInitMessage(
+    message: ContractSshKexEcdhInitMessage
+): SshKexEcdhInitMessage {
+    try {
+        SshKexEcdhInitMessage(message.clientEphemeralPublicKey)
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEX_ECDH_INIT message is invalid: ${e.message}"
+        )
+    }
+}
+
+private func contractFromSshKexEcdhReplyMessage(
+    message: SshKexEcdhReplyMessage
+): ContractSshKexEcdhReplyMessage {
+    ContractSshKexEcdhReplyMessage(
+        message.serverHostKey,
+        message.serverEphemeralPublicKey,
+        message.signature
+    )
+}
+
+private func contractToSshKexEcdhReplyMessage(
+    message: ContractSshKexEcdhReplyMessage
+): SshKexEcdhReplyMessage {
+    try {
+        SshKexEcdhReplyMessage(
+            message.serverHostKey,
+            message.serverEphemeralPublicKey,
+            message.signature
+        )
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH KEX_ECDH_REPLY message is invalid: ${e.message}"
+        )
+    }
 }
 
 private func contractFromSshVersionBanner(banner: SshVersionBanner): ContractSshVersionBanner {

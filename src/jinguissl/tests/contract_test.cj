@@ -3493,6 +3493,38 @@ public class ContractTestSuite {
     }
 
     @TestCase
+    public func testContractSshKexEcdhCodecFacadeHelpers(): Unit {
+        let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+        let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+        let clientPublic = x25519PublicFromPrivate(clientPrivate)
+        let serverPublic = x25519PublicFromPrivate(serverPrivate)
+
+        let initMessage = ContractSshKexEcdhInitMessage(clientPublic)
+        let encodedInit = contractSshEncodeKexEcdhInitRequest(
+            ContractSshEncodeKexEcdhInitRequest(initMessage)
+        )
+        let decodedInit = contractSshDecodeKexEcdhInitRequest(
+            ContractSshDecodeKexEcdhInitRequest(encodedInit)
+        )
+        @Assert(decodedInit.clientEphemeralPublicKey, clientPublic)
+
+        let replyMessage = ContractSshKexEcdhReplyMessage(
+            "server-host-key".toArray(),
+            serverPublic,
+            "signature-blob".toArray()
+        )
+        let encodedReply = contractSshEncodeKexEcdhReplyRequest(
+            ContractSshEncodeKexEcdhReplyRequest(replyMessage)
+        )
+        let decodedReply = contractSshDecodeKexEcdhReplyRequest(
+            ContractSshDecodeKexEcdhReplyRequest(encodedReply)
+        )
+        @Assert(decodedReply.serverHostKey, "server-host-key".toArray())
+        @Assert(decodedReply.serverEphemeralPublicKey, serverPublic)
+        @Assert(decodedReply.signature, "signature-blob".toArray())
+    }
+
+    @TestCase
     public func testContractSshRequestStyleHandshakeAndKexHelpers(): Unit {
         let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")

@@ -52,6 +52,7 @@
   - ECDH P-256 KEX
   - version banner build / decode / encode
   - decoded banner + KEXINIT prelude to transcript builder
+  - KEX_ECDH_INIT / KEX_ECDH_REPLY encode / decode
   - plaintext transport packet encode / decode
   - NEWKEYS gate
   - transport packet protection / rekey
@@ -75,6 +76,7 @@
   - X25519 KEX init/process helpers and session-state rekey entrypoints
   - KEXINIT default builder / codec / negotiation / transcript helper
   - version banner / prelude transcript request helpers
+  - KEX_ECDH init/reply request helpers
 
 ## Integrator Guidance
 
