@@ -4276,6 +4276,120 @@ public func contractTls13ApplyPeerKeyUpdateRequest(
     )
 }
 
+public func contractTls13ResolveCipherBindingFromVerifiedSession(
+    session: ContractTls13HttpClientVerifiedSession
+): ContractTls13CipherBinding {
+    match (session.result.cipherBinding) {
+        case Some(binding) => binding
+        case None =>
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 verified session does not carry cipher binding"
+            )
+    }
+}
+
+public func contractTls13CreateClientRecordChannelFromVerifiedSession(
+    session: ContractTls13HttpClientVerifiedSession
+): ContractTlsRecordChannel {
+    let binding = contractTls13ResolveCipherBindingFromVerifiedSession(session)
+    contractTls13CreateClientRecordChannel(
+        session.result.keyMaterial,
+        algorithm: binding.algorithm
+    )
+}
+
+public func contractTls13CreateClientRecordChannelFromVerifiedSessionRequest(
+    request: ContractTls13HttpVerifiedSessionRequest
+): ContractTlsRecordChannel {
+    contractTls13CreateClientRecordChannelFromVerifiedSession(request.session)
+}
+
+public func contractTls13DeriveExporterMasterSecretFromVerifiedSession(
+    session: ContractTls13HttpClientVerifiedSession
+): Array<Byte> {
+    contractTls13DeriveExporterMasterSecret(
+        session.masterSecret,
+        session.transcriptHash
+    )
+}
+
+public func contractTls13DeriveExporterMasterSecretFromVerifiedSessionRequest(
+    request: ContractTls13HttpVerifiedSessionRequest
+): Array<Byte> {
+    contractTls13DeriveExporterMasterSecretFromVerifiedSession(request.session)
+}
+
+public func contractTls13ExportKeyingMaterialFromVerifiedSession(
+    session: ContractTls13HttpClientVerifiedSession,
+    exporterLabel: String,
+    context!: Array<Byte> = [],
+    outputLen!: Int64 = 32
+): Array<Byte> {
+    let exporterMasterSecret = contractTls13DeriveExporterMasterSecretFromVerifiedSession(session)
+    contractTls13ExportKeyingMaterial(
+        exporterMasterSecret,
+        exporterLabel,
+        context: context,
+        outputLen: outputLen
+    )
+}
+
+public func contractTls13ExportKeyingMaterialFromVerifiedSessionRequest(
+    request: ContractTls13HttpVerifiedSessionExportRequest
+): Array<Byte> {
+    contractTls13ExportKeyingMaterialFromVerifiedSession(
+        request.session,
+        request.exporterLabel,
+        context: request.context,
+        outputLen: request.outputLen
+    )
+}
+
+public func contractTls13PrepareKeyUpdateFromVerifiedSession(
+    session: ContractTls13HttpClientVerifiedSession,
+    requestPeerUpdate!: Bool = false
+): ContractTls13KeyUpdatePlan {
+    let binding = contractTls13ResolveCipherBindingFromVerifiedSession(session)
+    contractTls13PrepareKeyUpdate(
+        session.clientAppTrafficSecret,
+        requestPeerUpdate: requestPeerUpdate,
+        keyLen: binding.keyLen,
+        ivLen: binding.ivLen
+    )
+}
+
+public func contractTls13PrepareKeyUpdateFromVerifiedSessionRequest(
+    request: ContractTls13HttpVerifiedSessionKeyUpdateRequest
+): ContractTls13KeyUpdatePlan {
+    contractTls13PrepareKeyUpdateFromVerifiedSession(
+        request.session,
+        requestPeerUpdate: request.requestPeerUpdate
+    )
+}
+
+public func contractTls13ApplyPeerKeyUpdateFromVerifiedSession(
+    session: ContractTls13HttpClientVerifiedSession,
+    encodedKeyUpdate: Array<Byte>
+): ContractTls13KeyUpdatePlan {
+    let binding = contractTls13ResolveCipherBindingFromVerifiedSession(session)
+    contractTls13ApplyPeerKeyUpdate(
+        session.serverAppTrafficSecret,
+        encodedKeyUpdate,
+        keyLen: binding.keyLen,
+        ivLen: binding.ivLen
+    )
+}
+
+public func contractTls13ApplyPeerKeyUpdateFromVerifiedSessionRequest(
+    request: ContractTls13HttpVerifiedSessionPeerKeyUpdateRequest
+): ContractTls13KeyUpdatePlan {
+    contractTls13ApplyPeerKeyUpdateFromVerifiedSession(
+        request.session,
+        request.encodedKeyUpdate
+    )
+}
+
 public func contractTls13BuildNewSessionTicketFromSessionTicket(
     ticket: ContractTlsSessionTicket,
     ticketAgeAdd!: Int64 = 0
@@ -5108,6 +5222,7 @@ public class ContractTls13HttpClientResult {
     public let leafDerSha256: Array<Byte>
     public let leafSpkiSha256: Array<Byte>
     public let keyMaterial: ContractTls13ApplicationKeyMaterial
+    public let cipherBinding: ?ContractTls13CipherBinding
 
     public init(
         selectedAlpn: String,
@@ -5118,7 +5233,8 @@ public class ContractTls13HttpClientResult {
         trustAnchorCommonName: String,
         leafDerSha256: Array<Byte>,
         leafSpkiSha256: Array<Byte>,
-        keyMaterial: ContractTls13ApplicationKeyMaterial
+        keyMaterial: ContractTls13ApplicationKeyMaterial,
+        cipherBinding!: ?ContractTls13CipherBinding = None
     ) {
         if (chainLength <= 0) {
             throw ContractException(ContractErrorCode.BadInput, "TLS1.3 verified chain length must be > 0")
@@ -5134,6 +5250,7 @@ public class ContractTls13HttpClientResult {
         this.leafDerSha256 = leafDerSha256.clone()
         this.leafSpkiSha256 = leafSpkiSha256.clone()
         this.keyMaterial = keyMaterial
+        this.cipherBinding = cipherBinding
     }
 }
 
@@ -5236,6 +5353,71 @@ public class ContractTls13HttpClientVerifiedSessionOutcome {
         this.code = code
         this.igniteCode = igniteCode
         this.result = result
+    }
+}
+
+public class ContractTls13HttpVerifiedSessionRequest {
+    public let session: ContractTls13HttpClientVerifiedSession
+
+    public init(session: ContractTls13HttpClientVerifiedSession) {
+        this.session = session
+    }
+}
+
+public class ContractTls13HttpVerifiedSessionExportRequest {
+    public let session: ContractTls13HttpClientVerifiedSession
+    public let exporterLabel: String
+    public let context: Array<Byte>
+    public let outputLen: Int64
+
+    public init(
+        session: ContractTls13HttpClientVerifiedSession,
+        exporterLabel: String,
+        context!: Array<Byte> = [],
+        outputLen!: Int64 = 32
+    ) {
+        if (exporterLabel.trimAscii().size == 0 || outputLen <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 verified session export request fields are invalid"
+            )
+        }
+        this.session = session
+        this.exporterLabel = exporterLabel.trimAscii()
+        this.context = context.clone()
+        this.outputLen = outputLen
+    }
+}
+
+public class ContractTls13HttpVerifiedSessionKeyUpdateRequest {
+    public let session: ContractTls13HttpClientVerifiedSession
+    public let requestPeerUpdate: Bool
+
+    public init(
+        session: ContractTls13HttpClientVerifiedSession,
+        requestPeerUpdate!: Bool = false
+    ) {
+        this.session = session
+        this.requestPeerUpdate = requestPeerUpdate
+    }
+}
+
+public class ContractTls13HttpVerifiedSessionPeerKeyUpdateRequest {
+    public let session: ContractTls13HttpClientVerifiedSession
+    public let encodedKeyUpdate: Array<Byte>
+
+    public init(
+        session: ContractTls13HttpClientVerifiedSession,
+        encodedKeyUpdate: Array<Byte>
+    ) {
+        if (encodedKeyUpdate.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 verified session peer key update request must not be empty"
+            )
+        }
+        this.session = session
+        this.encodedKeyUpdate = encodedKeyUpdate.clone()
     }
 }
 
@@ -7388,6 +7570,7 @@ public func contractTls13VerifyHttpServerFlightX25519WithSession(
         let leafDerSha = sha256(leaf.der)
         let leafSpkiSha = sha256(leaf.subjectPublicKeyInfoDer)
         contractRequirePinPolicy(pinPolicy, leafDerSha, leafSpkiSha)
+        let binding = contractTls13ResolveCipherBindingFromServerFlight(serverFlight)
         let clientResult = ContractTls13HttpClientResult(
             result.selectedAlpn,
             result.requestedServerName,
@@ -7402,7 +7585,8 @@ public func contractTls13VerifyHttpServerFlightX25519WithSession(
                 result.secrets.clientWriteIv,
                 result.secrets.serverWriteKey,
                 result.secrets.serverWriteIv
-            )
+            ),
+            cipherBinding: Some(binding)
         )
         ContractTls13HttpClientVerifiedSession(
             clientResult,

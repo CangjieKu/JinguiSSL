@@ -774,13 +774,19 @@ public class ContractTestSuite {
         @Assert(verifiedSession.clientAppTrafficSecret.size > 0, true)
         @Assert(verifiedSession.serverAppTrafficSecret.size > 0, true)
         @Assert(verifiedSession.masterSecret.size > 0, true)
+        let binding = contractTls13ResolveCipherBindingFromVerifiedSession(verifiedSession)
+        @Assert(binding.cipherSuiteName, "TLS_AES_128_GCM_SHA256")
+        @Assert(binding.keyLen, verifiedSession.result.keyMaterial.clientWriteKey.size)
 
-        let exporterMaster = contractTls13DeriveExporterMasterSecret(
-            verifiedSession.masterSecret,
-            verifiedSession.transcriptHash
+        let clientChannel = contractTls13CreateClientRecordChannelFromVerifiedSession(verifiedSession)
+        @Assert(clientChannel.version.toString(), "TLS1.3")
+        @Assert(clientChannel.algorithm.toString(), binding.algorithm.toString())
+
+        let exporterMaster = contractTls13DeriveExporterMasterSecretFromVerifiedSession(
+            verifiedSession
         )
-        let exported = contractTls13ExportKeyingMaterial(
-            exporterMaster,
+        let exported = contractTls13ExportKeyingMaterialFromVerifiedSession(
+            verifiedSession,
             "EXPORTER-jinkui/http",
             context: "http-ctx".toArray(),
             outputLen: 42
@@ -798,23 +804,25 @@ public class ContractTestSuite {
         @Assert(nextClientWriteKey.size, verifiedSession.result.keyMaterial.clientWriteKey.size)
         @Assert(nextClientWriteIv.size, verifiedSession.result.keyMaterial.clientWriteIv.size)
 
-        let exporterMasterByRequest = contractTls13DeriveExporterMasterSecretRequest(
-            ContractTls13ExporterMasterSecretRequest(
-                verifiedSession.masterSecret,
-                verifiedSession.transcriptHash
-            )
+        let exporterMasterByRequest = contractTls13DeriveExporterMasterSecretFromVerifiedSessionRequest(
+            ContractTls13HttpVerifiedSessionRequest(verifiedSession)
         )
         @Assert(exporterMasterByRequest, exporterMaster)
 
-        let exportedByRequest = contractTls13ExportKeyingMaterialRequest(
-            ContractTls13ExportKeyingMaterialRequest(
-                exporterMasterByRequest,
+        let exportedByRequest = contractTls13ExportKeyingMaterialFromVerifiedSessionRequest(
+            ContractTls13HttpVerifiedSessionExportRequest(
+                verifiedSession,
                 "EXPORTER-jinkui/http",
                 context: "http-ctx".toArray(),
                 outputLen: 42
             )
         )
         @Assert(exportedByRequest, exported)
+
+        let clientChannelByRequest = contractTls13CreateClientRecordChannelFromVerifiedSessionRequest(
+            ContractTls13HttpVerifiedSessionRequest(verifiedSession)
+        )
+        @Assert(clientChannelByRequest.algorithm.toString(), clientChannel.algorithm.toString())
     }
 
     @TestCase
@@ -2141,48 +2149,40 @@ public class ContractTestSuite {
                 alpnPreference: ["h2", "http/1.1"]
             )
         )
-        let binding = contractTls13ResolveCipherBindingFromServerFlight(flight)
+        let binding = contractTls13ResolveCipherBindingFromVerifiedSession(verifiedSession)
         @Assert(binding.cipherSuiteName, "TLS_AES_128_GCM_SHA256")
         @Assert(binding.algorithm.toString(), "AES-256-GCM")
         @Assert(binding.keyLen, verifiedSession.result.keyMaterial.clientWriteKey.size)
         @Assert(binding.ivLen, verifiedSession.result.keyMaterial.clientWriteIv.size)
 
-        let keyUpdate = contractTls13PrepareKeyUpdate(
-            verifiedSession.clientAppTrafficSecret,
-            requestPeerUpdate: true,
-            keyLen: binding.keyLen,
-            ivLen: binding.ivLen
+        let keyUpdate = contractTls13PrepareKeyUpdateFromVerifiedSession(
+            verifiedSession,
+            requestPeerUpdate: true
         )
         @Assert(contractTls13DecodeKeyUpdateHandshake(keyUpdate.encodedKeyUpdate), true)
         @Assert(keyUpdate.requestPeerUpdate, true)
 
-        let applied = contractTls13ApplyPeerKeyUpdate(
-            verifiedSession.serverAppTrafficSecret,
-            keyUpdate.encodedKeyUpdate,
-            keyLen: binding.keyLen,
-            ivLen: binding.ivLen
+        let applied = contractTls13ApplyPeerKeyUpdateFromVerifiedSession(
+            verifiedSession,
+            keyUpdate.encodedKeyUpdate
         )
         @Assert(applied.requestPeerUpdate, true)
         @Assert(applied.nextWriteKey.size, binding.keyLen)
         @Assert(applied.nextWriteIv.size, binding.ivLen)
 
-        let keyUpdateByRequest = contractTls13PrepareKeyUpdateRequest(
-            ContractTls13KeyUpdateRequest(
-                verifiedSession.clientAppTrafficSecret,
-                requestPeerUpdate: true,
-                keyLen: binding.keyLen,
-                ivLen: binding.ivLen
+        let keyUpdateByRequest = contractTls13PrepareKeyUpdateFromVerifiedSessionRequest(
+            ContractTls13HttpVerifiedSessionKeyUpdateRequest(
+                verifiedSession,
+                requestPeerUpdate: true
             )
         )
         @Assert(contractTls13DecodeKeyUpdateHandshake(keyUpdateByRequest.encodedKeyUpdate), true)
         @Assert(keyUpdateByRequest.requestPeerUpdate, true)
 
-        let appliedByRequest = contractTls13ApplyPeerKeyUpdateRequest(
-            ContractTls13PeerKeyUpdateRequest(
-                verifiedSession.serverAppTrafficSecret,
-                keyUpdateByRequest.encodedKeyUpdate,
-                keyLen: binding.keyLen,
-                ivLen: binding.ivLen
+        let appliedByRequest = contractTls13ApplyPeerKeyUpdateFromVerifiedSessionRequest(
+            ContractTls13HttpVerifiedSessionPeerKeyUpdateRequest(
+                verifiedSession,
+                keyUpdateByRequest.encodedKeyUpdate
             )
         )
         @Assert(appliedByRequest.requestPeerUpdate, true)

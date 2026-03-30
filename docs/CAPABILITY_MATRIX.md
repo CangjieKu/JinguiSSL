@@ -21,6 +21,7 @@
 - TLS 1.3：
   - X25519 / ECDHE(P-256 / P-384) HTTP handshake facade
   - verified-session result
+  - verified-session runtime helpers（cipher binding / exporter / record channel / key-update）
   - PSK / session ticket / session cache
   - request-style session ticket / cache / PSK facade
   - request-style 0-RTT prepare / accept / HTTP accept facade
