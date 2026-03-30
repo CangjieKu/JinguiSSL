@@ -40,6 +40,7 @@
 - TLS 1.3 early-data prepare / accept / HTTP accept request-style facade
 - TLS 1.3 key-update / exporter / cipher-binding request-style facade
 - TLS 1.3 verified-session runtime facade（cipher binding / exporter / record channel / key-update）
+- TLS 1.3 verified-session state-advance facade（updated session + channel set）
 - SSH host-signing material facade（RSA PKCS8 / ECDSA PKCS8 / Ed25519 seed）
 - SSH client/server initial-handshake facade 与 required verify 模式
 - X.509 `try/outcome` 统一结果模型与 PEM bundle normalization

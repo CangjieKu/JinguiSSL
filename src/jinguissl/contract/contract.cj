@@ -4305,6 +4305,38 @@ public func contractTls13CreateClientRecordChannelFromVerifiedSessionRequest(
     contractTls13CreateClientRecordChannelFromVerifiedSession(request.session)
 }
 
+public func contractTls13CreateServerRecordChannelFromVerifiedSession(
+    session: ContractTls13HttpClientVerifiedSession
+): ContractTlsRecordChannel {
+    let binding = contractTls13ResolveCipherBindingFromVerifiedSession(session)
+    contractTls13CreateServerRecordChannel(
+        session.result.keyMaterial,
+        algorithm: binding.algorithm
+    )
+}
+
+public func contractTls13CreateServerRecordChannelFromVerifiedSessionRequest(
+    request: ContractTls13HttpVerifiedSessionRequest
+): ContractTlsRecordChannel {
+    contractTls13CreateServerRecordChannelFromVerifiedSession(request.session)
+}
+
+public func contractTls13CreateVerifiedSessionChannelSet(
+    session: ContractTls13HttpClientVerifiedSession
+): ContractTls13HttpVerifiedSessionChannelSet {
+    ContractTls13HttpVerifiedSessionChannelSet(
+        session,
+        contractTls13CreateClientRecordChannelFromVerifiedSession(session),
+        contractTls13CreateServerRecordChannelFromVerifiedSession(session)
+    )
+}
+
+public func contractTls13CreateVerifiedSessionChannelSetRequest(
+    request: ContractTls13HttpVerifiedSessionRequest
+): ContractTls13HttpVerifiedSessionChannelSet {
+    contractTls13CreateVerifiedSessionChannelSet(request.session)
+}
+
 public func contractTls13DeriveExporterMasterSecretFromVerifiedSession(
     session: ContractTls13HttpClientVerifiedSession
 ): Array<Byte> {
@@ -4385,6 +4417,72 @@ public func contractTls13ApplyPeerKeyUpdateFromVerifiedSessionRequest(
     request: ContractTls13HttpVerifiedSessionPeerKeyUpdateRequest
 ): ContractTls13KeyUpdatePlan {
     contractTls13ApplyPeerKeyUpdateFromVerifiedSession(
+        request.session,
+        request.encodedKeyUpdate
+    )
+}
+
+public func contractTls13RotateClientTrafficInVerifiedSession(
+    session: ContractTls13HttpClientVerifiedSession,
+    requestPeerUpdate!: Bool = false
+): ContractTls13HttpVerifiedSessionTrafficUpdateResult {
+    let plan = contractTls13PrepareKeyUpdateFromVerifiedSession(
+        session,
+        requestPeerUpdate: requestPeerUpdate
+    )
+    let updatedSession = contractTls13RebuildVerifiedSession(
+        session,
+        session.result.keyMaterial.serverWriteKey,
+        session.result.keyMaterial.serverWriteIv,
+        plan.nextTrafficSecret,
+        session.serverAppTrafficSecret,
+        plan.nextWriteKey,
+        plan.nextWriteIv
+    )
+    ContractTls13HttpVerifiedSessionTrafficUpdateResult(
+        plan.encodedKeyUpdate,
+        plan.requestPeerUpdate,
+        contractTls13CreateVerifiedSessionChannelSet(updatedSession)
+    )
+}
+
+public func contractTls13RotateClientTrafficInVerifiedSessionRequest(
+    request: ContractTls13HttpVerifiedSessionKeyUpdateRequest
+): ContractTls13HttpVerifiedSessionTrafficUpdateResult {
+    contractTls13RotateClientTrafficInVerifiedSession(
+        request.session,
+        requestPeerUpdate: request.requestPeerUpdate
+    )
+}
+
+public func contractTls13ApplyPeerTrafficUpdateToVerifiedSession(
+    session: ContractTls13HttpClientVerifiedSession,
+    encodedKeyUpdate: Array<Byte>
+): ContractTls13HttpVerifiedSessionTrafficUpdateResult {
+    let plan = contractTls13ApplyPeerKeyUpdateFromVerifiedSession(
+        session,
+        encodedKeyUpdate
+    )
+    let updatedSession = contractTls13RebuildVerifiedSession(
+        session,
+        plan.nextWriteKey,
+        plan.nextWriteIv,
+        session.clientAppTrafficSecret,
+        plan.nextTrafficSecret,
+        session.result.keyMaterial.clientWriteKey,
+        session.result.keyMaterial.clientWriteIv
+    )
+    ContractTls13HttpVerifiedSessionTrafficUpdateResult(
+        plan.encodedKeyUpdate,
+        plan.requestPeerUpdate,
+        contractTls13CreateVerifiedSessionChannelSet(updatedSession)
+    )
+}
+
+public func contractTls13ApplyPeerTrafficUpdateToVerifiedSessionRequest(
+    request: ContractTls13HttpVerifiedSessionPeerKeyUpdateRequest
+): ContractTls13HttpVerifiedSessionTrafficUpdateResult {
+    contractTls13ApplyPeerTrafficUpdateToVerifiedSession(
         request.session,
         request.encodedKeyUpdate
     )
@@ -5418,6 +5516,57 @@ public class ContractTls13HttpVerifiedSessionPeerKeyUpdateRequest {
         }
         this.session = session
         this.encodedKeyUpdate = encodedKeyUpdate.clone()
+    }
+}
+
+public class ContractTls13HttpVerifiedSessionChannelSet {
+    public let session: ContractTls13HttpClientVerifiedSession
+    public let clientChannel: ContractTlsRecordChannel
+    public let serverChannel: ContractTlsRecordChannel
+
+    public init(
+        session: ContractTls13HttpClientVerifiedSession,
+        clientChannel: ContractTlsRecordChannel,
+        serverChannel: ContractTlsRecordChannel
+    ) {
+        let binding = contractTls13ResolveCipherBindingFromVerifiedSession(session)
+        if (clientChannel.version != ContractTlsVersion.Tls13 || serverChannel.version != ContractTlsVersion.Tls13) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 verified session channel set requires TLS1.3 record channels"
+            )
+        }
+        if (clientChannel.algorithm != binding.algorithm || serverChannel.algorithm != binding.algorithm) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 verified session channel algorithms must match cipher binding"
+            )
+        }
+        this.session = session
+        this.clientChannel = clientChannel
+        this.serverChannel = serverChannel
+    }
+}
+
+public class ContractTls13HttpVerifiedSessionTrafficUpdateResult {
+    public let encodedKeyUpdate: Array<Byte>
+    public let requestPeerUpdate: Bool
+    public let runtime: ContractTls13HttpVerifiedSessionChannelSet
+
+    public init(
+        encodedKeyUpdate: Array<Byte>,
+        requestPeerUpdate: Bool,
+        runtime: ContractTls13HttpVerifiedSessionChannelSet
+    ) {
+        if (encodedKeyUpdate.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 verified session traffic update handshake must not be empty"
+            )
+        }
+        this.encodedKeyUpdate = encodedKeyUpdate.clone()
+        this.requestPeerUpdate = requestPeerUpdate
+        this.runtime = runtime
     }
 }
 
@@ -8866,6 +9015,43 @@ private func contractTls13BuildPskEarlyDataReplayKeyFromFields(
     let resumptionId = base64UrlEncode(identity.resumptionId)
     let hash = base64UrlEncode(clientHelloHash)
     "${versionTag}:${resumptionId}:${hash}"
+}
+
+private func contractTls13RebuildVerifiedSession(
+    session: ContractTls13HttpClientVerifiedSession,
+    serverWriteKey: Array<Byte>,
+    serverWriteIv: Array<Byte>,
+    clientAppTrafficSecret: Array<Byte>,
+    serverAppTrafficSecret: Array<Byte>,
+    clientWriteKey: Array<Byte>,
+    clientWriteIv: Array<Byte>
+): ContractTls13HttpClientVerifiedSession {
+    let previous = session.result
+    let keyMaterial = ContractTls13ApplicationKeyMaterial(
+        clientWriteKey,
+        clientWriteIv,
+        serverWriteKey,
+        serverWriteIv
+    )
+    let result = ContractTls13HttpClientResult(
+        previous.selectedAlpn,
+        previous.requestedServerName,
+        previous.acknowledgedServerName,
+        previous.chainLength,
+        previous.leafSubjectCommonName,
+        previous.trustAnchorCommonName,
+        previous.leafDerSha256,
+        previous.leafSpkiSha256,
+        keyMaterial,
+        cipherBinding: previous.cipherBinding
+    )
+    ContractTls13HttpClientVerifiedSession(
+        result,
+        clientAppTrafficSecret,
+        serverAppTrafficSecret,
+        session.masterSecret,
+        session.transcriptHash
+    )
 }
 
 private func contractTls13ValidatePskEarlyDataHttpBinding(

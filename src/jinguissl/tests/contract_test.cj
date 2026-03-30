@@ -779,8 +779,15 @@ public class ContractTestSuite {
         @Assert(binding.keyLen, verifiedSession.result.keyMaterial.clientWriteKey.size)
 
         let clientChannel = contractTls13CreateClientRecordChannelFromVerifiedSession(verifiedSession)
+        let serverChannel = contractTls13CreateServerRecordChannelFromVerifiedSession(verifiedSession)
         @Assert(clientChannel.version.toString(), "TLS1.3")
         @Assert(clientChannel.algorithm.toString(), binding.algorithm.toString())
+        @Assert(serverChannel.algorithm.toString(), binding.algorithm.toString())
+
+        let runtime = contractTls13CreateVerifiedSessionChannelSet(verifiedSession)
+        let runtimeCiphertext = runtime.clientChannel.sealApplicationData("verified-session-runtime".toArray())
+        let runtimePlaintext = runtime.serverChannel.openApplicationData(runtimeCiphertext)
+        @Assert(runtimePlaintext, "verified-session-runtime".toArray())
 
         let exporterMaster = contractTls13DeriveExporterMasterSecretFromVerifiedSession(
             verifiedSession
@@ -823,6 +830,17 @@ public class ContractTestSuite {
             ContractTls13HttpVerifiedSessionRequest(verifiedSession)
         )
         @Assert(clientChannelByRequest.algorithm.toString(), clientChannel.algorithm.toString())
+
+        let runtimeByRequest = contractTls13CreateVerifiedSessionChannelSetRequest(
+            ContractTls13HttpVerifiedSessionRequest(verifiedSession)
+        )
+        let runtimeByRequestCiphertext = runtimeByRequest.serverChannel.sealApplicationData(
+            "verified-session-runtime-request".toArray()
+        )
+        let runtimeByRequestPlaintext = runtimeByRequest.clientChannel.openApplicationData(
+            runtimeByRequestCiphertext
+        )
+        @Assert(runtimeByRequestPlaintext, "verified-session-runtime-request".toArray())
     }
 
     @TestCase
@@ -2188,6 +2206,66 @@ public class ContractTestSuite {
         @Assert(appliedByRequest.requestPeerUpdate, true)
         @Assert(appliedByRequest.nextWriteKey.size, binding.keyLen)
         @Assert(appliedByRequest.nextWriteIv.size, binding.ivLen)
+
+        let localTrafficUpdate = contractTls13RotateClientTrafficInVerifiedSession(
+            verifiedSession,
+            requestPeerUpdate: true
+        )
+        @Assert(localTrafficUpdate.requestPeerUpdate, true)
+        @Assert(
+            localTrafficUpdate.runtime.session.clientAppTrafficSecret == verifiedSession.clientAppTrafficSecret,
+            false
+        )
+        @Assert(
+            localTrafficUpdate.runtime.session.serverAppTrafficSecret,
+            verifiedSession.serverAppTrafficSecret
+        )
+        let localCiphertext = localTrafficUpdate.runtime.clientChannel.sealApplicationData(
+            "verified-session-local-update".toArray()
+        )
+        let localPlaintext = localTrafficUpdate.runtime.serverChannel.openApplicationData(localCiphertext)
+        @Assert(localPlaintext, "verified-session-local-update".toArray())
+
+        let localTrafficUpdateByRequest = contractTls13RotateClientTrafficInVerifiedSessionRequest(
+            ContractTls13HttpVerifiedSessionKeyUpdateRequest(
+                verifiedSession,
+                requestPeerUpdate: true
+            )
+        )
+        @Assert(
+            localTrafficUpdateByRequest.runtime.session.clientAppTrafficSecret,
+            localTrafficUpdate.runtime.session.clientAppTrafficSecret
+        )
+
+        let peerTrafficUpdate = contractTls13ApplyPeerTrafficUpdateToVerifiedSession(
+            verifiedSession,
+            keyUpdate.encodedKeyUpdate
+        )
+        @Assert(peerTrafficUpdate.requestPeerUpdate, true)
+        @Assert(
+            peerTrafficUpdate.runtime.session.clientAppTrafficSecret,
+            verifiedSession.clientAppTrafficSecret
+        )
+        @Assert(
+            peerTrafficUpdate.runtime.session.serverAppTrafficSecret == verifiedSession.serverAppTrafficSecret,
+            false
+        )
+        let peerCiphertext = peerTrafficUpdate.runtime.serverChannel.sealApplicationData(
+            "verified-session-peer-update".toArray()
+        )
+        let peerPlaintext = peerTrafficUpdate.runtime.clientChannel.openApplicationData(peerCiphertext)
+        @Assert(peerPlaintext, "verified-session-peer-update".toArray())
+
+        let peerTrafficUpdateByRequest = contractTls13ApplyPeerTrafficUpdateToVerifiedSessionRequest(
+            ContractTls13HttpVerifiedSessionPeerKeyUpdateRequest(
+                verifiedSession,
+                keyUpdateByRequest.encodedKeyUpdate
+            )
+        )
+        @Assert(
+            peerTrafficUpdateByRequest.runtime.session.serverAppTrafficSecret,
+            peerTrafficUpdate.runtime.session.serverAppTrafficSecret
+        )
     }
 
     @TestCase
