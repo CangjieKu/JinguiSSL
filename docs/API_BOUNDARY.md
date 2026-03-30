@@ -25,6 +25,7 @@
 - SSH facade 已覆盖 host key fingerprint、host-signing material、client/server initial-handshake、runtime bundle 与 required-host-verification 模式
 - SSH runtime 已覆盖 current-session snapshot 与 X25519 rekey facade
 - SSH request-style facade 已补到 transcript / negotiated algorithms / X25519 KEX helpers / session-state rekey
+- SSH host verification 已补 request / required / try-outcome 风格 facade
 - SSH KEXINIT message build / encode / decode / negotiate / transcript builder 已进入稳定 contract 面
 - SSH version banner build / codec、plaintext transport packet codec、decoded prelude -> transcript builder 已进入稳定 contract 面
 - SSH `KEX_ECDH_INIT` / `KEX_ECDH_REPLY` message codec 已进入稳定 contract 面
@@ -52,6 +53,7 @@
 - SSH client/server runtime facade（transport convenience / sequence / session accessor）
 - SSH runtime current-session / rekey facade（mutable session snapshot）
 - SSH transcript / negotiated algorithms / X25519 KEX request facade
+- SSH host verification request / outcome facade
 - SSH KEXINIT negotiation facade（default builder / codec / transcript helper）
 - SSH version banner / plaintext transport packet / prelude transcript facade
 - SSH KEX_ECDH init/reply codec facade

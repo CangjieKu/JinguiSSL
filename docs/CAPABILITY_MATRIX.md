@@ -61,6 +61,7 @@
   - RSA-SHA2 / ECDSA / Ed25519 host key and host signature verify
   - known-host pinning（SHA-256）
   - required-host-verification modes
+  - host verification request / required / try-outcome helpers
 - host-signing material facade：
   - RSA PKCS8 request
   - ECDSA PKCS8 request

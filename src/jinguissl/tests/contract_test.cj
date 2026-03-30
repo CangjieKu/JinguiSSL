@@ -3165,6 +3165,17 @@ public class ContractTestSuite {
             "rsa-sha2-256",
             incrementalBytes(64, start: 81)
         )
+        let requiredRequest = ContractSshVerifyHostIdentityRequest(
+            exchangeHash,
+            serverHostKey,
+            hostSignature,
+            policy: ContractSshHostVerificationPolicy(
+                expectedHostKeySha256: contractSshComputeHostKeySha256(serverHostKey),
+                requireKnownHost: true,
+                requireHostSignature: false,
+                requireVerifiedHost: true
+            )
+        )
 
         let knownFingerprint = contractSshComputeHostKeySha256(serverHostKey)
         let knownHostPolicy = ContractSshHostVerificationPolicy(
@@ -3183,6 +3194,14 @@ public class ContractTestSuite {
         @Assert(knownHostResult.hostSignatureAlgorithm, "rsa-sha2-256")
         @Assert(knownHostResult.hostSignatureVerified, false)
         @Assert(knownHostResult.hostKeySha256, knownFingerprint)
+        let knownHostByRequest = contractSshVerifyHostIdentityRequiredRequest(requiredRequest)
+        @Assert(knownHostByRequest.hostKeyAlgorithm, "ssh-rsa")
+        let knownHostOutcome = contractTrySshVerifyHostIdentityRequiredRequest(requiredRequest)
+        @Assert(knownHostOutcome.ok, true)
+        match (knownHostOutcome.result) {
+            case Some(value) => @Assert(value.hostKeySha256, knownFingerprint)
+            case None => @Fail("SSH host verification request outcome should carry result")
+        }
 
         let strictPolicy = ContractSshHostVerificationPolicy(
             requireHostSignature: true,
@@ -3204,11 +3223,13 @@ public class ContractTestSuite {
             requireHostSignature: true,
             requireVerifiedHost: false
         )
-        let optionalResult = contractSshVerifyHostIdentity(
-            exchangeHash,
-            serverHostKey,
-            hostSignature,
-            policy: optionalPolicy
+        let optionalResult = contractSshVerifyHostIdentityRequest(
+            ContractSshVerifyHostIdentityRequest(
+                exchangeHash,
+                serverHostKey,
+                hostSignature,
+                policy: optionalPolicy
+            )
         )
         match (optionalResult) {
             case Some(_value) =>

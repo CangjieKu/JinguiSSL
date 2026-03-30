@@ -1682,6 +1682,31 @@ public class ContractSshHostVerificationPolicy {
     }
 }
 
+public class ContractSshVerifyHostIdentityRequest {
+    public let exchangeHash: Array<Byte>
+    public let serverHostKey: Array<Byte>
+    public let hostSignature: Array<Byte>
+    public let policy: ContractSshHostVerificationPolicy
+
+    public init(
+        exchangeHash: Array<Byte>,
+        serverHostKey: Array<Byte>,
+        hostSignature: Array<Byte>,
+        policy!: ContractSshHostVerificationPolicy = ContractSshHostVerificationPolicy()
+    ) {
+        if (exchangeHash.size == 0 || serverHostKey.size == 0 || hostSignature.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH host verification request fields must not be empty"
+            )
+        }
+        this.exchangeHash = exchangeHash.clone()
+        this.serverHostKey = serverHostKey.clone()
+        this.hostSignature = hostSignature.clone()
+        this.policy = policy
+    }
+}
+
 public class ContractSshHostVerificationResult {
     public let hostKeyAlgorithm: String
     public let hostSignatureAlgorithm: String
@@ -10147,6 +10172,17 @@ public func contractSshVerifyHostIdentity(
     }
 }
 
+public func contractSshVerifyHostIdentityRequest(
+    request: ContractSshVerifyHostIdentityRequest
+): ?ContractSshHostVerificationResult {
+    contractSshVerifyHostIdentity(
+        request.exchangeHash,
+        request.serverHostKey,
+        request.hostSignature,
+        policy: request.policy
+    )
+}
+
 public func contractSshVerifyHostIdentityRequired(
     exchangeHash: Array<Byte>,
     serverHostKey: Array<Byte>,
@@ -10194,6 +10230,17 @@ public func contractSshVerifyHostIdentityRequired(
             "SSH host verification failed: ${e.message}"
         )
     }
+}
+
+public func contractSshVerifyHostIdentityRequiredRequest(
+    request: ContractSshVerifyHostIdentityRequest
+): ContractSshHostVerificationResult {
+    contractSshVerifyHostIdentityRequired(
+        request.exchangeHash,
+        request.serverHostKey,
+        request.hostSignature,
+        policy: request.policy
+    )
 }
 
 public func contractSshEncodeTransportPacket(
@@ -10269,6 +10316,17 @@ public func contractTrySshVerifyHostIdentityRequired(
             igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
         )
     }
+}
+
+public func contractTrySshVerifyHostIdentityRequiredRequest(
+    request: ContractSshVerifyHostIdentityRequest
+): ContractSshHostVerificationOutcome {
+    contractTrySshVerifyHostIdentityRequired(
+        request.exchangeHash,
+        request.serverHostKey,
+        request.hostSignature,
+        policy: request.policy
+    )
 }
 
 private func contractFromSshServerInitialHandshakeResult(
