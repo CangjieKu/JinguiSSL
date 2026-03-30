@@ -1,5 +1,6 @@
 package jinguissl.tests
 
+import std.collection.ArrayList
 import std.fs.*
 import jinguissl.crypto.bignum.BigNum
 import jinguissl.crypto.compliance.*
@@ -16,6 +17,7 @@ private let P256_2G_X: BigNum = BigNum.fromHex("7CF27B188D034F7E8A52380304B51AC3
 private let P256_2G_Y: BigNum = BigNum.fromHex("07775510DB8ED040293D9AC69F7430DBBA7DADE63CE982299E04B79D227873D1")
 private let P384_GX: BigNum = BigNum.fromHex("AA87CA22BE8B05378EB1C71EF320AD746E1D3B628BA79B9859F741E082542A385502F25DBF55296C3A545E3872760AB7")
 private let P384_GY: BigNum = BigNum.fromHex("3617DE4A96262C6F5D9E98BF9292DC29F8F41DBD289A147CE9DA3113B5F0B8C00A60B1CE1D7E819D7A431D7C90EA0E5F")
+private let TLS13_KEY_SHARE_EXTENSION_TYPE: Int64 = 0x0033
 
 @Test
 public class Tls13HandshakeFlowTestSuite {
@@ -620,6 +622,72 @@ public class Tls13HandshakeFlowTestSuite {
             @Fail("server should reject malformed TLS1.3 ClientHello")
         } catch (e: CryptoException) {
             @Assert(e.code.toString(), "PARSE_ERROR")
+        }
+
+        let validEcdheClientHello = tls13BuildClientHelloEcdhe(EcPublicKey(P256, P256_2G_X, P256_2G_Y))
+        let validEcdheServerHello = tls13BuildServerHelloForEcdhe(validEcdheClientHello, EcPublicKey(P256, P256_GX, P256_GY))
+        let decodedEcdheServerHello = tlsDecodeServerHelloHandshake(validEcdheServerHello)
+        let mutatedEcdheExtensions = ArrayList<TlsExtension>()
+        for (ext in decodedEcdheServerHello.extensions) {
+            if (ext.extType == TLS13_KEY_SHARE_EXTENSION_TYPE) {
+                let ecdheKeyShareData = ext.data.clone()
+                ecdheKeyShareData[0] = UInt8(0x00)
+                ecdheKeyShareData[1] = UInt8(0x19)
+                mutatedEcdheExtensions.add(TlsExtension(ext.extType, ecdheKeyShareData))
+            } else {
+                mutatedEcdheExtensions.add(TlsExtension(ext.extType, ext.data))
+            }
+        }
+        let unsupportedEcdheServerHello = tlsEncodeServerHelloHandshake(
+            TlsServerHello(
+                decodedEcdheServerHello.random,
+                decodedEcdheServerHello.cipherSuite,
+                sessionId: decodedEcdheServerHello.sessionId,
+                compressionMethod: decodedEcdheServerHello.compressionMethod,
+                extensions: mutatedEcdheExtensions.toArray(),
+                legacyVersion: decodedEcdheServerHello.legacyVersion
+            )
+        )
+        try {
+            _ = tls13ExtractServerKeyShare(unsupportedEcdheServerHello)
+            @Fail("unsupported TLS1.3 ECDHE server key_share group should surface as unsupported")
+        } catch (e: CryptoException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
+
+        let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+        let validX25519ClientHello = tls13BuildClientHelloX25519(x25519PublicFromPrivate(clientPrivate))
+        let validX25519ServerHello = tls13BuildServerHelloForX25519(
+            validX25519ClientHello,
+            hexToBytes("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
+        )
+        let decodedX25519ServerHello = tlsDecodeServerHelloHandshake(validX25519ServerHello)
+        let mutatedX25519Extensions = ArrayList<TlsExtension>()
+        for (ext in decodedX25519ServerHello.extensions) {
+            if (ext.extType == TLS13_KEY_SHARE_EXTENSION_TYPE) {
+                let x25519KeyShareData = ext.data.clone()
+                x25519KeyShareData[0] = UInt8(0x00)
+                x25519KeyShareData[1] = UInt8(0x17)
+                mutatedX25519Extensions.add(TlsExtension(ext.extType, x25519KeyShareData))
+            } else {
+                mutatedX25519Extensions.add(TlsExtension(ext.extType, ext.data))
+            }
+        }
+        let unsupportedX25519ServerHello = tlsEncodeServerHelloHandshake(
+            TlsServerHello(
+                decodedX25519ServerHello.random,
+                decodedX25519ServerHello.cipherSuite,
+                sessionId: decodedX25519ServerHello.sessionId,
+                compressionMethod: decodedX25519ServerHello.compressionMethod,
+                extensions: mutatedX25519Extensions.toArray(),
+                legacyVersion: decodedX25519ServerHello.legacyVersion
+            )
+        )
+        try {
+            _ = tls13ExtractServerX25519KeyShare(unsupportedX25519ServerHello)
+            @Fail("unsupported TLS1.3 X25519 server key_share group should surface as unsupported")
+        } catch (e: CryptoException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
         }
 
         let pskHello = tls13BuildClientHelloPsk("ticket-B".toArray())

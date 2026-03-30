@@ -580,7 +580,7 @@ private func tls12ResolveEcdheCurveSpecFromNamedCurveId(namedCurveId: Int64): (N
     if (namedCurveId == TLS12_NAMED_CURVE_SECP384R1) {
         return (P384, TLS12_P384_FIELD_BYTES)
     }
-    throw CryptoException(ParseError, "TLS12 ECDHE named curve is unsupported")
+    throw CryptoException(Unsupported, "TLS12 ECDHE named curve is unsupported")
 }
 
 private func tls12ResolveEcdheCurveSpecFromPointLength(pointLen: Int64): (NamedCurve, Int64) {

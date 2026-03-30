@@ -3260,7 +3260,7 @@ private func tls13DecodeServerKeyShare(data: Array<Byte>): EcPublicKey {
     }
     let group = tls13DecodeUInt16(data, 0)
     if (group != TLS13_GROUP_SECP256R1 && group != TLS13_GROUP_SECP384R1) {
-        throw CryptoException(ParseError, "TLS1.3 server key_share group is unsupported")
+        throw CryptoException(Unsupported, "TLS1.3 server key_share group is unsupported")
     }
     let keyLen = tls13DecodeUInt16(data, 2)
     if (keyLen == 0 || data.size != 4 + keyLen) {
@@ -3276,7 +3276,7 @@ private func tls13DecodeServerX25519KeyShare(data: Array<Byte>): Array<Byte> {
     }
     let group = tls13DecodeUInt16(data, 0)
     if (group != TLS13_GROUP_X25519) {
-        throw CryptoException(ParseError, "TLS1.3 server key_share group is unsupported")
+        throw CryptoException(Unsupported, "TLS1.3 server key_share group is unsupported")
     }
     let keyLen = tls13DecodeUInt16(data, 2)
     if (keyLen != X25519_KEY_LEN || data.size != 4 + keyLen) {
@@ -3600,7 +3600,7 @@ private func tls13ResolveEcdheCurveSpecFromNamedGroup(group: Int64): (NamedCurve
     if (group == TLS13_GROUP_SECP384R1) {
         return (P384, TLS13_P384_FIELD_BYTES)
     }
-    throw CryptoException(ParseError, "TLS1.3 key_share group is unsupported: ${group}")
+    throw CryptoException(Unsupported, "TLS1.3 key_share group is unsupported: ${group}")
 }
 
 private func tls13EncodeEcPoint(publicKey: EcPublicKey, fieldBytes: Int64): Array<Byte> {

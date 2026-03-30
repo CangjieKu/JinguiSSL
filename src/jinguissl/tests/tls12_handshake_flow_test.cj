@@ -212,6 +212,17 @@ public class Tls12HandshakeFlowTestSuite {
         } catch (e: CryptoException) {
             @Assert(e.code.toString(), "PARSE_ERROR")
         }
+
+        let validServerKeyExchange = tls12BuildEcdheServerKeyExchange(EcPublicKey(P256, P256_GX, P256_GY))
+        let unsupportedCurveServerKeyExchange = validServerKeyExchange.clone()
+        unsupportedCurveServerKeyExchange[5] = UInt8(0x00)
+        unsupportedCurveServerKeyExchange[6] = UInt8(0x19)
+        try {
+            _ = tls12ParseEcdheServerKeyExchange(unsupportedCurveServerKeyExchange)
+            @Fail("unsupported TLS12 ECDHE named curve should surface as unsupported")
+        } catch (e: CryptoException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
     }
 
     @TestCase
