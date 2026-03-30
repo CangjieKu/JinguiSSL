@@ -439,7 +439,8 @@ public func contractCapabilityInfo(): ContractCapabilityInfo {
             "host-signing-material-facade",
             "client-initial-handshake-facade",
             "server-initial-handshake-facade",
-            "host-verification-required-modes"
+            "host-verification-required-modes",
+            "session-runtime-snapshot-facade"
         ],
         [
             "pem-der-parse",
@@ -1730,6 +1731,15 @@ public class ContractSshHostVerificationResult {
         this.hostKeySha256 = hostKeySha256.clone()
         this.hostSignatureVerified = hostSignatureVerified
     }
+
+    public func hostIdentity(): ContractSshHostIdentitySummary {
+        ContractSshHostIdentitySummary(
+            hostKeyAlgorithm,
+            hostSignatureAlgorithm,
+            hostKeySha256,
+            signatureVerified: Some(hostSignatureVerified)
+        )
+    }
 }
 
 public class ContractSshHostVerificationOutcome {
@@ -1761,6 +1771,92 @@ public class ContractSshHostVerificationOutcome {
         this.code = code
         this.igniteCode = igniteCode
         this.result = result
+    }
+}
+
+public class ContractSshHostIdentitySummary {
+    public let hostKeyAlgorithm: String
+    public let hostSignatureAlgorithm: String
+    public let hostKeySha256: Array<Byte>
+    public let signatureVerified: ?Bool
+
+    public init(
+        hostKeyAlgorithm: String,
+        hostSignatureAlgorithm: String,
+        hostKeySha256: Array<Byte>,
+        signatureVerified!: ?Bool = None
+    ) {
+        if (hostKeyAlgorithm.size == 0 || hostSignatureAlgorithm.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH host identity summary algorithms must not be empty")
+        }
+        if (hostKeySha256.size != 32) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH host identity summary fingerprint must be SHA-256 sized")
+        }
+        this.hostKeyAlgorithm = hostKeyAlgorithm
+        this.hostSignatureAlgorithm = hostSignatureAlgorithm
+        this.hostKeySha256 = hostKeySha256.clone()
+        this.signatureVerified = signatureVerified
+    }
+}
+
+public class ContractSshSessionSnapshot {
+    public let sessionId: Array<Byte>
+    public let hostIdentity: ContractSshHostIdentitySummary
+    public let hostVerification: ?ContractSshHostVerificationResult
+
+    public init(
+        sessionId: Array<Byte>,
+        hostIdentity: ContractSshHostIdentitySummary,
+        hostVerification!: ?ContractSshHostVerificationResult = None
+    ) {
+        if (sessionId.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH session snapshot session id must not be empty")
+        }
+        this.sessionId = sessionId.clone()
+        this.hostIdentity = hostIdentity
+        this.hostVerification = hostVerification
+    }
+
+    public func requireHostVerification(): ContractSshHostVerificationResult {
+        match (hostVerification) {
+            case Some(value) => value
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.VerifyFailed,
+                    "SSH session snapshot host identity verification is unavailable"
+                )
+        }
+    }
+}
+
+public class ContractSshRuntimeSnapshot {
+    public let session: ContractSshSessionSnapshot
+    public let writeSequence: Int64
+    public let readSequence: Int64
+
+    public init(
+        session: ContractSshSessionSnapshot,
+        writeSequence: Int64,
+        readSequence: Int64
+    ) {
+        if (writeSequence < 0 || readSequence < 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH runtime snapshot sequence counters must not be negative")
+        }
+        this.session = session
+        this.writeSequence = writeSequence
+        this.readSequence = readSequence
+    }
+
+    public func sessionId(): Array<Byte> {
+        session.sessionId.clone()
+    }
+
+    public func hostIdentity(): ContractSshHostIdentitySummary {
+        session.hostIdentity
+    }
+
+    public func hostVerification(): ?ContractSshHostVerificationResult {
+        session.hostVerification
     }
 }
 
@@ -2134,6 +2230,17 @@ public class ContractSshServerInitialHandshakeResult {
     public func transport(): ContractSshTransportChannel {
         _transport
     }
+
+    public func sessionSnapshot(): ContractSshSessionSnapshot {
+        ContractSshSessionSnapshot(
+            sessionId,
+            ContractSshHostIdentitySummary(
+                hostKeyAlgorithm,
+                hostSignatureAlgorithm,
+                hostKeySha256
+            )
+        )
+    }
 }
 
 public class ContractSshClientInitialHandshakeResult {
@@ -2208,6 +2315,19 @@ public class ContractSshClientInitialHandshakeResult {
 
     public func transport(): ContractSshTransportChannel {
         _transport
+    }
+
+    public func sessionSnapshot(): ContractSshSessionSnapshot {
+        ContractSshSessionSnapshot(
+            sessionId,
+            ContractSshHostIdentitySummary(
+                hostKeyAlgorithm,
+                hostSignatureAlgorithm,
+                hostKeySha256,
+                signatureVerified: contractTryHostVerificationSignatureVerified(hostVerification)
+            ),
+            hostVerification: hostVerification
+        )
     }
 }
 
@@ -2341,6 +2461,19 @@ public class ContractSshSessionState {
                 )
         }
     }
+
+    public func snapshot(): ContractSshSessionSnapshot {
+        ContractSshSessionSnapshot(
+            sessionId,
+            ContractSshHostIdentitySummary(
+                hostKeyAlgorithm,
+                hostSignatureAlgorithm,
+                hostKeySha256,
+                signatureVerified: contractTryHostVerificationSignatureVerified(hostVerification)
+            ),
+            hostVerification: hostVerification
+        )
+    }
 }
 
 public class ContractSshServerRuntime {
@@ -2380,6 +2513,10 @@ public class ContractSshServerRuntime {
 
     public func transport(): ContractSshTransportChannel {
         initialHandshake.transport()
+    }
+
+    public func snapshot(): ContractSshRuntimeSnapshot {
+        ContractSshRuntimeSnapshot(currentSession().snapshot(), writeSequence, readSequence)
     }
 
     public func resetTransportCounters(): Unit {
@@ -2440,6 +2577,10 @@ public class ContractSshClientRuntime {
 
     public func requireHostVerification(): ContractSshHostVerificationResult {
         _currentSession.requireHostVerification()
+    }
+
+    public func snapshot(): ContractSshRuntimeSnapshot {
+        ContractSshRuntimeSnapshot(currentSession().snapshot(), writeSequence, readSequence)
     }
 
     public func resetTransportCounters(): Unit {
@@ -10327,6 +10468,15 @@ public func contractTrySshVerifyHostIdentityRequiredRequest(
         request.hostSignature,
         policy: request.policy
     )
+}
+
+private func contractTryHostVerificationSignatureVerified(
+    verification: ?ContractSshHostVerificationResult
+): ?Bool {
+    match (verification) {
+        case Some(value) => Some(value.hostSignatureVerified)
+        case None => None
+    }
 }
 
 private func contractFromSshServerInitialHandshakeResult(

@@ -2819,6 +2819,7 @@ public class ContractTestSuite {
         @Assert(containsString(info.httpTlsFeatures, "http-client-tls-config-validation"), true)
         @Assert(containsString(info.httpTlsFeatures, "http-client-trust-material-preparation"), true)
         @Assert(containsString(info.sshFeatures, "ed25519-hostkey"), true)
+        @Assert(containsString(info.sshFeatures, "session-runtime-snapshot-facade"), true)
         @Assert(containsString(info.x509Features, "hostname-policy"), true)
         @Assert(containsString(info.x509Features, "pem-bundle-normalization"), true)
         @Assert(containsString(info.x509Features, "http-client-peer-certificate-verify"), true)
@@ -3921,6 +3922,42 @@ public class ContractTestSuite {
         let serverRuntime = contractSshCreateServerRuntimeRequest(
             ContractSshServerRuntimeRequest(serverHandshake)
         )
+        let knownHostSummary = clientHandshake.requireHostVerification().hostIdentity()
+        @Assert(knownHostSummary.hostKeyAlgorithm, "ssh-rsa")
+        match (knownHostSummary.signatureVerified) {
+            case Some(value) => @Assert(value, true)
+            case None => @Fail("SSH verified host identity summary should carry verification flag")
+        }
+        let serverHandshakeSnapshot = serverHandshake.sessionSnapshot()
+        @Assert(serverHandshakeSnapshot.sessionId, serverHandshake.sessionId)
+        @Assert(serverHandshakeSnapshot.hostIdentity.hostKeyAlgorithm, "ssh-rsa")
+        match (serverHandshakeSnapshot.hostIdentity.signatureVerified) {
+            case None => @Assert(true, true)
+            case Some(_) => @Fail("SSH server handshake snapshot should not synthesize verification flag")
+        }
+        let clientHandshakeSnapshot = clientHandshake.sessionSnapshot()
+        @Assert(clientHandshakeSnapshot.sessionId, clientHandshake.sessionId)
+        @Assert(clientHandshakeSnapshot.hostIdentity.hostSignatureAlgorithm, "rsa-sha2-256")
+        match (clientHandshakeSnapshot.hostIdentity.signatureVerified) {
+            case Some(value) => @Assert(value, true)
+            case None => @Fail("SSH client handshake snapshot should preserve verification flag")
+        }
+        let initialClientRuntimeSnapshot = clientRuntime.snapshot()
+        @Assert(initialClientRuntimeSnapshot.sessionId(), clientHandshake.sessionId)
+        @Assert(initialClientRuntimeSnapshot.hostIdentity().hostKeySha256, serverHandshake.hostKeySha256)
+        @Assert(initialClientRuntimeSnapshot.writeSequence, 0)
+        @Assert(initialClientRuntimeSnapshot.readSequence, 0)
+        match (initialClientRuntimeSnapshot.hostVerification()) {
+            case Some(value) => @Assert(value.hostSignatureVerified, true)
+            case None => @Fail("SSH client runtime snapshot should preserve host verification")
+        }
+        let initialServerRuntimeSnapshot = serverRuntime.snapshot()
+        @Assert(initialServerRuntimeSnapshot.session.sessionId, serverHandshake.sessionId)
+        @Assert(initialServerRuntimeSnapshot.hostIdentity().hostKeyAlgorithm, "ssh-rsa")
+        match (initialServerRuntimeSnapshot.hostVerification()) {
+            case None => @Assert(true, true)
+            case Some(_) => @Fail("SSH server runtime snapshot should not report host verification")
+        }
         @Assert(clientRuntime.sessionId(), clientHandshake.sessionId)
         @Assert(serverRuntime.sessionId(), serverHandshake.sessionId)
         @Assert(clientRuntime.requireHostVerification().hostSignatureVerified, true)
@@ -3939,6 +3976,12 @@ public class ContractTestSuite {
         @Assert(serverOpened.payload, "contract-runtime-client".toArray())
         @Assert(clientRuntime.writeSequence, 1)
         @Assert(serverRuntime.readSequence, 1)
+        let updatedClientRuntimeSnapshot = clientRuntime.snapshot()
+        @Assert(updatedClientRuntimeSnapshot.writeSequence, 1)
+        @Assert(updatedClientRuntimeSnapshot.readSequence, 0)
+        let updatedServerRuntimeSnapshot = serverRuntime.snapshot()
+        @Assert(updatedServerRuntimeSnapshot.writeSequence, 0)
+        @Assert(updatedServerRuntimeSnapshot.readSequence, 1)
 
         let serverPacket = serverRuntime.seal(
             "contract-runtime-server".toArray(),

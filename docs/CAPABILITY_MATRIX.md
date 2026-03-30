@@ -72,7 +72,9 @@
   - result / outcome wrappers for request-style upper layers
   - client/server runtime bundle
   - transport convenience facade（session id / sequence / seal / open / reset counters）
-  - current session snapshot
+  - host identity summary
+  - session snapshot
+  - runtime snapshot
   - X25519 runtime rekey facade
   - request-style transcript / negotiated algorithms wrappers
   - X25519 KEX init/process helpers and session-state rekey entrypoints
