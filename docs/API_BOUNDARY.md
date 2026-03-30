@@ -50,6 +50,7 @@
 - TLS 1.3 key-update / exporter / cipher-binding request-style facade
 - TLS 1.3 verified-session runtime facade（cipher binding / exporter / record channel / key-update）
 - TLS 1.3 verified-session state-advance facade（updated session + channel set）
+- TLS alert payload / record request-style encode/decode + try/outcome facade
 - SSH host-signing material facade（RSA PKCS8 / ECDSA PKCS8 / Ed25519 seed）
 - SSH client/server initial-handshake facade 与 required verify 模式
 - SSH client/server runtime facade（transport convenience / sequence / session accessor）

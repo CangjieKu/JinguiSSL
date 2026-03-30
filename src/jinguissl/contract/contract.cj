@@ -4377,6 +4377,130 @@ public class ContractTlsAlertMessage {
     }
 }
 
+public class ContractTlsAlertPayloadRequest {
+    public let level: ContractTlsAlertLevel
+    public let description: ContractTlsAlertDescription
+
+    public init(level: ContractTlsAlertLevel, description: ContractTlsAlertDescription) {
+        this.level = level
+        this.description = description
+    }
+}
+
+public class ContractTlsAlertPayloadDecodeRequest {
+    public let encodedAlert: Array<Byte>
+
+    public init(encodedAlert: Array<Byte>) {
+        if (encodedAlert.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "TLS alert payload decode request must not be empty")
+        }
+        this.encodedAlert = encodedAlert.clone()
+    }
+}
+
+public class ContractTlsAlertRecordRequest {
+    public let version: ContractTlsVersion
+    public let level: ContractTlsAlertLevel
+    public let description: ContractTlsAlertDescription
+
+    public init(
+        version: ContractTlsVersion,
+        level: ContractTlsAlertLevel,
+        description: ContractTlsAlertDescription
+    ) {
+        this.version = version
+        this.level = level
+        this.description = description
+    }
+}
+
+public class ContractTlsAlertRecordDecodeRequest {
+    public let encodedRecord: Array<Byte>
+
+    public init(encodedRecord: Array<Byte>) {
+        if (encodedRecord.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "TLS alert record decode request must not be empty")
+        }
+        this.encodedRecord = encodedRecord.clone()
+    }
+}
+
+public class ContractTlsAlertDecodeOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractTlsAlertMessage
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractTlsAlertMessage = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "TLS alert decode outcome message must not be empty")
+        }
+        if (ok) {
+            match (code) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "TLS alert decode outcome code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (igniteCode) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "TLS alert decode outcome ignite code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (result) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "TLS alert decode outcome result must exist when ok is true"
+                    )
+            }
+        } else {
+            match (code) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "TLS alert decode outcome code must exist when ok is false"
+                    )
+            }
+            match (igniteCode) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "TLS alert decode outcome ignite code must exist when ok is false"
+                    )
+            }
+            match (result) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "TLS alert decode outcome result must be empty when ok is false"
+                    )
+                case None => ()
+            }
+        }
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
 public class ContractTlsSessionIdentity {
     public let version: ContractTlsVersion
     public let resumptionId: Array<Byte>
@@ -4964,6 +5088,12 @@ public func contractTlsEncodeAlertPayload(
     }
 }
 
+public func contractTlsEncodeAlertPayloadRequest(
+    request: ContractTlsAlertPayloadRequest
+): Array<Byte> {
+    contractTlsEncodeAlertPayload(request.level, request.description)
+}
+
 public func contractTlsDecodeAlertPayload(
     encodedAlert: Array<Byte>
 ): ContractTlsAlertMessage {
@@ -4975,6 +5105,34 @@ public func contractTlsDecodeAlertPayload(
             "TLS alert payload decoding failed: ${e.message}"
         )
     }
+}
+
+public func contractTlsDecodeAlertPayloadRequest(
+    request: ContractTlsAlertPayloadDecodeRequest
+): ContractTlsAlertMessage {
+    contractTlsDecodeAlertPayload(request.encodedAlert)
+}
+
+public func contractTryTlsDecodeAlertPayload(
+    encodedAlert: Array<Byte>
+): ContractTlsAlertDecodeOutcome {
+    try {
+        let result = contractTlsDecodeAlertPayload(encodedAlert)
+        return ContractTlsAlertDecodeOutcome(true, "TLS alert payload decoded", result: Some(result))
+    } catch (e: ContractException) {
+        return ContractTlsAlertDecodeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapExceptionToIgniteCryptoErrorCode(e))
+        )
+    }
+}
+
+public func contractTryTlsDecodeAlertPayloadRequest(
+    request: ContractTlsAlertPayloadDecodeRequest
+): ContractTlsAlertDecodeOutcome {
+    contractTryTlsDecodeAlertPayload(request.encodedAlert)
 }
 
 public func contractTlsEncodeAlertRecord(
@@ -4996,6 +5154,12 @@ public func contractTlsEncodeAlertRecord(
     }
 }
 
+public func contractTlsEncodeAlertRecordRequest(
+    request: ContractTlsAlertRecordRequest
+): Array<Byte> {
+    contractTlsEncodeAlertRecord(request.version, request.level, request.description)
+}
+
 public func contractTlsDecodeAlertRecord(encodedRecord: Array<Byte>): ContractTlsAlertMessage {
     try {
         contractFromTlsAlertMessage(tlsDecodeAlertRecord(encodedRecord))
@@ -5005,6 +5169,34 @@ public func contractTlsDecodeAlertRecord(encodedRecord: Array<Byte>): ContractTl
             "TLS alert record decoding failed: ${e.message}"
         )
     }
+}
+
+public func contractTlsDecodeAlertRecordRequest(
+    request: ContractTlsAlertRecordDecodeRequest
+): ContractTlsAlertMessage {
+    contractTlsDecodeAlertRecord(request.encodedRecord)
+}
+
+public func contractTryTlsDecodeAlertRecord(
+    encodedRecord: Array<Byte>
+): ContractTlsAlertDecodeOutcome {
+    try {
+        let result = contractTlsDecodeAlertRecord(encodedRecord)
+        return ContractTlsAlertDecodeOutcome(true, "TLS alert record decoded", result: Some(result))
+    } catch (e: ContractException) {
+        return ContractTlsAlertDecodeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapExceptionToIgniteCryptoErrorCode(e))
+        )
+    }
+}
+
+public func contractTryTlsDecodeAlertRecordRequest(
+    request: ContractTlsAlertRecordDecodeRequest
+): ContractTlsAlertDecodeOutcome {
+    contractTryTlsDecodeAlertRecord(request.encodedRecord)
 }
 
 public func contractTlsIsCloseNotifyAlert(alert: ContractTlsAlertMessage): Bool {

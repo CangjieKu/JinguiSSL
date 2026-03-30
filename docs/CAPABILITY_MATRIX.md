@@ -23,6 +23,7 @@
   - verified-session result
   - verified-session runtime helpers（cipher binding / exporter / record channel / key-update）
   - verified-session state advance（updated session / channel set）
+  - alert payload / record request-style encode / decode / try-outcome
   - PSK / session ticket / session cache
   - request-style session ticket / cache / PSK facade
   - request-style 0-RTT prepare / accept / HTTP accept facade

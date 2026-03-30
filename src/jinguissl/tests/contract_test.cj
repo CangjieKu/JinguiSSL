@@ -1330,16 +1330,37 @@ public class ContractTestSuite {
 
     @TestCase
     public func testContractTlsRecordAlertFacadeAndCloseNotify(): Unit {
-        let plainAlertRecord = contractTlsEncodeAlertRecord(
-            ContractTlsVersion.Tls13,
+        let alertPayloadRequest = ContractTlsAlertPayloadRequest(
             ContractTlsAlertLevel.AlertWarning,
             ContractTlsAlertDescription.AlertCloseNotify
+        )
+        let encodedAlertPayload = contractTlsEncodeAlertPayloadRequest(alertPayloadRequest)
+        let decodedAlertPayload = contractTlsDecodeAlertPayloadRequest(
+            ContractTlsAlertPayloadDecodeRequest(encodedAlertPayload)
+        )
+        @Assert(decodedAlertPayload.isCloseNotify, true)
+
+        let plainAlertRecord = contractTlsEncodeAlertRecordRequest(
+            ContractTlsAlertRecordRequest(
+                ContractTlsVersion.Tls13,
+                ContractTlsAlertLevel.AlertWarning,
+                ContractTlsAlertDescription.AlertCloseNotify
+            )
         )
         let decodedPlainAlert = contractTlsDecodeAlertRecord(plainAlertRecord)
         @Assert(decodedPlainAlert.level.toString(), "WARNING")
         @Assert(decodedPlainAlert.description.toString(), "CLOSE_NOTIFY")
         @Assert(decodedPlainAlert.isCloseNotify, true)
         @Assert(contractTlsIsCloseNotifyAlert(decodedPlainAlert), true)
+
+        let alertRecordOutcome = contractTryTlsDecodeAlertRecordRequest(
+            ContractTlsAlertRecordDecodeRequest(plainAlertRecord)
+        )
+        @Assert(alertRecordOutcome.ok, true)
+        match (alertRecordOutcome.result) {
+            case Some(value) => @Assert(value.isCloseNotify, true)
+            case None => @Fail("successful TLS alert record outcome should carry result")
+        }
 
         let keyMaterial = ContractTls13ApplicationKeyMaterial(
             incrementalBytes(32, start: 51),
@@ -1360,11 +1381,37 @@ public class ContractTestSuite {
             @Assert(e.code.toString(), "UNSUPPORTED")
         }
 
+        let failedAlertPayloadOutcome = contractTryTlsDecodeAlertPayloadRequest(
+            ContractTlsAlertPayloadDecodeRequest([UInt8(0x03), UInt8(0x00)])
+        )
+        @Assert(failedAlertPayloadOutcome.ok, false)
+        match (failedAlertPayloadOutcome.code) {
+            case Some(value) => @Assert(value.toString(), "UNSUPPORTED")
+            case None => @Fail("failed TLS alert payload outcome should carry contract code")
+        }
+        match (failedAlertPayloadOutcome.igniteCode) {
+            case Some(value) => @Assert(value.toString(), "CRYPTO_UNAVAILABLE")
+            case None => @Fail("failed TLS alert payload outcome should carry ignite code")
+        }
+
         try {
             _ = contractTlsDecodeAlertRecord([UInt8(0x99), UInt8(0x03), UInt8(0x03), UInt8(0x00), UInt8(0x00)])
             @Fail("unsupported TLS content type should surface as contract unsupported")
         } catch (e: ContractException) {
             @Assert(e.code.toString(), "UNSUPPORTED")
+        }
+
+        let failedAlertRecordOutcome = contractTryTlsDecodeAlertRecord(
+            [UInt8(0x99), UInt8(0x03), UInt8(0x03), UInt8(0x00), UInt8(0x00)]
+        )
+        @Assert(failedAlertRecordOutcome.ok, false)
+        match (failedAlertRecordOutcome.code) {
+            case Some(value) => @Assert(value.toString(), "UNSUPPORTED")
+            case None => @Fail("failed TLS alert record outcome should carry contract code")
+        }
+        match (failedAlertRecordOutcome.igniteCode) {
+            case Some(value) => @Assert(value.toString(), "CRYPTO_UNAVAILABLE")
+            case None => @Fail("failed TLS alert record outcome should carry ignite code")
         }
     }
 
