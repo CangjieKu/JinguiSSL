@@ -36,6 +36,7 @@
 - HTTP server TLS material preparation facade
 - HTTP client trust material preparation facade
 - TLS 1.3 ticket 生命周期、session cache、PSK、early-data replay gate
+- TLS 1.3 session ticket / cache / PSK request-style facade
 - TLS 1.3 key-update / exporter / cipher-binding request-style facade
 - SSH host-signing material facade（RSA PKCS8 / ECDSA PKCS8 / Ed25519 seed）
 - SSH client/server initial-handshake facade 与 required verify 模式

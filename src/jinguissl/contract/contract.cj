@@ -2997,6 +2997,52 @@ public class ContractTls13RecordChannelRequest {
     }
 }
 
+public class ContractTls13PskClientHelloFromSessionCacheRequest {
+    public let cache: ContractTlsSessionCache
+    public let identity: ContractTlsSessionIdentity
+    public let nowUnixSeconds: Int64
+    public let sessionId: Array<Byte>
+
+    public init(
+        cache: ContractTlsSessionCache,
+        identity: ContractTlsSessionIdentity,
+        nowUnixSeconds!: Int64 = 0,
+        sessionId!: Array<Byte> = []
+    ) {
+        this.cache = cache
+        this.identity = identity
+        this.nowUnixSeconds = nowUnixSeconds
+        this.sessionId = sessionId.clone()
+    }
+}
+
+public class ContractTls13PskClientHelloFromSessionCacheWithPolicyRequest {
+    public let cache: ContractTlsSessionCache
+    public let identity: ContractTlsSessionIdentity
+    public let policy: ContractTls13SessionTicketPolicy
+    public let nowUnixSeconds: Int64
+    public let sessionId: Array<Byte>
+
+    public init(
+        cache: ContractTlsSessionCache,
+        identity: ContractTlsSessionIdentity,
+        policy!: ContractTls13SessionTicketPolicy = ContractTls13SessionTicketPolicy(),
+        nowUnixSeconds!: Int64 = 0,
+        sessionId!: Array<Byte> = []
+    ) {
+        this.cache = cache
+        this.identity = identity
+        this.policy = ContractTls13SessionTicketPolicy(
+            minRemainingTtlSeconds: policy.minRemainingTtlSeconds,
+            renewBeforeExpirySeconds: policy.renewBeforeExpirySeconds,
+            requiredServerName: policy.requiredServerName,
+            requiredAlpnProtocol: policy.requiredAlpnProtocol
+        )
+        this.nowUnixSeconds = nowUnixSeconds
+        this.sessionId = sessionId.clone()
+    }
+}
+
 public enum ContractTlsAlertLevel <: Equatable<ContractTlsAlertLevel> & ToString {
     | AlertWarning
     | AlertFatal
@@ -3254,6 +3300,59 @@ public class ContractTls13SessionTicketLifecycleResult {
         this.reason = reason.trimAscii()
         this.nowUnixSeconds = nowUnixSeconds
         this.remainingTtlSeconds = remainingTtlSeconds
+    }
+}
+
+public class ContractTls13NewSessionTicketRequest {
+    public let ticket: ContractTlsSessionTicket
+    public let ticketAgeAdd: Int64
+
+    public init(
+        ticket: ContractTlsSessionTicket,
+        ticketAgeAdd!: Int64 = 0
+    ) {
+        this.ticket = ticket
+        this.ticketAgeAdd = ticketAgeAdd
+    }
+}
+
+public class ContractTls13StoreNewSessionTicketRequest {
+    public let cache: ContractTlsSessionCache
+    public let encodedNewSessionTicket: Array<Byte>
+
+    public init(
+        cache: ContractTlsSessionCache,
+        encodedNewSessionTicket: Array<Byte>
+    ) {
+        if (encodedNewSessionTicket.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "TLS1.3 store NewSessionTicket request payload must not be empty"
+            )
+        }
+        this.cache = cache
+        this.encodedNewSessionTicket = encodedNewSessionTicket.clone()
+    }
+}
+
+public class ContractTls13SessionTicketLifecycleRequest {
+    public let ticket: ContractTlsSessionTicket
+    public let policy: ContractTls13SessionTicketPolicy
+    public let nowUnixSeconds: Int64
+
+    public init(
+        ticket: ContractTlsSessionTicket,
+        policy!: ContractTls13SessionTicketPolicy = ContractTls13SessionTicketPolicy(),
+        nowUnixSeconds!: Int64 = 0
+    ) {
+        this.ticket = ticket
+        this.policy = ContractTls13SessionTicketPolicy(
+            minRemainingTtlSeconds: policy.minRemainingTtlSeconds,
+            renewBeforeExpirySeconds: policy.renewBeforeExpirySeconds,
+            requiredServerName: policy.requiredServerName,
+            requiredAlpnProtocol: policy.requiredAlpnProtocol
+        )
+        this.nowUnixSeconds = nowUnixSeconds
     }
 }
 
@@ -4192,6 +4291,15 @@ public func contractTls13BuildNewSessionTicketFromSessionTicket(
     }
 }
 
+public func contractTls13BuildNewSessionTicketFromSessionTicketRequest(
+    request: ContractTls13NewSessionTicketRequest
+): Array<Byte> {
+    contractTls13BuildNewSessionTicketFromSessionTicket(
+        request.ticket,
+        ticketAgeAdd: request.ticketAgeAdd
+    )
+}
+
 public func contractTls13DecodeSessionTicketFromNewSessionTicket(
     encodedNewSessionTicket: Array<Byte>
 ): ContractTlsSessionTicket {
@@ -4213,6 +4321,15 @@ public func contractTls13StoreNewSessionTicketToCache(
     cache.store(ticket)
 }
 
+public func contractTls13StoreNewSessionTicketToCacheRequest(
+    request: ContractTls13StoreNewSessionTicketRequest
+): ContractTlsSessionTicket {
+    contractTls13StoreNewSessionTicketToCache(
+        request.cache,
+        request.encodedNewSessionTicket
+    )
+}
+
 public func contractTls13TryBuildHttpClientHelloPskFromSessionCache(
     cache: ContractTlsSessionCache,
     identity: ContractTlsSessionIdentity,
@@ -4229,6 +4346,17 @@ public func contractTls13TryBuildHttpClientHelloPskFromSessionCache(
         case None =>
             None
     }
+}
+
+public func contractTls13TryBuildHttpClientHelloPskFromSessionCacheRequest(
+    request: ContractTls13PskClientHelloFromSessionCacheRequest
+): ?ContractTls13PskClientHelloFromCacheResult {
+    contractTls13TryBuildHttpClientHelloPskFromSessionCache(
+        request.cache,
+        request.identity,
+        nowUnixSeconds: request.nowUnixSeconds,
+        sessionId: request.sessionId
+    )
 }
 
 public func contractTryBuildHttpClientHelloPskFromSessionCacheOutcome(
@@ -4256,6 +4384,17 @@ public func contractTryBuildHttpClientHelloPskFromSessionCacheOutcome(
                 igniteCode: Some(contractMapToIgniteCryptoErrorCode(ContractErrorCode.KeyNotFound))
             )
     }
+}
+
+public func contractTryBuildHttpClientHelloPskFromSessionCacheRequestOutcome(
+    request: ContractTls13PskClientHelloFromSessionCacheRequest
+): ContractTls13PskClientHelloFromCacheOutcome {
+    contractTryBuildHttpClientHelloPskFromSessionCacheOutcome(
+        request.cache,
+        request.identity,
+        nowUnixSeconds: request.nowUnixSeconds,
+        sessionId: request.sessionId
+    )
 }
 
 public func contractTls13EvaluateSessionTicketLifecycle(
@@ -4342,6 +4481,16 @@ public func contractTls13EvaluateSessionTicketLifecycle(
     ContractTls13SessionTicketLifecycleResult(true, shouldRenew, reason, now, remaining)
 }
 
+public func contractTls13EvaluateSessionTicketLifecycleRequest(
+    request: ContractTls13SessionTicketLifecycleRequest
+): ContractTls13SessionTicketLifecycleResult {
+    contractTls13EvaluateSessionTicketLifecycle(
+        request.ticket,
+        policy: request.policy,
+        nowUnixSeconds: request.nowUnixSeconds
+    )
+}
+
 public func contractTls13RequireUsableSessionTicket(
     ticket: ContractTlsSessionTicket,
     policy!: ContractTls13SessionTicketPolicy = ContractTls13SessionTicketPolicy(),
@@ -4359,6 +4508,16 @@ public func contractTls13RequireUsableSessionTicket(
         )
     }
     lifecycle
+}
+
+public func contractTls13RequireUsableSessionTicketRequest(
+    request: ContractTls13SessionTicketLifecycleRequest
+): ContractTls13SessionTicketLifecycleResult {
+    contractTls13RequireUsableSessionTicket(
+        request.ticket,
+        policy: request.policy,
+        nowUnixSeconds: request.nowUnixSeconds
+    )
 }
 
 public func contractTls13TryBuildHttpClientHelloPskFromSessionCacheWithPolicy(
@@ -4386,6 +4545,18 @@ public func contractTls13TryBuildHttpClientHelloPskFromSessionCacheWithPolicy(
         case None =>
             None
     }
+}
+
+public func contractTls13TryBuildHttpClientHelloPskFromSessionCacheWithPolicyRequest(
+    request: ContractTls13PskClientHelloFromSessionCacheWithPolicyRequest
+): ?ContractTls13PskClientHelloFromCacheResult {
+    contractTls13TryBuildHttpClientHelloPskFromSessionCacheWithPolicy(
+        request.cache,
+        request.identity,
+        policy: request.policy,
+        nowUnixSeconds: request.nowUnixSeconds,
+        sessionId: request.sessionId
+    )
 }
 
 public func contractTryBuildHttpClientHelloPskFromSessionCacheWithPolicyOutcome(
@@ -4431,6 +4602,18 @@ public func contractTryBuildHttpClientHelloPskFromSessionCacheWithPolicyOutcome(
     }
 }
 
+public func contractTryBuildHttpClientHelloPskFromSessionCacheWithPolicyRequestOutcome(
+    request: ContractTls13PskClientHelloFromSessionCacheWithPolicyRequest
+): ContractTls13PskClientHelloFromCacheOutcome {
+    contractTryBuildHttpClientHelloPskFromSessionCacheWithPolicyOutcome(
+        request.cache,
+        request.identity,
+        policy: request.policy,
+        nowUnixSeconds: request.nowUnixSeconds,
+        sessionId: request.sessionId
+    )
+}
+
 public func contractTls13BuildHttpClientHelloPskFromSessionCacheWithPolicy(
     cache: ContractTlsSessionCache,
     identity: ContractTlsSessionIdentity,
@@ -4457,6 +4640,18 @@ public func contractTls13BuildHttpClientHelloPskFromSessionCacheWithPolicy(
     }
 }
 
+public func contractTls13BuildHttpClientHelloPskFromSessionCacheWithPolicyRequest(
+    request: ContractTls13PskClientHelloFromSessionCacheWithPolicyRequest
+): ContractTls13PskClientHelloFromCacheResult {
+    contractTls13BuildHttpClientHelloPskFromSessionCacheWithPolicy(
+        request.cache,
+        request.identity,
+        policy: request.policy,
+        nowUnixSeconds: request.nowUnixSeconds,
+        sessionId: request.sessionId
+    )
+}
+
 public func contractTls13BuildHttpClientHelloPskFromSessionCache(
     cache: ContractTlsSessionCache,
     identity: ContractTlsSessionIdentity,
@@ -4479,6 +4674,17 @@ public func contractTls13BuildHttpClientHelloPskFromSessionCache(
                 "TLS1.3 PSK session ticket is not found in cache"
             )
     }
+}
+
+public func contractTls13BuildHttpClientHelloPskFromSessionCacheRequest(
+    request: ContractTls13PskClientHelloFromSessionCacheRequest
+): ContractTls13PskClientHelloFromCacheResult {
+    contractTls13BuildHttpClientHelloPskFromSessionCache(
+        request.cache,
+        request.identity,
+        nowUnixSeconds: request.nowUnixSeconds,
+        sessionId: request.sessionId
+    )
 }
 
 public func contractTls13PreparePskEarlyDataFromSessionTicket(

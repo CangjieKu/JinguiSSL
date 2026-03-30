@@ -1690,6 +1690,138 @@ public class ContractTestSuite {
     }
 
     @TestCase
+    public func testContractTls13SessionTicketRequestFacades(): Unit {
+        let ticket = contractTlsCreateSessionTicket(
+            ContractTlsSessionIdentity(
+                ContractTlsVersion.Tls13,
+                incrementalBytes(24, start: 231),
+                serverName: "resume.example.com",
+                alpnProtocol: "h2"
+            ),
+            incrementalBytes(48, start: 141),
+            nonce: incrementalBytes(8, start: 29),
+            nowUnixSeconds: 900,
+            ttlSeconds: 700
+        )
+        let lifecycleRequest = ContractTls13SessionTicketLifecycleRequest(
+            ticket,
+            policy: ContractTls13SessionTicketPolicy(
+                minRemainingTtlSeconds: 150,
+                renewBeforeExpirySeconds: 300,
+                requiredServerName: "resume.example.com",
+                requiredAlpnProtocol: "h2"
+            ),
+            nowUnixSeconds: 1300
+        )
+        let lifecycle = contractTls13EvaluateSessionTicketLifecycleRequest(lifecycleRequest)
+        @Assert(lifecycle.usable, true)
+        @Assert(lifecycle.shouldRenew, true)
+        @Assert(lifecycle.reason, "OK_RENEW_RECOMMENDED")
+
+        let required = contractTls13RequireUsableSessionTicketRequest(lifecycleRequest)
+        @Assert(required.remainingTtlSeconds, 300)
+
+        let rejectedRequest = ContractTls13SessionTicketLifecycleRequest(
+            ticket,
+            policy: ContractTls13SessionTicketPolicy(
+                minRemainingTtlSeconds: 400
+            ),
+            nowUnixSeconds: 1300
+        )
+        try {
+            _ = contractTls13RequireUsableSessionTicketRequest(rejectedRequest)
+            @Fail("request-style usable session ticket helper should reject insufficient ttl")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "VERIFY_FAILED")
+        }
+
+        let encodedNewSessionTicket = contractTls13BuildNewSessionTicketFromSessionTicketRequest(
+            ContractTls13NewSessionTicketRequest(ticket, ticketAgeAdd: 23)
+        )
+        let cache = ContractTlsSessionCache(maxEntries: 4, defaultTtlSeconds: 60)
+        let stored = contractTls13StoreNewSessionTicketToCacheRequest(
+            ContractTls13StoreNewSessionTicketRequest(cache, encodedNewSessionTicket)
+        )
+        @Assert(stored.identity.resumptionId, ticket.identity.resumptionId)
+        @Assert(stored.secret, ticket.secret)
+    }
+
+    @TestCase
+    public func testContractTls13SessionCachePskClientHelloRequestFacades(): Unit {
+        let ticket = contractTlsCreateSessionTicket(
+            ContractTlsSessionIdentity(
+                ContractTlsVersion.Tls13,
+                incrementalBytes(24, start: 17),
+                serverName: "resume.example.com",
+                alpnProtocol: "h2"
+            ),
+            incrementalBytes(48, start: 181),
+            nonce: incrementalBytes(8, start: 39),
+            nowUnixSeconds: 1000,
+            ttlSeconds: 500
+        )
+        let cache = ContractTlsSessionCache(maxEntries: 4, defaultTtlSeconds: 60)
+        _ = cache.store(ticket)
+
+        let request = ContractTls13PskClientHelloFromSessionCacheRequest(
+            cache,
+            ticket.identity,
+            nowUnixSeconds: 1100,
+            sessionId: incrementalBytes(8, start: 55)
+        )
+        let strictResult = contractTls13BuildHttpClientHelloPskFromSessionCacheRequest(request)
+        @Assert(strictResult.ticket.secret, ticket.secret)
+
+        let optionalResult = contractTls13TryBuildHttpClientHelloPskFromSessionCacheRequest(request)
+        match (optionalResult) {
+            case Some(value) =>
+                @Assert(value.ticket.identity.resumptionId, ticket.identity.resumptionId)
+            case None =>
+                @Fail("request-style cache PSK helper should load stored ticket")
+        }
+
+        let outcome = contractTryBuildHttpClientHelloPskFromSessionCacheRequestOutcome(request)
+        @Assert(outcome.ok, true)
+        match (outcome.result) {
+            case Some(value) =>
+                let selectedTicket = contractTls13ExtractClientPskSessionTicket(value.encodedClientHello)
+                @Assert(selectedTicket.secret, ticket.secret)
+            case None =>
+                @Fail("request-style cache PSK outcome should carry result")
+        }
+
+        let policyRequest = ContractTls13PskClientHelloFromSessionCacheWithPolicyRequest(
+            cache,
+            ticket.identity,
+            policy: ContractTls13SessionTicketPolicy(
+                minRemainingTtlSeconds: 150,
+                requiredServerName: "resume.example.com",
+                requiredAlpnProtocol: "h2"
+            ),
+            nowUnixSeconds: 1300,
+            sessionId: incrementalBytes(8, start: 87)
+        )
+        let allowed = contractTls13BuildHttpClientHelloPskFromSessionCacheWithPolicyRequest(policyRequest)
+        @Assert(allowed.ticket.identity.resumptionId, ticket.identity.resumptionId)
+
+        let blockedOutcome = contractTryBuildHttpClientHelloPskFromSessionCacheWithPolicyRequestOutcome(
+            ContractTls13PskClientHelloFromSessionCacheWithPolicyRequest(
+                cache,
+                ticket.identity,
+                policy: ContractTls13SessionTicketPolicy(
+                    minRemainingTtlSeconds: 300
+                ),
+                nowUnixSeconds: 1300
+            )
+        )
+        @Assert(blockedOutcome.ok, false)
+        match (blockedOutcome.lifecycle) {
+            case Some(value) => @Assert(value.reason, "INSUFFICIENT_REMAINING_TTL")
+            case None => @Fail("blocked request-style PSK outcome should carry lifecycle")
+        }
+    }
+
+    @TestCase
     public func testContractTls13PskEarlyDataPlanFacade(): Unit {
         let ticket = contractTlsCreateSessionTicket(
             ContractTlsSessionIdentity(

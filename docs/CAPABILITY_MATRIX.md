@@ -22,6 +22,7 @@
   - X25519 / ECDHE(P-256 / P-384) HTTP handshake facade
   - verified-session result
   - PSK / session ticket / session cache
+  - request-style session ticket / cache / PSK facade
   - 0-RTT acceptance gate + replay cache
   - KeyUpdate / traffic secret rotation
   - Exporter / cipher-binding helpers
