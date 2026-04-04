@@ -76,6 +76,8 @@ private let AES_HW_BACKEND_NONE: String = "none"
 private let AES_HW_BACKEND_SHIM: String = "shim"
 private let AES_HW_BACKEND_AESNI: String = "aesni"
 private let AES_HW_BACKEND_ARMV8_CE: String = "armv8-ce"
+private let AES_HW_BACKEND_LOONGARCH64_RESERVED: String = "loongarch64-reserved"
+private let AES_HW_BACKEND_RISCV64_RESERVED: String = "riscv64-reserved"
 private let AES_NATIVE_BRIDGE_KEY_BLOB_HEADER_BYTES: Int64 = 12
 private let AES_NATIVE_BRIDGE_KEY_BLOB_MAGIC_0: UInt8 = UInt8(0x4a)
 private let AES_NATIVE_BRIDGE_KEY_BLOB_MAGIC_1: UInt8 = UInt8(0x4b)
@@ -151,6 +153,28 @@ public class AesHardwareMountPoint {
         this.available = available
         this.accelerated = accelerated
         this.detected = detected
+        this.detail = detail
+    }
+}
+
+public class AesHardwareRoadmapEntry {
+    public let architecture: String
+    public let backend: String
+    public let status: String
+    public let targetVersion: String
+    public let detail: String
+
+    public init(
+        architecture: String,
+        backend: String,
+        status: String,
+        targetVersion: String,
+        detail: String
+    ) {
+        this.architecture = architecture
+        this.backend = backend
+        this.status = status
+        this.targetVersion = targetVersion
         this.detail = detail
     }
 }
@@ -342,7 +366,7 @@ public class AesGcmContext {
 }
 
 public func aesProbeHardware(backendHint!: String = ""): AesHardwareProbe {
-    let source = resolveAesHardwareBackendHint(backendHint)
+    let source = normalizeAesBridgeBackend(resolveAesHardwareBackendHint(backendHint))
     if (source.size == 0 || source == "off" || source == AES_HW_BACKEND_NONE || source == "software") {
         return AesHardwareProbe(
             false,
@@ -393,6 +417,22 @@ public func aesProbeHardware(backendHint!: String = ""): AesHardwareProbe {
             )
         }
         return AesHardwareProbe(false, AES_HW_BACKEND_NONE, false, "ARMv8 CE backend is unavailable on current runtime")
+    }
+    if (source == AES_HW_BACKEND_LOONGARCH64_RESERVED) {
+        return AesHardwareProbe(
+            false,
+            AES_HW_BACKEND_LOONGARCH64_RESERVED,
+            false,
+            "LoongArch64 AES backend is reserved as a future skeleton and is not implemented in 0.6"
+        )
+    }
+    if (source == AES_HW_BACKEND_RISCV64_RESERVED) {
+        return AesHardwareProbe(
+            false,
+            AES_HW_BACKEND_RISCV64_RESERVED,
+            false,
+            "RISC-V64 AES backend is reserved as a future skeleton and is not implemented in 0.6"
+        )
     }
     AesHardwareProbe(false, AES_HW_BACKEND_NONE, false, "unsupported AES hardware backend hint: ${source}")
 }
@@ -513,7 +553,7 @@ public func aesListHardwareMountPoints(): Array<AesHardwareMountPoint> {
             false,
             false,
             false,
-            "placeholder mount point for future AES-NI backend wiring"
+            "placeholder mount point reserved for x86_64 backend wiring; deferred to 0.7"
         ),
         AesHardwareMountPoint(
             AES_HW_BACKEND_ARMV8_CE,
@@ -521,9 +561,9 @@ public func aesListHardwareMountPoints(): Array<AesHardwareMountPoint> {
             armv8Ready,
             armv8Ready,
             if (armv8Ready) {
-                "ARMv8 CE backend active via CommonCrypto native bridge"
+                "ARMv8 CE backend active via CommonCrypto native bridge; current 0.6 priority path"
             } else {
-                "ARMv8 CE backend unavailable on current runtime"
+                "ARMv8 CE backend unavailable on current runtime; current 0.6 priority path"
             }
         ),
         AesHardwareMountPoint(
@@ -532,6 +572,53 @@ public func aesListHardwareMountPoints(): Array<AesHardwareMountPoint> {
             false,
             true,
             "software shim mount point for Stage6.2 backend integration testing"
+        ),
+        AesHardwareMountPoint(
+            AES_HW_BACKEND_LOONGARCH64_RESERVED,
+            false,
+            false,
+            false,
+            "reserved skeleton mount point for future LoongArch64 backend design"
+        ),
+        AesHardwareMountPoint(
+            AES_HW_BACKEND_RISCV64_RESERVED,
+            false,
+            false,
+            false,
+            "reserved skeleton mount point for future RISC-V64 backend design"
+        )
+    ]
+}
+
+public func aesHardwareRoadmap(): Array<AesHardwareRoadmapEntry> {
+    [
+        AesHardwareRoadmapEntry(
+            "aarch64",
+            AES_HW_BACKEND_ARMV8_CE,
+            "PRIMARY_ACTIVE",
+            "0.6",
+            "current priority path for real hardware-backed AES delivery"
+        ),
+        AesHardwareRoadmapEntry(
+            "x86_64",
+            AES_HW_BACKEND_AESNI,
+            "DEFERRED_0_7",
+            "0.7",
+            "reserved mount point exists, but native AES-NI wiring is intentionally deferred"
+        ),
+        AesHardwareRoadmapEntry(
+            "loongarch64",
+            AES_HW_BACKEND_LOONGARCH64_RESERVED,
+            "RESERVED_SKELETON",
+            "post-0.7",
+            "skeleton reserved for future backend design without active wiring in 0.6"
+        ),
+        AesHardwareRoadmapEntry(
+            "riscv64",
+            AES_HW_BACKEND_RISCV64_RESERVED,
+            "RESERVED_SKELETON",
+            "post-0.7",
+            "skeleton reserved for future backend design without active wiring in 0.6"
         )
     ]
 }
@@ -586,6 +673,12 @@ private func normalizeAesBridgeBackend(name: String): String {
     }
     if (normalized == "software-shim" || normalized == "armv8-shim") {
         return AES_HW_BACKEND_SHIM
+    }
+    if (normalized == "loongarch64" || normalized == "loongarch" || normalized == "la64") {
+        return AES_HW_BACKEND_LOONGARCH64_RESERVED
+    }
+    if (normalized == "riscv64" || normalized == "riscv" || normalized == "rv64") {
+        return AES_HW_BACKEND_RISCV64_RESERVED
     }
     normalized
 }

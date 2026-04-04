@@ -89,6 +89,369 @@ public class ContractTestSuite {
     }
 
     @TestCase
+    public func testContractAesHardwareFacade(): Unit {
+        let mounts = contractAesListHardwareMountPoints()
+        @Assert(mounts.size >= 5, true)
+
+        let backends = ArrayList<String>()
+        for (mount in mounts) {
+            backends.add(mount.backend)
+        }
+        @Assert(containsString(backends.toArray(), "aesni"), true)
+        @Assert(containsString(backends.toArray(), "armv8-ce"), true)
+        @Assert(containsString(backends.toArray(), "shim"), true)
+        @Assert(containsString(backends.toArray(), "loongarch64-reserved"), true)
+        @Assert(containsString(backends.toArray(), "riscv64-reserved"), true)
+
+        let hint = contractAesDefaultHardwareBackendHint().trimAscii()
+        if (hint.size > 0) {
+            @Assert(containsString(backends.toArray(), hint), true)
+        }
+
+        let shim = contractAesProbeHardware(backendHint: "shim")
+        @Assert(shim.backend, "shim")
+        @Assert(shim.available, true)
+        @Assert(shim.accelerated, false)
+        @Assert(shim.detail.trimAscii().size > 0, true)
+
+        let loongarch = contractAesProbeHardware(backendHint: "loongarch64")
+        @Assert(loongarch.backend, "loongarch64-reserved")
+        @Assert(loongarch.available, false)
+        @Assert(loongarch.accelerated, false)
+
+        let riscv = contractAesProbeHardware(backendHint: "riscv64")
+        @Assert(riscv.backend, "riscv64-reserved")
+        @Assert(riscv.available, false)
+        @Assert(riscv.accelerated, false)
+    }
+
+    @TestCase
+    public func testContractAesHardwareRoadmapFacade(): Unit {
+        let roadmap = contractAesHardwareRoadmap()
+        @Assert(roadmap.size >= 4, true)
+
+        var foundArm = false
+        var foundX64 = false
+        var foundLoong = false
+        var foundRiscv = false
+        for (entry in roadmap) {
+            if (entry.architecture == "aarch64") {
+                foundArm = true
+                @Assert(entry.backend, "armv8-ce")
+                @Assert(entry.status, "PRIMARY_ACTIVE")
+                @Assert(entry.targetVersion, "0.6")
+            }
+            if (entry.architecture == "x86_64") {
+                foundX64 = true
+                @Assert(entry.backend, "aesni")
+                @Assert(entry.status, "DEFERRED_0_7")
+                @Assert(entry.targetVersion, "0.7")
+            }
+            if (entry.architecture == "loongarch64") {
+                foundLoong = true
+                @Assert(entry.status, "RESERVED_SKELETON")
+            }
+            if (entry.architecture == "riscv64") {
+                foundRiscv = true
+                @Assert(entry.status, "RESERVED_SKELETON")
+            }
+        }
+        @Assert(foundArm, true)
+        @Assert(foundX64, true)
+        @Assert(foundLoong, true)
+        @Assert(foundRiscv, true)
+    }
+
+    @TestCase
+    public func testContractAesCurrentReleasePlanFacade(): Unit {
+        let report = contractAesCurrentReleasePlan(backendHint: "shim")
+        @Assert(report.currentReleaseSeries, "0.6")
+        @Assert(report.primaryBackend, "armv8-ce")
+        @Assert(containsString(report.primaryArchitectures, "aarch64"), true)
+        @Assert(containsString(report.deferredBackends, "aesni"), true)
+        @Assert(containsString(report.reservedBackends, "loongarch64-reserved"), true)
+        @Assert(containsString(report.reservedBackends, "riscv64-reserved"), true)
+        @Assert(report.usingPrimaryBackend, false)
+        @Assert(
+            containsString(report.warnings, "selected AES backend is not the current 0.6 primary backend"),
+            true
+        )
+
+        try {
+            _ = contractRequireAesCurrentReleasePrimaryBackend(backendHint: "shim")
+            @Fail("shim backend should not satisfy current release primary backend requirement")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
+    }
+
+    @TestCase
+    public func testContractAesEngineFacade(): Unit {
+        let resolvedShim = contractResolveAesEngine(backendHint: "shim")
+        @Assert(resolvedShim.requested.toString(), "AUTO")
+        @Assert(resolvedShim.active.toString(), "HARDWARE")
+        @Assert(resolvedShim.backend, "shim")
+        @Assert(resolvedShim.accelerated, false)
+
+        let forcedSoftware = contractResolveAesEngine(
+            requestedEngine: ContractAesEngineKind.Software,
+            backendHint: "shim"
+        )
+        @Assert(forcedSoftware.requested.toString(), "SOFTWARE")
+        @Assert(forcedSoftware.active.toString(), "SOFTWARE")
+        @Assert(forcedSoftware.backend, "shim")
+
+        let unavailable = contractTryResolveAesEngine(
+            requestedEngine: ContractAesEngineKind.Hardware,
+            backendHint: "none"
+        )
+        @Assert(unavailable.ok, false)
+        match (unavailable.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("AES engine unavailable outcome should carry contract code")
+        }
+        match (unavailable.igniteCode) {
+            case Some(value) =>
+                @Assert(value.toString(), "CRYPTO_UNAVAILABLE")
+            case None =>
+                @Fail("AES engine unavailable outcome should carry ignite code")
+        }
+
+        try {
+            _ = contractRequireAesAcceleratedBackend(backendHint: "shim")
+            @Fail("shim backend should not satisfy accelerated backend requirement")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "UNSUPPORTED")
+        }
+    }
+
+    @TestCase
+    public func testContractAesNativeBridgeDiagnosticsFacade(): Unit {
+        let shimSpec = ContractAesNativeBridgeSpec("shim")
+        let diagnostics = contractInspectAesNativeBridge(shimSpec)
+        @Assert(diagnostics.spec.backend, "shim")
+        @Assert(diagnostics.probe.backend, "shim")
+        @Assert(diagnostics.probe.available, true)
+        @Assert(diagnostics.probe.accelerated, false)
+        @Assert(diagnostics.engine.active.toString(), "HARDWARE")
+        @Assert(diagnostics.contract.backend, "shim")
+        @Assert(diagnostics.contract.expandKeySymbol, "jinguissl_aes_expand_key")
+        @Assert(diagnostics.contract.ghashMulSymbol, "jinguissl_aes_ghash_mul")
+
+        let callShape = contractDescribeAesNativeBridgeCallShape(shimSpec, 16)
+        @Assert(callShape.backend, "shim")
+        @Assert(callShape.keyBytes, 16)
+        @Assert(callShape.roundCount, 10)
+        @Assert(callShape.roundKeyWordCount, 44)
+        @Assert(callShape.expandedKeyBlobBytes, 188)
+        @Assert(callShape.blockBytes, 16)
+        @Assert(callShape.requiresBlockAlignedPayload, true)
+
+        let invalid = contractTryInspectAesNativeBridge(ContractAesNativeBridgeSpec("bogus"))
+        @Assert(invalid.ok, false)
+        match (invalid.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "BAD_INPUT")
+            case None =>
+                @Fail("AES native bridge diagnostics outcome should carry contract code")
+        }
+    }
+
+    @TestCase
+    public func testContractAesStartupSelfCheckFacade(): Unit {
+        let recommendation = contractRecommendAesBackend()
+        @Assert(recommendation.backendHint.size > 0, true)
+        @Assert(recommendation.reason.size > 0, true)
+
+        let report = contractAesStartupSelfCheck(backendHint: "shim")
+        @Assert(report.effectiveBackendHint, "shim")
+        @Assert(report.recommendation.backendHint.size > 0, true)
+        @Assert(report.selectedEngine.backend, "shim")
+        @Assert(report.selectedEngine.active.toString(), "HARDWARE")
+        @Assert(report.acceleratedBackendReady, false)
+        @Assert(report.mountPoints.size >= 3, true)
+        match (report.diagnostics) {
+            case Some(value) =>
+                @Assert(value.spec.backend, "shim")
+            case None =>
+                @Fail("AES startup self-check should carry diagnostics for shim backend")
+        }
+
+        let softwareReport = contractAesStartupSelfCheck(
+            requestedEngine: ContractAesEngineKind.Software,
+            backendHint: "none"
+        )
+        @Assert(softwareReport.effectiveBackendHint, "none")
+        @Assert(softwareReport.selectedEngine.active.toString(), "SOFTWARE")
+        match (softwareReport.diagnostics) {
+            case Some(_) =>
+                @Fail("software-only AES startup self-check should not carry bridge diagnostics")
+            case None => ()
+        }
+    }
+
+    @TestCase
+    public func testContractHttpSshStartupReadinessFacade(): Unit {
+        let report = contractHttpSshStartupReadiness(aesBackendHint: "shim")
+        @Assert(report.capability.stableDomains.size > 0, true)
+        @Assert(report.httpTlsReady, true)
+        @Assert(report.sshReady, true)
+        @Assert(report.x509Ready, true)
+        @Assert(report.overallReady, report.randomAvailable && report.httpTlsReady && report.sshReady && report.x509Ready)
+        @Assert(report.productionAccelerationReady, false)
+        @Assert(report.aes.effectiveBackendHint, "shim")
+        @Assert(report.aesCurrentReleasePlan.currentReleaseSeries, "0.6")
+        @Assert(report.aesCurrentReleasePlan.primaryBackend, "armv8-ce")
+        @Assert(report.aesCurrentReleasePlan.usingPrimaryBackend, false)
+        @Assert(containsString(report.warnings, "AES accelerated backend is not ready; software or shim path may be used"), true)
+        @Assert(
+            containsString(report.warnings, "selected AES backend is not the current 0.6 primary backend"),
+            true
+        )
+
+        let outcome = contractTryHttpSshStartupReadiness(
+            requestedAesEngine: ContractAesEngineKind.Hardware,
+            aesBackendHint: "none"
+        )
+        @Assert(outcome.ok, false)
+        match (outcome.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("HTTP/SSH startup readiness outcome should carry contract code")
+        }
+    }
+
+    @TestCase
+    public func testContractRequireHttpSshStartupReadinessFacade(): Unit {
+        let relaxed = contractRequireHttpSshStartupReadiness(
+            policy: ContractHttpSshStartupPolicy(
+                requireRandom: true,
+                requireHttpTls: true,
+                requireSsh: false,
+                requireX509: true,
+                requireAcceleration: false
+            ),
+            aesBackendHint: "shim"
+        )
+        @Assert(relaxed.httpTlsReady, true)
+        @Assert(relaxed.x509Ready, true)
+
+        let accelerationRequired = contractTryRequireHttpSshStartupReadiness(
+            policy: ContractHttpSshStartupPolicy(
+                requireRandom: true,
+                requireHttpTls: true,
+                requireSsh: true,
+                requireX509: true,
+                requireAcceleration: true
+            ),
+            aesBackendHint: "shim"
+        )
+        @Assert(accelerationRequired.ok, false)
+        match (accelerationRequired.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("HTTP/SSH startup policy failure should carry contract code")
+        }
+        @Assert(
+            accelerationRequired.message.contains("accelerated AES backend is required but not ready"),
+            true
+        )
+
+        let directBridgeRequired = contractTryRequireHttpSshStartupReadiness(
+            policy: ContractHttpSshStartupPolicy(
+                requireRandom: true,
+                requireHttpTls: true,
+                requireSsh: false,
+                requireX509: true,
+                requireDirectStdxTlsServerConfigBridge: true
+            ),
+            aesBackendHint: "shim"
+        )
+        @Assert(directBridgeRequired.ok, false)
+        match (directBridgeRequired.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("direct bridge policy failure should carry contract code")
+        }
+        @Assert(
+            directBridgeRequired.message.contains(
+                "direct stdx.net.tls.TlsServerConfig bridge is required but unavailable"
+            ),
+            true
+        )
+
+        let releasePrimaryRequired = contractTryRequireHttpSshStartupReadiness(
+            policy: ContractHttpSshStartupPolicy(
+                requireRandom: true,
+                requireHttpTls: true,
+                requireSsh: true,
+                requireX509: true,
+                requireCurrentReleasePrimaryBackend: true
+            ),
+            aesBackendHint: "shim"
+        )
+        @Assert(releasePrimaryRequired.ok, false)
+        match (releasePrimaryRequired.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("release primary backend policy failure should carry contract code")
+        }
+        @Assert(
+            releasePrimaryRequired.message.contains(
+                "current release requires primary AES backend armv8-ce, but startup resolved shim"
+            ),
+            true
+        )
+    }
+
+    @TestCase
+    public func testContractHttpSshStartupProfilesFacade(): Unit {
+        let templates = contractListHttpSshStartupProfiles()
+        @Assert(templates.size >= 6, true)
+
+        let production = contractDescribeHttpSshStartupProfile(
+            ContractHttpSshStartupProfile.ProductionAccelerated
+        )
+        @Assert(production.label, "production-accelerated")
+        @Assert(production.defaultAesEngine.toString(), "HARDWARE")
+        @Assert(production.policy.requireAcceleration, true)
+        @Assert(production.policy.requireCurrentReleasePrimaryBackend, true)
+        @Assert(production.defaultAesBackendHint, "armv8-ce")
+
+        let sshClient = contractDescribeHttpSshStartupProfile(
+            ContractHttpSshStartupProfile.SshClientLibrary
+        )
+        @Assert(sshClient.policy.requireHttpTls, false)
+        @Assert(sshClient.policy.requireSsh, true)
+        @Assert(sshClient.policy.requireX509, false)
+
+        let httpClient = contractRequireHttpSshStartupProfile(
+            ContractHttpSshStartupProfile.HttpClientLibrary,
+            aesBackendHint: "shim"
+        )
+        @Assert(httpClient.httpTlsReady, true)
+        @Assert(httpClient.x509Ready, true)
+
+        let productionFailed = contractTryRequireHttpSshStartupProfile(
+            ContractHttpSshStartupProfile.ProductionAccelerated,
+            aesBackendHint: "shim"
+        )
+        @Assert(productionFailed.ok, false)
+        match (productionFailed.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("startup profile failure should carry contract code")
+        }
+    }
+
+    @TestCase
     public func testX509VerifyWithHostnameAndPinning(): Unit {
         let leafPem = readText("testdata/x509/policy_leaf.pem")
         let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
@@ -542,6 +905,245 @@ public class ContractTestSuite {
         )
         @Assert(failed.ok, false)
         @Assert(failed.code.toString(), "VERIFY_FAILED")
+    }
+
+    @TestCase
+    public func testContractHttpLibraryStartupBundles(): Unit {
+        let leafPem = readText("testdata/x509/policy_leaf.pem")
+        let intermediatePem = readText("testdata/x509/policy_intermediate.pem")
+        let rootPem = readText("testdata/x509/policy_root.pem")
+        let certChainPem = "${leafPem}\n${intermediatePem}"
+        let leafKeyPem = readText("testdata/x509/policy_leaf_key_pkcs8.pem")
+        let (_derPin, spkiPin) = contractComputeLeafPinsFromPem(leafPem)
+
+        let serverBundle = contractPrepareHttpServerLibraryStartupRequest(
+            ContractHttpServerLibraryStartupRequest(
+                ContractHttpServerTlsConfigRequest(
+                    certChainPem,
+                    leafKeyPem,
+                    alpnProtocols: ["h2", "http/1.1"]
+                ),
+                profile: ContractHttpSshStartupProfile.HttpServerLibrary,
+                aesBackendHint: "shim"
+            )
+        )
+        @Assert(serverBundle.template.profile.toString(), "HTTP_SERVER_LIBRARY")
+        @Assert(serverBundle.readiness.httpTlsReady, true)
+        @Assert(serverBundle.readiness.aesCurrentReleasePlan.currentReleaseSeries, "0.6")
+        @Assert(serverBundle.material.certificateChainPemBlocks.size, 2)
+
+        let productionServer = contractTryPrepareHttpServerLibraryStartupRequest(
+            ContractHttpServerLibraryStartupRequest(
+                ContractHttpServerTlsConfigRequest(certChainPem, leafKeyPem),
+                profile: ContractHttpSshStartupProfile.ProductionAccelerated,
+                aesBackendHint: "shim"
+            )
+        )
+        @Assert(productionServer.ok, false)
+        match (productionServer.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("HTTP server startup production outcome should carry contract code")
+        }
+
+        let clientBundle = contractPrepareHttpClientLibraryStartupRequest(
+            ContractHttpClientLibraryStartupRequest(
+                ContractHttpClientTlsTrustRequest(
+                    rootPem,
+                    intermediatesPemBundle: intermediatePem,
+                    hostname: TEST_HOST_WWW,
+                    validationTime: "230101000000Z",
+                    pinPolicy: ContractX509PinPolicy(allowedLeafSpkiSha256: [spkiPin]),
+                    policy: ContractTlsHttpNegotiationPolicy(
+                        requireServerName: true,
+                        allowedServerNames: [TEST_HOST_WWW],
+                        alpnPreference: ["h2", "http/1.1"]
+                    )
+                ),
+                profile: ContractHttpSshStartupProfile.HttpClientLibrary,
+                aesBackendHint: "shim"
+            )
+        )
+        @Assert(clientBundle.template.profile.toString(), "HTTP_CLIENT_LIBRARY")
+        @Assert(clientBundle.readiness.httpTlsReady, true)
+        @Assert(clientBundle.trust.validation.normalizedHostname, TEST_HOST_WWW)
+
+        let invalidProfile = contractTryPrepareHttpClientLibraryStartupRequest(
+            ContractHttpClientLibraryStartupRequest(
+                ContractHttpClientTlsTrustRequest(rootPem, hostname: TEST_HOST_WWW),
+                profile: ContractHttpSshStartupProfile.SshClientLibrary,
+                aesBackendHint: "shim"
+            )
+        )
+        @Assert(invalidProfile.ok, false)
+        match (invalidProfile.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("HTTP client startup invalid profile outcome should carry contract code")
+        }
+    }
+
+    @TestCase
+    public func testContractSshLibraryStartupBundles(): Unit {
+        let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+        let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+        let transcript = ContractSshKexExchangeTranscript(
+            "SSH-2.0-contract-startup-client\r\n".toArray(),
+            "SSH-2.0-contract-startup-server\r\n".toArray(),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1820))),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 1860)))
+        )
+        let (encodedInit, _) = sshBuildKexEcdhInitX25519(clientPrivate)
+        let negotiated = ContractSshNegotiatedAlgorithms(
+            "curve25519-sha256",
+            "rsa-sha2-256",
+            "aes128-ctr",
+            "aes128-ctr",
+            "hmac-sha2-256",
+            "hmac-sha2-256",
+            compressionAlgorithmClientToServer: "none",
+            compressionAlgorithmServerToClient: "none"
+        )
+        let serverBundle = contractPrepareSshServerLibraryStartupX25519RsaPkcs8Request(
+            ContractSshServerLibraryStartupX25519RsaPkcs8Request(
+                transcript,
+                serverPrivate,
+                encodedInit,
+                readText("testdata/x509/rsa_2048_pkcs8.pem"),
+                negotiated,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                profile: ContractHttpSshStartupProfile.SshServerLibrary,
+                aesBackendHint: "shim"
+            )
+        )
+        @Assert(serverBundle.template.profile.toString(), "SSH_SERVER_LIBRARY")
+        @Assert(serverBundle.readiness.sshReady, true)
+        @Assert(serverBundle.handshake.hostSignatureAlgorithm, "rsa-sha2-256")
+        @Assert(serverBundle.runtime.sessionId(), serverBundle.handshake.sessionId)
+
+        let ecdsaBundle = contractPrepareSshServerLibraryStartupX25519EcdsaPkcs8Request(
+            ContractSshServerLibraryStartupX25519EcdsaPkcs8Request(
+                transcript,
+                serverPrivate,
+                encodedInit,
+                readText("testdata/x509/policy_leaf_key_pkcs8.pem"),
+                ContractSshNegotiatedAlgorithms(
+                    "curve25519-sha256",
+                    "ecdsa-sha2-nistp256",
+                    "aes128-ctr",
+                    "aes128-ctr",
+                    "hmac-sha2-256",
+                    "hmac-sha2-256",
+                    compressionAlgorithmClientToServer: "none",
+                    compressionAlgorithmServerToClient: "none"
+                ),
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                profile: ContractHttpSshStartupProfile.SshServerLibrary,
+                aesBackendHint: "shim"
+            )
+        )
+        @Assert(ecdsaBundle.handshake.hostKeyAlgorithm, "ecdsa-sha2-nistp256")
+        @Assert(ecdsaBundle.runtime.sessionId(), ecdsaBundle.handshake.sessionId)
+
+        let ed25519Bundle = contractPrepareSshServerLibraryStartupX25519Ed25519SeedRequest(
+            ContractSshServerLibraryStartupX25519Ed25519SeedRequest(
+                transcript,
+                serverPrivate,
+                encodedInit,
+                hexToBytes("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"),
+                ContractSshNegotiatedAlgorithms(
+                    "curve25519-sha256",
+                    "ssh-ed25519",
+                    "aes128-ctr",
+                    "aes128-ctr",
+                    "hmac-sha2-256",
+                    "hmac-sha2-256",
+                    compressionAlgorithmClientToServer: "none",
+                    compressionAlgorithmServerToClient: "none"
+                ),
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                profile: ContractHttpSshStartupProfile.SshServerLibrary,
+                aesBackendHint: "shim"
+            )
+        )
+        @Assert(ed25519Bundle.handshake.hostKeyAlgorithm, "ssh-ed25519")
+        @Assert(ed25519Bundle.runtime.sessionId(), ed25519Bundle.handshake.sessionId)
+
+        let clientBundle = contractPrepareSshClientLibraryStartupX25519Request(
+            ContractSshClientLibraryStartupX25519Request(
+                ContractSshClientInitialHandshakeX25519Request(
+                    transcript,
+                    clientPrivate,
+                    encodedInit,
+                    serverBundle.handshake.encodedReply,
+                    negotiated,
+                    sshEncodeNewKeys(),
+                    sshEncodeNewKeys(),
+                    policy: ContractSshHostVerificationPolicy(
+                        negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                        expectedHostKeySha256: serverBundle.handshake.hostKeySha256,
+                        requireKnownHost: true,
+                        requireHostSignature: true,
+                        requireVerifiedHost: true
+                    )
+                ),
+                profile: ContractHttpSshStartupProfile.SshClientLibrary,
+                aesBackendHint: "shim"
+            )
+        )
+        @Assert(clientBundle.template.profile.toString(), "SSH_CLIENT_LIBRARY")
+        @Assert(clientBundle.readiness.sshReady, true)
+        @Assert(clientBundle.handshake.requireHostVerification().hostSignatureVerified, true)
+        @Assert(clientBundle.runtime.sessionId(), clientBundle.handshake.sessionId)
+
+        let productionServer = contractTryPrepareSshServerLibraryStartupX25519RsaPkcs8Request(
+            ContractSshServerLibraryStartupX25519RsaPkcs8Request(
+                transcript,
+                serverPrivate,
+                encodedInit,
+                readText("testdata/x509/rsa_2048_pkcs8.pem"),
+                negotiated,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                profile: ContractHttpSshStartupProfile.ProductionAccelerated,
+                aesBackendHint: "shim"
+            )
+        )
+        @Assert(productionServer.ok, false)
+        match (productionServer.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("SSH server startup production outcome should carry contract code")
+        }
+
+        let invalidClientProfile = contractTryPrepareSshClientLibraryStartupX25519Request(
+            ContractSshClientLibraryStartupX25519Request(
+                ContractSshClientInitialHandshakeX25519Request(
+                    transcript,
+                    clientPrivate,
+                    encodedInit,
+                    serverBundle.handshake.encodedReply,
+                    negotiated,
+                    sshEncodeNewKeys(),
+                    sshEncodeNewKeys()
+                ),
+                profile: ContractHttpSshStartupProfile.HttpClientLibrary,
+                aesBackendHint: "shim"
+            )
+        )
+        @Assert(invalidClientProfile.ok, false)
+        match (invalidClientProfile.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("SSH client startup invalid profile outcome should carry contract code")
+        }
     }
 
     @TestCase
@@ -4146,6 +4748,182 @@ public class ContractTestSuite {
             ContractSshClientRuntimeRequest(clientHandshake)
         )
         @Assert(clientRuntimeByRequest.transport().sessionId(), clientHandshake.sessionId)
+    }
+
+    @TestCase
+    public func testContractSshRuntimeBundleFacades(): Unit {
+        let clientPrivate = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+        let serverPrivate = hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")
+        let negotiated = ContractSshNegotiatedAlgorithms(
+            "curve25519-sha256",
+            "rsa-sha2-256",
+            "aes128-ctr",
+            "aes128-ctr",
+            "hmac-sha2-256",
+            "hmac-sha2-256"
+        )
+        let rsaPrivateKey = x509ParseRsaPrivateKeyPkcs8Pem(readText("testdata/x509/rsa_2048_pkcs8.pem"))
+
+        let initialTranscript = ContractSshKexExchangeTranscript(
+            "SSH-2.0-contract-client-runtime-bundle0\r\n".toArray(),
+            "SSH-2.0-contract-server-runtime-bundle0\r\n".toArray(),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 2200))),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 2232)))
+        )
+        let initialInit = contractSshBuildKexEcdhInitX25519Request(
+            ContractSshBuildKexEcdhInitX25519Request(clientPrivate)
+        )
+        let serverHandshake = contractSshCompleteServerInitialHandshakeX25519RsaRequest(
+            ContractSshServerInitialHandshakeX25519RsaRequest(
+                initialTranscript,
+                serverPrivate,
+                initialInit.encodedInit,
+                rsaPrivateKey,
+                negotiated,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys()
+            )
+        )
+        let clientHandshake = contractSshCompleteClientInitialHandshakeX25519Request(
+            ContractSshClientInitialHandshakeX25519Request(
+                initialTranscript,
+                clientPrivate,
+                initialInit.encodedInit,
+                serverHandshake.encodedReply,
+                negotiated,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                    expectedHostKeySha256: serverHandshake.hostKeySha256,
+                    requireKnownHost: true,
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+
+        let serverRuntimeBundle = contractPrepareSshServerRuntimeRequest(
+            ContractSshServerRuntimeRequest(serverHandshake)
+        )
+        let clientRuntimeBundle = contractPrepareSshClientRuntimeRequest(
+            ContractSshClientRuntimeRequest(clientHandshake)
+        )
+        @Assert(serverRuntimeBundle.session.sessionId, serverHandshake.sessionId)
+        @Assert(serverRuntimeBundle.snapshot.sessionId(), serverHandshake.sessionId)
+        @Assert(clientRuntimeBundle.session.sessionId, clientHandshake.sessionId)
+        @Assert(clientRuntimeBundle.snapshot.sessionId(), clientHandshake.sessionId)
+        match (clientRuntimeBundle.snapshot.hostVerification()) {
+            case Some(value) => @Assert(value.hostSignatureVerified, true)
+            case None => @Fail("SSH client runtime bundle snapshot should preserve host verification")
+        }
+
+        let rekeyTranscript = ContractSshKexExchangeTranscript(
+            "SSH-2.0-contract-client-runtime-bundle1\r\n".toArray(),
+            "SSH-2.0-contract-server-runtime-bundle1\r\n".toArray(),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 2264))),
+            sshEncodeKexInit(sshBuildDefaultKexInit(cookie: incrementalBytes(16, start: 2296)))
+        )
+        let rekeyClientPrivate = hexToBytes("5c3a3d02825f2a5f6905aef0d8c8d3f0a4f8df94d153c5e8e91c1f1f9a8e6f71")
+        let rekeyServerPrivate = hexToBytes("4f2f6c59b0d4f52b8c0db0ce1d77c4f1e1dcb3ea65b31f8f5a6c6e7f8899aabb")
+        let rekeyInit = contractSshBuildKexEcdhInitX25519Request(
+            ContractSshBuildKexEcdhInitX25519Request(rekeyClientPrivate)
+        )
+        let rekeyServerHandshake = contractSshCompleteServerInitialHandshakeX25519RsaRequest(
+            ContractSshServerInitialHandshakeX25519RsaRequest(
+                rekeyTranscript,
+                rekeyServerPrivate,
+                rekeyInit.encodedInit,
+                rsaPrivateKey,
+                negotiated,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys()
+            )
+        )
+        let rekeyServerSession = contractSshServerProcessKexEcdhInitX25519Request(
+            ContractSshServerProcessKexEcdhInitX25519Request(
+                rekeyTranscript,
+                rekeyServerPrivate,
+                rekeyInit.encodedInit,
+                ContractSshHostSigningResult(
+                    rekeyServerHandshake.serverHostKey,
+                    rekeyServerHandshake.hostSignature,
+                    rekeyServerHandshake.hostKeyAlgorithm,
+                    rekeyServerHandshake.hostSignatureAlgorithm,
+                    rekeyServerHandshake.hostKeySha256
+                )
+            )
+        )
+        let rekeyClientSession = contractSshClientProcessKexEcdhReplyX25519Request(
+            ContractSshClientProcessKexEcdhReplyX25519Request(
+                rekeyTranscript,
+                rekeyClientPrivate,
+                rekeyInit.encodedInit,
+                rekeyServerSession.encodedReply,
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                    expectedHostKeySha256: serverHandshake.hostKeySha256,
+                    requireKnownHost: true,
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+
+        let serverRekeyBundle = contractPrepareSshServerRuntimeRekeyFromSessionStateRequest(
+            ContractSshServerRuntimeSessionRekeyRequest(
+                serverRuntimeBundle.runtime,
+                rekeyServerSession.session,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys()
+            )
+        )
+        let clientRekeyBundle = contractPrepareSshClientRuntimeRekeyFromSessionStateRequest(
+            ContractSshClientRuntimeSessionRekeyRequest(
+                clientRuntimeBundle.runtime,
+                rekeyClientSession,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                    expectedHostKeySha256: serverHandshake.hostKeySha256,
+                    requireKnownHost: true,
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+        @Assert(serverRekeyBundle.session.sessionId, serverRuntimeBundle.session.sessionId)
+        @Assert(clientRekeyBundle.session.sessionId, clientRuntimeBundle.session.sessionId)
+        @Assert(serverRekeyBundle.snapshot.sessionId(), serverRuntimeBundle.session.sessionId)
+        @Assert(clientRekeyBundle.snapshot.sessionId(), clientRuntimeBundle.session.sessionId)
+        @Assert(serverRekeyBundle.runtime.currentSession().exchangeHash, rekeyServerSession.session.exchangeHash)
+        @Assert(clientRekeyBundle.runtime.currentSession().exchangeHash, rekeyClientSession.exchangeHash)
+        match (clientRekeyBundle.snapshot.hostVerification()) {
+            case Some(value) => @Assert(value.hostSignatureVerified, true)
+            case None => @Fail("SSH client rekey bundle snapshot should preserve host verification")
+        }
+
+        let failedClientRekey = contractTryPrepareSshClientRuntimeRekeyFromSessionStateRequest(
+            ContractSshClientRuntimeSessionRekeyRequest(
+                clientRuntimeBundle.runtime,
+                rekeyClientSession,
+                sshEncodeNewKeys(),
+                sshEncodeNewKeys(),
+                policy: ContractSshHostVerificationPolicy(
+                    negotiatedHostKeyAlgorithm: "rsa-sha2-256",
+                    expectedHostKeySha256: incrementalBytes(32, start: 2330),
+                    requireKnownHost: true,
+                    requireHostSignature: true,
+                    requireVerifiedHost: true
+                )
+            )
+        )
+        @Assert(failedClientRekey.ok, false)
+        match (failedClientRekey.code) {
+            case Some(value) => @Assert(value.toString(), "VERIFY_FAILED")
+            case None => @Fail("SSH client runtime rekey bundle outcome should carry contract code")
+        }
     }
 
     @TestCase

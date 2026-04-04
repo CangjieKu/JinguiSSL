@@ -1,7 +1,28 @@
 package jinguissl.contract
 
 import std.collection.{ArrayList, HashMap}
-import jinguissl.crypto.aes.{AesGcmContext, aesGcmDecryptWithContext, aesGcmEncryptWithContext, aesNewGcmContext}
+import jinguissl.crypto.aes.{
+    AesEngine,
+    AesEngineKind,
+    AesGcmContext,
+    AesHardwareMountPoint,
+    AesHardwareRoadmapEntry,
+    AesNativeBridgeCallShape,
+    AesNativeBridgeContract,
+    AesNativeBridgeSpec,
+    AesHardwareProbe,
+    aesDefaultHardwareBackendHint,
+    aesGcmDecryptWithContext,
+    aesGcmEncryptWithContext,
+    aesHardwareRoadmap,
+    aesListHardwareMountPoints,
+    aesNativeBridgeDescribeCallShape,
+    aesNewGcmContext,
+    aesOpenNativeBridge,
+    aesProbeHardware,
+    aesResolveEngine,
+    aesResolveEngineWithNativeBridge
+}
 import jinguissl.crypto.bignum.BigNum
 import jinguissl.crypto.chacha20.{chacha20Poly1305Decrypt, chacha20Poly1305Encrypt}
 import jinguissl.crypto.compliance.{TLS_VERSION_1_2, TLS_VERSION_1_3, TlsVersion}
@@ -461,6 +482,1655 @@ public func contractCapabilityInfo(): ContractCapabilityInfo {
             "HTTP/SSH-facing contract surface is prioritized over deep crypto internals"
         ]
     )
+}
+
+public class ContractAesHardwareMountPointInfo {
+    public let backend: String
+    public let available: Bool
+    public let accelerated: Bool
+    public let detected: Bool
+    public let detail: String
+
+    public init(
+        backend: String,
+        available: Bool,
+        accelerated: Bool,
+        detected: Bool,
+        detail: String
+    ) {
+        if (backend.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES hardware mount point backend must not be empty")
+        }
+        if (detail.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES hardware mount point detail must not be empty")
+        }
+        this.backend = backend.trimAscii()
+        this.available = available
+        this.accelerated = accelerated
+        this.detected = detected
+        this.detail = detail.trimAscii()
+    }
+}
+
+public class ContractAesHardwareProbeInfo {
+    public let available: Bool
+    public let backend: String
+    public let accelerated: Bool
+    public let detail: String
+
+    public init(
+        available: Bool,
+        backend: String,
+        accelerated: Bool,
+        detail: String
+    ) {
+        if (backend.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES hardware probe backend must not be empty")
+        }
+        if (detail.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES hardware probe detail must not be empty")
+        }
+        this.available = available
+        this.backend = backend.trimAscii()
+        this.accelerated = accelerated
+        this.detail = detail.trimAscii()
+    }
+}
+
+public class ContractAesHardwareRoadmapEntry {
+    public let architecture: String
+    public let backend: String
+    public let status: String
+    public let targetVersion: String
+    public let detail: String
+
+    public init(
+        architecture: String,
+        backend: String,
+        status: String,
+        targetVersion: String,
+        detail: String
+    ) {
+        if (
+            architecture.trimAscii().size == 0 ||
+            backend.trimAscii().size == 0 ||
+            status.trimAscii().size == 0 ||
+            targetVersion.trimAscii().size == 0 ||
+            detail.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "AES hardware roadmap entry fields must not be empty"
+            )
+        }
+        this.architecture = architecture.trimAscii()
+        this.backend = backend.trimAscii()
+        this.status = status.trimAscii()
+        this.targetVersion = targetVersion.trimAscii()
+        this.detail = detail.trimAscii()
+    }
+}
+
+public enum ContractAesEngineKind <: Equatable<ContractAesEngineKind> & ToString {
+    | Auto
+    | Software
+    | Hardware
+
+    public operator func ==(right: ContractAesEngineKind): Bool {
+        ordinalValue() == right.ordinalValue()
+    }
+
+    public operator func !=(right: ContractAesEngineKind): Bool {
+        !(this == right)
+    }
+
+    public func ordinalValue(): Int64 {
+        match (this) {
+            case Auto => 0
+            case Software => 1
+            case Hardware => 2
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case Auto => "AUTO"
+            case Software => "SOFTWARE"
+            case Hardware => "HARDWARE"
+        }
+    }
+}
+
+public class ContractAesEngineInfo {
+    public let requested: ContractAesEngineKind
+    public let active: ContractAesEngineKind
+    public let backend: String
+    public let accelerated: Bool
+    public let detail: String
+
+    public init(
+        requested: ContractAesEngineKind,
+        active: ContractAesEngineKind,
+        backend: String,
+        accelerated: Bool,
+        detail: String
+    ) {
+        if (backend.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES engine backend must not be empty")
+        }
+        if (detail.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES engine detail must not be empty")
+        }
+        this.requested = requested
+        this.active = active
+        this.backend = backend.trimAscii()
+        this.accelerated = accelerated
+        this.detail = detail.trimAscii()
+    }
+}
+
+public class ContractAesEngineResolveOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractAesEngineInfo
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractAesEngineInfo = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "AES engine resolve outcome message must not be empty"
+            )
+        }
+        if (ok) {
+            match (code) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES engine resolve outcome code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (igniteCode) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES engine resolve outcome ignite code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (result) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES engine resolve outcome result must exist when ok is true"
+                    )
+            }
+        } else {
+            match (code) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES engine resolve outcome code must exist when ok is false"
+                    )
+            }
+            match (igniteCode) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES engine resolve outcome ignite code must exist when ok is false"
+                    )
+            }
+            match (result) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES engine resolve outcome result must be empty when ok is false"
+                    )
+                case None => ()
+            }
+        }
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
+public class ContractAesNativeBridgeSpec {
+    public let backend: String
+    public let libraryPath: String
+    public let symbolPrefix: String
+    public let abiVersion: Int64
+
+    public init(
+        backend: String,
+        libraryPath!: String = "",
+        symbolPrefix!: String = "jinguissl_aes",
+        abiVersion!: Int64 = 1
+    ) {
+        if (backend.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES native bridge backend must not be empty")
+        }
+        if (symbolPrefix.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES native bridge symbol prefix must not be empty")
+        }
+        if (abiVersion <= 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES native bridge ABI version must be positive")
+        }
+        this.backend = backend.trimAscii()
+        this.libraryPath = libraryPath.trimAscii()
+        this.symbolPrefix = symbolPrefix.trimAscii()
+        this.abiVersion = abiVersion
+    }
+}
+
+public class ContractAesNativeBridgeContractInfo {
+    public let backend: String
+    public let abiVersion: Int64
+    public let expandKeySymbol: String
+    public let encryptBlocksSymbol: String
+    public let decryptBlocksSymbol: String
+    public let ghashMulSymbol: String
+    public let detail: String
+
+    public init(
+        backend: String,
+        abiVersion: Int64,
+        expandKeySymbol: String,
+        encryptBlocksSymbol: String,
+        decryptBlocksSymbol: String,
+        ghashMulSymbol: String,
+        detail: String
+    ) {
+        if (backend.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES native bridge contract backend must not be empty")
+        }
+        if (
+            expandKeySymbol.trimAscii().size == 0 ||
+            encryptBlocksSymbol.trimAscii().size == 0 ||
+            decryptBlocksSymbol.trimAscii().size == 0 ||
+            ghashMulSymbol.trimAscii().size == 0 ||
+            detail.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "AES native bridge contract symbol/detail fields must not be empty"
+            )
+        }
+        this.backend = backend.trimAscii()
+        this.abiVersion = abiVersion
+        this.expandKeySymbol = expandKeySymbol.trimAscii()
+        this.encryptBlocksSymbol = encryptBlocksSymbol.trimAscii()
+        this.decryptBlocksSymbol = decryptBlocksSymbol.trimAscii()
+        this.ghashMulSymbol = ghashMulSymbol.trimAscii()
+        this.detail = detail.trimAscii()
+    }
+}
+
+public class ContractAesNativeBridgeCallShapeInfo {
+    public let backend: String
+    public let abiVersion: Int64
+    public let keyBytes: Int64
+    public let roundCount: Int64
+    public let roundKeyWordCount: Int64
+    public let expandedKeyBlobBytes: Int64
+    public let blockBytes: Int64
+    public let requiresBlockAlignedPayload: Bool
+
+    public init(
+        backend: String,
+        abiVersion: Int64,
+        keyBytes: Int64,
+        roundCount: Int64,
+        roundKeyWordCount: Int64,
+        expandedKeyBlobBytes: Int64,
+        blockBytes: Int64,
+        requiresBlockAlignedPayload: Bool
+    ) {
+        if (backend.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES native bridge call-shape backend must not be empty")
+        }
+        if (keyBytes <= 0 || roundCount <= 0 || roundKeyWordCount <= 0 || expandedKeyBlobBytes <= 0 || blockBytes <= 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "AES native bridge call-shape numeric fields must be positive"
+            )
+        }
+        this.backend = backend.trimAscii()
+        this.abiVersion = abiVersion
+        this.keyBytes = keyBytes
+        this.roundCount = roundCount
+        this.roundKeyWordCount = roundKeyWordCount
+        this.expandedKeyBlobBytes = expandedKeyBlobBytes
+        this.blockBytes = blockBytes
+        this.requiresBlockAlignedPayload = requiresBlockAlignedPayload
+    }
+}
+
+public class ContractAesNativeBridgeDiagnostics {
+    public let spec: ContractAesNativeBridgeSpec
+    public let probe: ContractAesHardwareProbeInfo
+    public let engine: ContractAesEngineInfo
+    public let contract: ContractAesNativeBridgeContractInfo
+
+    public init(
+        spec: ContractAesNativeBridgeSpec,
+        probe: ContractAesHardwareProbeInfo,
+        engine: ContractAesEngineInfo,
+        contract: ContractAesNativeBridgeContractInfo
+    ) {
+        this.spec = ContractAesNativeBridgeSpec(
+            spec.backend,
+            libraryPath: spec.libraryPath,
+            symbolPrefix: spec.symbolPrefix,
+            abiVersion: spec.abiVersion
+        )
+        this.probe = probe
+        this.engine = engine
+        this.contract = contract
+    }
+}
+
+public class ContractAesNativeBridgeDiagnosticsOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractAesNativeBridgeDiagnostics
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractAesNativeBridgeDiagnostics = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "AES native bridge diagnostics outcome message must not be empty"
+            )
+        }
+        if (ok) {
+            match (code) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES native bridge diagnostics outcome code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (igniteCode) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES native bridge diagnostics outcome ignite code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (result) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES native bridge diagnostics outcome result must exist when ok is true"
+                    )
+            }
+        } else {
+            match (code) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES native bridge diagnostics outcome code must exist when ok is false"
+                    )
+            }
+            match (igniteCode) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES native bridge diagnostics outcome ignite code must exist when ok is false"
+                    )
+            }
+            match (result) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "AES native bridge diagnostics outcome result must be empty when ok is false"
+                    )
+                case None => ()
+            }
+        }
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
+public enum ContractAesBackendReadiness <: Equatable<ContractAesBackendReadiness> & ToString {
+    | AcceleratedReady
+    | BridgeReady
+    | SoftwareOnly
+    | Unavailable
+
+    public operator func ==(right: ContractAesBackendReadiness): Bool {
+        ordinalValue() == right.ordinalValue()
+    }
+
+    public operator func !=(right: ContractAesBackendReadiness): Bool {
+        !(this == right)
+    }
+
+    public func ordinalValue(): Int64 {
+        match (this) {
+            case AcceleratedReady => 0
+            case BridgeReady => 1
+            case SoftwareOnly => 2
+            case Unavailable => 3
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case AcceleratedReady => "ACCELERATED_READY"
+            case BridgeReady => "BRIDGE_READY"
+            case SoftwareOnly => "SOFTWARE_ONLY"
+            case Unavailable => "UNAVAILABLE"
+        }
+    }
+}
+
+public class ContractAesBackendRecommendation {
+    public let backendHint: String
+    public let readiness: ContractAesBackendReadiness
+    public let accelerated: Bool
+    public let reason: String
+
+    public init(
+        backendHint: String,
+        readiness: ContractAesBackendReadiness,
+        accelerated: Bool,
+        reason: String
+    ) {
+        if (backendHint.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES backend recommendation hint must not be empty")
+        }
+        if (reason.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES backend recommendation reason must not be empty")
+        }
+        this.backendHint = backendHint.trimAscii()
+        this.readiness = readiness
+        this.accelerated = accelerated
+        this.reason = reason.trimAscii()
+    }
+}
+
+public class ContractAesStartupSelfCheckReport {
+    public let defaultBackendHint: String
+    public let effectiveBackendHint: String
+    public let recommendation: ContractAesBackendRecommendation
+    public let selectedEngine: ContractAesEngineInfo
+    public let acceleratedBackendReady: Bool
+    public let mountPoints: Array<ContractAesHardwareMountPointInfo>
+    public let diagnostics: ?ContractAesNativeBridgeDiagnostics
+
+    public init(
+        defaultBackendHint: String,
+        effectiveBackendHint: String,
+        recommendation: ContractAesBackendRecommendation,
+        selectedEngine: ContractAesEngineInfo,
+        acceleratedBackendReady: Bool,
+        mountPoints: Array<ContractAesHardwareMountPointInfo>,
+        diagnostics!: ?ContractAesNativeBridgeDiagnostics = None
+    ) {
+        if (effectiveBackendHint.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES startup self-check effective backend hint must not be empty")
+        }
+        if (mountPoints.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "AES startup self-check mount points must not be empty")
+        }
+        this.defaultBackendHint = defaultBackendHint.trimAscii()
+        this.effectiveBackendHint = effectiveBackendHint.trimAscii()
+        this.recommendation = recommendation
+        this.selectedEngine = selectedEngine
+        this.acceleratedBackendReady = acceleratedBackendReady
+        this.mountPoints = mountPoints.clone()
+        this.diagnostics = diagnostics
+    }
+}
+
+public class ContractAesCurrentReleasePlanReport {
+    public let currentReleaseSeries: String
+    public let primaryBackend: String
+    public let primaryArchitectures: Array<String>
+    public let deferredBackends: Array<String>
+    public let reservedBackends: Array<String>
+    public let startup: ContractAesStartupSelfCheckReport
+    public let usingPrimaryBackend: Bool
+    public let primaryBackendAvailable: Bool
+    public let warnings: Array<String>
+
+    public init(
+        currentReleaseSeries: String,
+        primaryBackend: String,
+        primaryArchitectures: Array<String>,
+        deferredBackends: Array<String>,
+        reservedBackends: Array<String>,
+        startup: ContractAesStartupSelfCheckReport,
+        usingPrimaryBackend: Bool,
+        primaryBackendAvailable: Bool,
+        warnings: Array<String>
+    ) {
+        if (currentReleaseSeries.trimAscii().size == 0 || primaryBackend.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "AES current release plan report release series and primary backend must not be empty"
+            )
+        }
+        if (primaryArchitectures.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "AES current release plan report primary architectures must not be empty"
+            )
+        }
+        this.currentReleaseSeries = currentReleaseSeries.trimAscii()
+        this.primaryBackend = primaryBackend.trimAscii()
+        this.primaryArchitectures = primaryArchitectures.clone()
+        this.deferredBackends = deferredBackends.clone()
+        this.reservedBackends = reservedBackends.clone()
+        this.startup = startup
+        this.usingPrimaryBackend = usingPrimaryBackend
+        this.primaryBackendAvailable = primaryBackendAvailable
+        this.warnings = warnings.clone()
+    }
+}
+
+public class ContractHttpSshStartupReadinessReport {
+    public let randomAvailable: Bool
+    public let aes: ContractAesStartupSelfCheckReport
+    public let aesCurrentReleasePlan: ContractAesCurrentReleasePlanReport
+    public let capability: ContractCapabilityInfo
+    public let httpTlsReady: Bool
+    public let sshReady: Bool
+    public let x509Ready: Bool
+    public let overallReady: Bool
+    public let productionAccelerationReady: Bool
+    public let warnings: Array<String>
+
+    public init(
+        randomAvailable: Bool,
+        aes: ContractAesStartupSelfCheckReport,
+        aesCurrentReleasePlan: ContractAesCurrentReleasePlanReport,
+        capability: ContractCapabilityInfo,
+        httpTlsReady: Bool,
+        sshReady: Bool,
+        x509Ready: Bool,
+        overallReady: Bool,
+        productionAccelerationReady: Bool,
+        warnings: Array<String>
+    ) {
+        this.randomAvailable = randomAvailable
+        this.aes = aes
+        this.aesCurrentReleasePlan = aesCurrentReleasePlan
+        this.capability = capability
+        this.httpTlsReady = httpTlsReady
+        this.sshReady = sshReady
+        this.x509Ready = x509Ready
+        this.overallReady = overallReady
+        this.productionAccelerationReady = productionAccelerationReady
+        this.warnings = warnings.clone()
+    }
+}
+
+public class ContractHttpSshStartupReadinessOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractHttpSshStartupReadinessReport
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractHttpSshStartupReadinessReport = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "HTTP/SSH startup readiness outcome message must not be empty"
+            )
+        }
+        if (ok) {
+            match (code) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "HTTP/SSH startup readiness outcome code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (igniteCode) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "HTTP/SSH startup readiness outcome ignite code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (result) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "HTTP/SSH startup readiness outcome result must exist when ok is true"
+                    )
+            }
+        } else {
+            match (code) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "HTTP/SSH startup readiness outcome code must exist when ok is false"
+                    )
+            }
+            match (igniteCode) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "HTTP/SSH startup readiness outcome ignite code must exist when ok is false"
+                    )
+            }
+            match (result) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "HTTP/SSH startup readiness outcome result must be empty when ok is false"
+                    )
+                case None => ()
+            }
+        }
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
+public class ContractHttpSshStartupPolicy {
+    public let requireRandom: Bool
+    public let requireHttpTls: Bool
+    public let requireSsh: Bool
+    public let requireX509: Bool
+    public let requireAcceleration: Bool
+    public let requireCurrentReleasePrimaryBackend: Bool
+    public let requireDirectStdxTlsServerConfigBridge: Bool
+
+    public init(
+        requireRandom!: Bool = true,
+        requireHttpTls!: Bool = true,
+        requireSsh!: Bool = true,
+        requireX509!: Bool = true,
+        requireAcceleration!: Bool = false,
+        requireCurrentReleasePrimaryBackend!: Bool = false,
+        requireDirectStdxTlsServerConfigBridge!: Bool = false
+    ) {
+        this.requireRandom = requireRandom
+        this.requireHttpTls = requireHttpTls
+        this.requireSsh = requireSsh
+        this.requireX509 = requireX509
+        this.requireAcceleration = requireAcceleration
+        this.requireCurrentReleasePrimaryBackend = requireCurrentReleasePrimaryBackend
+        this.requireDirectStdxTlsServerConfigBridge = requireDirectStdxTlsServerConfigBridge
+    }
+}
+
+public enum ContractHttpSshStartupProfile <: Equatable<ContractHttpSshStartupProfile> & ToString {
+    | LibraryDefault
+    | HttpClientLibrary
+    | HttpServerLibrary
+    | SshClientLibrary
+    | SshServerLibrary
+    | ProductionAccelerated
+
+    public operator func ==(right: ContractHttpSshStartupProfile): Bool {
+        ordinalValue() == right.ordinalValue()
+    }
+
+    public operator func !=(right: ContractHttpSshStartupProfile): Bool {
+        !(this == right)
+    }
+
+    public func ordinalValue(): Int64 {
+        match (this) {
+            case LibraryDefault => 0
+            case HttpClientLibrary => 1
+            case HttpServerLibrary => 2
+            case SshClientLibrary => 3
+            case SshServerLibrary => 4
+            case ProductionAccelerated => 5
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case LibraryDefault => "LIBRARY_DEFAULT"
+            case HttpClientLibrary => "HTTP_CLIENT_LIBRARY"
+            case HttpServerLibrary => "HTTP_SERVER_LIBRARY"
+            case SshClientLibrary => "SSH_CLIENT_LIBRARY"
+            case SshServerLibrary => "SSH_SERVER_LIBRARY"
+            case ProductionAccelerated => "PRODUCTION_ACCELERATED"
+        }
+    }
+}
+
+public class ContractHttpSshStartupProfileTemplate {
+    public let profile: ContractHttpSshStartupProfile
+    public let label: String
+    public let policy: ContractHttpSshStartupPolicy
+    public let defaultAesEngine: ContractAesEngineKind
+    public let defaultAesBackendHint: String
+    public let notes: Array<String>
+
+    public init(
+        profile: ContractHttpSshStartupProfile,
+        label: String,
+        policy: ContractHttpSshStartupPolicy,
+        defaultAesEngine: ContractAesEngineKind,
+        notes: Array<String>,
+        defaultAesBackendHint!: String = ""
+    ) {
+        if (label.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "HTTP/SSH startup profile label must not be empty")
+        }
+        if (notes.size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "HTTP/SSH startup profile notes must not be empty")
+        }
+        this.profile = profile
+        this.label = label.trimAscii()
+        this.policy = ContractHttpSshStartupPolicy(
+            requireRandom: policy.requireRandom,
+            requireHttpTls: policy.requireHttpTls,
+            requireSsh: policy.requireSsh,
+            requireX509: policy.requireX509,
+            requireAcceleration: policy.requireAcceleration,
+            requireCurrentReleasePrimaryBackend: policy.requireCurrentReleasePrimaryBackend,
+            requireDirectStdxTlsServerConfigBridge: policy.requireDirectStdxTlsServerConfigBridge
+        )
+        this.defaultAesEngine = defaultAesEngine
+        this.defaultAesBackendHint = defaultAesBackendHint.trimAscii()
+        this.notes = notes.clone()
+    }
+}
+
+public func contractAesListHardwareMountPoints(): Array<ContractAesHardwareMountPointInfo> {
+    let mounts = aesListHardwareMountPoints()
+    let converted = ArrayList<ContractAesHardwareMountPointInfo>()
+    for (mount in mounts) {
+        converted.add(contractFromAesHardwareMountPoint(mount))
+    }
+    converted.toArray()
+}
+
+public func contractAesHardwareRoadmap(): Array<ContractAesHardwareRoadmapEntry> {
+    let entries = aesHardwareRoadmap()
+    let converted = ArrayList<ContractAesHardwareRoadmapEntry>()
+    for (entry in entries) {
+        converted.add(contractFromAesHardwareRoadmapEntry(entry))
+    }
+    converted.toArray()
+}
+
+public func contractAesDefaultHardwareBackendHint(): String {
+    aesDefaultHardwareBackendHint()
+}
+
+public func contractAesProbeHardware(backendHint!: String = ""): ContractAesHardwareProbeInfo {
+    contractFromAesHardwareProbe(aesProbeHardware(backendHint: backendHint))
+}
+
+public func contractResolveAesEngine(
+    requestedEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+    backendHint!: String = ""
+): ContractAesEngineInfo {
+    try {
+        contractFromAesEngine(
+            aesResolveEngine(
+                requested: contractToAesEngineKind(requestedEngine),
+                hardwareHint: backendHint
+            )
+        )
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            contractMapCryptoExceptionToErrorCode(e, operation: "aes"),
+            "AES engine resolve failed: ${e.message}"
+        )
+    }
+}
+
+public func contractTryResolveAesEngine(
+    requestedEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+    backendHint!: String = ""
+): ContractAesEngineResolveOutcome {
+    try {
+        let result = contractResolveAesEngine(requestedEngine: requestedEngine, backendHint: backendHint)
+        ContractAesEngineResolveOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractAesEngineResolveOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractRequireAesAcceleratedBackend(
+    backendHint!: String = ""
+): ContractAesHardwareProbeInfo {
+    let probe = contractAesProbeHardware(backendHint: backendHint)
+    if (!probe.available || !probe.accelerated) {
+        throw ContractException(
+            ContractErrorCode.Unsupported,
+            "AES accelerated backend is required: ${probe.detail}"
+        )
+    }
+    probe
+}
+
+public func contractInspectAesNativeBridge(
+    spec: ContractAesNativeBridgeSpec,
+    requestedEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto
+): ContractAesNativeBridgeDiagnostics {
+    try {
+        let innerSpec = contractToAesNativeBridgeSpec(spec)
+        let handle = aesOpenNativeBridge(innerSpec)
+        let engine = aesResolveEngineWithNativeBridge(
+            innerSpec,
+            requested: contractToAesEngineKind(requestedEngine)
+        )
+        ContractAesNativeBridgeDiagnostics(
+            spec,
+            contractFromAesHardwareProbe(handle.probe),
+            contractFromAesEngine(engine),
+            contractFromAesNativeBridgeContract(handle.contract)
+        )
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            contractMapCryptoExceptionToErrorCode(e, operation: "aes"),
+            "AES native bridge inspection failed: ${e.message}"
+        )
+    }
+}
+
+public func contractTryInspectAesNativeBridge(
+    spec: ContractAesNativeBridgeSpec,
+    requestedEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto
+): ContractAesNativeBridgeDiagnosticsOutcome {
+    try {
+        let result = contractInspectAesNativeBridge(spec, requestedEngine: requestedEngine)
+        ContractAesNativeBridgeDiagnosticsOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractAesNativeBridgeDiagnosticsOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractDescribeAesNativeBridgeCallShape(
+    spec: ContractAesNativeBridgeSpec,
+    keyBytes: Int64
+): ContractAesNativeBridgeCallShapeInfo {
+    try {
+        let innerSpec = contractToAesNativeBridgeSpec(spec)
+        let handle = aesOpenNativeBridge(innerSpec)
+        contractFromAesNativeBridgeCallShape(aesNativeBridgeDescribeCallShape(handle, keyBytes))
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            contractMapCryptoExceptionToErrorCode(e, operation: "aes"),
+            "AES native bridge call-shape describe failed: ${e.message}"
+        )
+    }
+}
+
+public func contractRecommendAesBackend(): ContractAesBackendRecommendation {
+    let mounts = contractAesListHardwareMountPoints()
+    let armv8 = contractFindAesMountPoint(mounts, "armv8-ce")
+    match (armv8) {
+        case Some(value) =>
+            if (value.available && value.accelerated) {
+                return ContractAesBackendRecommendation(
+                    "armv8-ce",
+                    ContractAesBackendReadiness.AcceleratedReady,
+                    true,
+                    "ARMv8 CE native backend is available and accelerated on current runtime"
+                )
+            }
+        case None => ()
+    }
+
+    let shim = contractFindAesMountPoint(mounts, "shim")
+    match (shim) {
+        case Some(value) =>
+            if (value.available) {
+                return ContractAesBackendRecommendation(
+                    "shim",
+                    ContractAesBackendReadiness.BridgeReady,
+                    false,
+                    "software shim backend is available for bridge-path validation but does not provide hardware acceleration"
+                )
+            }
+        case None => ()
+    }
+
+    ContractAesBackendRecommendation(
+        "none",
+        ContractAesBackendReadiness.Unavailable,
+        false,
+        "no AES hardware backend is currently available; software AES remains usable"
+    )
+}
+
+public func contractAesStartupSelfCheck(
+    requestedEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+    backendHint!: String = ""
+): ContractAesStartupSelfCheckReport {
+    let mounts = contractAesListHardwareMountPoints()
+    let recommendation = contractRecommendAesBackend()
+    let defaultHint = contractAesDefaultHardwareBackendHint().trimAscii()
+    let overrideHint = backendHint.trimAscii()
+    let effectiveHint = if (overrideHint.size > 0) {
+        overrideHint
+    } else if (defaultHint.size > 0) {
+        defaultHint
+    } else {
+        recommendation.backendHint
+    }
+    let selectedEngine = contractResolveAesEngine(requestedEngine: requestedEngine, backendHint: effectiveHint)
+    let diagnostics: ?ContractAesNativeBridgeDiagnostics = if (selectedEngine.backend == "none") {
+        None
+    } else {
+        Some(contractInspectAesNativeBridge(ContractAesNativeBridgeSpec(selectedEngine.backend), requestedEngine: requestedEngine))
+    }
+    ContractAesStartupSelfCheckReport(
+        defaultHint,
+        effectiveHint,
+        recommendation,
+        selectedEngine,
+        selectedEngine.accelerated,
+        mounts,
+        diagnostics: diagnostics
+    )
+}
+
+public func contractAesCurrentReleasePlan(
+    requestedEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+    backendHint!: String = ""
+): ContractAesCurrentReleasePlanReport {
+    let startup = contractAesStartupSelfCheck(
+        requestedEngine: requestedEngine,
+        backendHint: backendHint
+    )
+    let roadmap = contractAesHardwareRoadmap()
+    let primaryBackend = contractFindPrimaryAesRoadmapBackend(roadmap)
+    let primaryArchitectures = contractCollectAesRoadmapArchitectures(
+        roadmap,
+        "PRIMARY_ACTIVE"
+    )
+    let deferredBackends = contractCollectAesRoadmapBackendsByPrefix(
+        roadmap,
+        "DEFERRED"
+    )
+    let reservedBackends = contractCollectAesRoadmapBackendsByPrefix(
+        roadmap,
+        "RESERVED"
+    )
+    let primaryMount = contractFindAesMountPoint(startup.mountPoints, primaryBackend)
+    let primaryBackendAvailable = match (primaryMount) {
+        case Some(value) => value.available && value.accelerated
+        case None => false
+    }
+    let usingPrimaryBackend = startup.selectedEngine.backend == primaryBackend && startup.selectedEngine.accelerated
+    let warnings = ArrayList<String>()
+    if (!primaryBackendAvailable) {
+        warnings.add("current release primary backend is unavailable on this runtime")
+    }
+    if (!usingPrimaryBackend) {
+        warnings.add("selected AES backend is not the current 0.6 primary backend")
+    }
+    if (contractContainsString(deferredBackends, "aesni")) {
+        warnings.add("x86_64 AES-NI remains deferred to 0.7 in the current release plan")
+    }
+    if (reservedBackends.size > 0) {
+        warnings.add("loongarch64/riscv64 backends remain reserved skeletons in the current release plan")
+    }
+    ContractAesCurrentReleasePlanReport(
+        "0.6",
+        primaryBackend,
+        primaryArchitectures,
+        deferredBackends,
+        reservedBackends,
+        startup,
+        usingPrimaryBackend,
+        primaryBackendAvailable,
+        warnings.toArray()
+    )
+}
+
+public func contractRequireAesCurrentReleasePrimaryBackend(
+    backendHint!: String = ""
+): ContractAesCurrentReleasePlanReport {
+    let report = contractAesCurrentReleasePlan(
+        requestedEngine: ContractAesEngineKind.Hardware,
+        backendHint: backendHint
+    )
+    if (!report.primaryBackendAvailable) {
+        throw ContractException(
+            ContractErrorCode.Unsupported,
+            "current release primary backend is unavailable: ${report.primaryBackend}"
+        )
+    }
+    if (!report.usingPrimaryBackend) {
+        throw ContractException(
+            ContractErrorCode.Unsupported,
+            "current release requires primary backend ${report.primaryBackend}, but selected backend is ${report.startup.selectedEngine.backend}"
+        )
+    }
+    report
+}
+
+public func contractHttpSshStartupReadiness(
+    requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+    aesBackendHint!: String = ""
+): ContractHttpSshStartupReadinessReport {
+    try {
+        let capability = contractCapabilityInfo()
+        let aesCurrentReleasePlan = contractAesCurrentReleasePlan(
+            requestedEngine: requestedAesEngine,
+            backendHint: aesBackendHint
+        )
+        let aes = aesCurrentReleasePlan.startup
+        let randomAvailable = contractRandomAvailable()
+        let httpTlsReady = contractHasAllFeatures(
+            capability.httpTlsFeatures,
+            [
+                "tls12-rsa",
+                "tls13-x25519",
+                "http-server-tls-config-validation",
+                "http-client-trust-material-preparation",
+                "alpn-normalization"
+            ]
+        )
+        let sshReady = contractHasAllFeatures(
+            capability.sshFeatures,
+            [
+                "transport-packet-protection",
+                "x25519-kex",
+                "rsa-sha2-hostkey",
+                "client-initial-handshake-facade",
+                "server-initial-handshake-facade",
+                "session-runtime-snapshot-facade"
+            ]
+        )
+        let x509Ready = contractHasAllFeatures(
+            capability.x509Features,
+            [
+                "certificate-chain-verify",
+                "hostname-policy",
+                "leaf-pin-spki-sha256",
+                "private-key-parse-rsa-pkcs1-pkcs8",
+                "private-key-parse-ec-pkcs8"
+            ]
+        )
+        let overallReady = randomAvailable && httpTlsReady && sshReady && x509Ready
+        let warnings = ArrayList<String>()
+        if (!randomAvailable) {
+            warnings.add("system CSPRNG is unavailable; HTTP/SSH startup should fail closed")
+        }
+        if (!aes.acceleratedBackendReady) {
+            warnings.add("AES accelerated backend is not ready; software or shim path may be used")
+        }
+        for (warning in aesCurrentReleasePlan.warnings) {
+            warnings.add(warning)
+        }
+        if (!capability.directStdxTlsServerConfigBridge) {
+            warnings.add("direct stdx.net.tls.TlsServerConfig bridge is not provided; use contract-level preparation APIs")
+        }
+        if (!httpTlsReady) {
+            warnings.add("HTTP/TLS facade capability set is incomplete for startup expectations")
+        }
+        if (!sshReady) {
+            warnings.add("SSH facade capability set is incomplete for startup expectations")
+        }
+        if (!x509Ready) {
+            warnings.add("X.509 facade capability set is incomplete for startup expectations")
+        }
+        ContractHttpSshStartupReadinessReport(
+            randomAvailable,
+            aes,
+            aesCurrentReleasePlan,
+            capability,
+            httpTlsReady,
+            sshReady,
+            x509Ready,
+            overallReady,
+            aes.acceleratedBackendReady,
+            warnings.toArray()
+        )
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            contractMapCryptoExceptionToErrorCode(e, operation: "startup"),
+            "HTTP/SSH startup readiness failed: ${e.message}"
+        )
+    }
+}
+
+public func contractTryHttpSshStartupReadiness(
+    requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+    aesBackendHint!: String = ""
+): ContractHttpSshStartupReadinessOutcome {
+    try {
+        let result = contractHttpSshStartupReadiness(
+            requestedAesEngine: requestedAesEngine,
+            aesBackendHint: aesBackendHint
+        )
+        ContractHttpSshStartupReadinessOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpSshStartupReadinessOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractRequireHttpSshStartupReadiness(
+    policy!: ContractHttpSshStartupPolicy = ContractHttpSshStartupPolicy(),
+    requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+    aesBackendHint!: String = ""
+): ContractHttpSshStartupReadinessReport {
+    let report = contractHttpSshStartupReadiness(
+        requestedAesEngine: requestedAesEngine,
+        aesBackendHint: aesBackendHint
+    )
+    let failures = contractCollectHttpSshStartupPolicyFailures(report, policy)
+    if (failures.size > 0) {
+        let message = contractJoinMessages(
+            failures,
+            "HTTP/SSH startup requirements are not satisfied: "
+        )
+        if (policy.requireRandom && !report.randomAvailable) {
+            throw ContractException(ContractErrorCode.CryptoUnavailable, message)
+        }
+        throw ContractException(ContractErrorCode.Unsupported, message)
+    }
+    report
+}
+
+public func contractTryRequireHttpSshStartupReadiness(
+    policy!: ContractHttpSshStartupPolicy = ContractHttpSshStartupPolicy(),
+    requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+    aesBackendHint!: String = ""
+): ContractHttpSshStartupReadinessOutcome {
+    try {
+        let result = contractRequireHttpSshStartupReadiness(
+            policy: policy,
+            requestedAesEngine: requestedAesEngine,
+            aesBackendHint: aesBackendHint
+        )
+        ContractHttpSshStartupReadinessOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpSshStartupReadinessOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractDescribeHttpSshStartupProfile(
+    profile: ContractHttpSshStartupProfile
+): ContractHttpSshStartupProfileTemplate {
+    match (profile) {
+        case ContractHttpSshStartupProfile.LibraryDefault =>
+            ContractHttpSshStartupProfileTemplate(
+                profile,
+                "library-default",
+                ContractHttpSshStartupPolicy(
+                    requireRandom: true,
+                    requireHttpTls: true,
+                    requireSsh: true,
+                    requireX509: true
+                ),
+                ContractAesEngineKind.Auto,
+                [
+                    "default profile for libraries that expose both HTTP/TLS and SSH-facing capabilities",
+                    "does not require accelerated AES backend"
+                ]
+            )
+        case ContractHttpSshStartupProfile.HttpClientLibrary =>
+            ContractHttpSshStartupProfileTemplate(
+                profile,
+                "http-client-library",
+                ContractHttpSshStartupPolicy(
+                    requireRandom: true,
+                    requireHttpTls: true,
+                    requireSsh: false,
+                    requireX509: true
+                ),
+                ContractAesEngineKind.Auto,
+                [
+                    "optimized for HTTPS client stacks that need TLS and certificate validation",
+                    "SSH readiness is not required"
+                ]
+            )
+        case ContractHttpSshStartupProfile.HttpServerLibrary =>
+            ContractHttpSshStartupProfileTemplate(
+                profile,
+                "http-server-library",
+                ContractHttpSshStartupPolicy(
+                    requireRandom: true,
+                    requireHttpTls: true,
+                    requireSsh: false,
+                    requireX509: true
+                ),
+                ContractAesEngineKind.Auto,
+                [
+                    "optimized for HTTPS server stacks that still prepare certificate material in-library",
+                    "direct stdx.net.tls.TlsServerConfig bridge is not required by default"
+                ]
+            )
+        case ContractHttpSshStartupProfile.SshClientLibrary =>
+            ContractHttpSshStartupProfileTemplate(
+                profile,
+                "ssh-client-library",
+                ContractHttpSshStartupPolicy(
+                    requireRandom: true,
+                    requireHttpTls: false,
+                    requireSsh: true,
+                    requireX509: false
+                ),
+                ContractAesEngineKind.Auto,
+                [
+                    "optimized for SSH client stacks that do not depend on X.509",
+                    "HTTP/TLS readiness is not required"
+                ]
+            )
+        case ContractHttpSshStartupProfile.SshServerLibrary =>
+            ContractHttpSshStartupProfileTemplate(
+                profile,
+                "ssh-server-library",
+                ContractHttpSshStartupPolicy(
+                    requireRandom: true,
+                    requireHttpTls: false,
+                    requireSsh: true,
+                    requireX509: false
+                ),
+                ContractAesEngineKind.Auto,
+                [
+                    "optimized for SSH server stacks that terminate SSH without X.509 requirements",
+                    "HTTP/TLS readiness is not required"
+                ]
+            )
+        case ContractHttpSshStartupProfile.ProductionAccelerated =>
+            ContractHttpSshStartupProfileTemplate(
+                profile,
+                "production-accelerated",
+                ContractHttpSshStartupPolicy(
+                    requireRandom: true,
+                    requireHttpTls: true,
+                    requireSsh: true,
+                    requireX509: true,
+                    requireAcceleration: true,
+                    requireCurrentReleasePrimaryBackend: true
+                ),
+                ContractAesEngineKind.Hardware,
+                [
+                    "requires the full HTTP/TLS + SSH + X.509 capability set",
+                    "fails closed when accelerated AES backend is unavailable",
+                    "pins the profile to the current release primary AES backend"
+                ],
+                defaultAesBackendHint: "armv8-ce"
+            )
+    }
+}
+
+public func contractListHttpSshStartupProfiles(): Array<ContractHttpSshStartupProfileTemplate> {
+    [
+        contractDescribeHttpSshStartupProfile(ContractHttpSshStartupProfile.LibraryDefault),
+        contractDescribeHttpSshStartupProfile(ContractHttpSshStartupProfile.HttpClientLibrary),
+        contractDescribeHttpSshStartupProfile(ContractHttpSshStartupProfile.HttpServerLibrary),
+        contractDescribeHttpSshStartupProfile(ContractHttpSshStartupProfile.SshClientLibrary),
+        contractDescribeHttpSshStartupProfile(ContractHttpSshStartupProfile.SshServerLibrary),
+        contractDescribeHttpSshStartupProfile(ContractHttpSshStartupProfile.ProductionAccelerated)
+    ]
+}
+
+public func contractRequireHttpSshStartupProfile(
+    profile: ContractHttpSshStartupProfile,
+    requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+    aesBackendHint!: String = ""
+): ContractHttpSshStartupReadinessReport {
+    let template = contractDescribeHttpSshStartupProfile(profile)
+    let effectiveAesEngine = if (requestedAesEngine == ContractAesEngineKind.Auto) {
+        template.defaultAesEngine
+    } else {
+        requestedAesEngine
+    }
+    let effectiveBackendHint = if (aesBackendHint.trimAscii().size > 0) {
+        aesBackendHint.trimAscii()
+    } else {
+        template.defaultAesBackendHint
+    }
+    contractRequireHttpSshStartupReadiness(
+        policy: template.policy,
+        requestedAesEngine: effectiveAesEngine,
+        aesBackendHint: effectiveBackendHint
+    )
+}
+
+public func contractTryRequireHttpSshStartupProfile(
+    profile: ContractHttpSshStartupProfile,
+    requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+    aesBackendHint!: String = ""
+): ContractHttpSshStartupReadinessOutcome {
+    try {
+        let result = contractRequireHttpSshStartupProfile(
+            profile,
+            requestedAesEngine: requestedAesEngine,
+            aesBackendHint: aesBackendHint
+        )
+        ContractHttpSshStartupReadinessOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpSshStartupReadinessOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareHttpServerLibraryStartupRequest(
+    request: ContractHttpServerLibraryStartupRequest
+): ContractHttpServerLibraryStartupBundle {
+    let template = contractDescribeHttpSshStartupProfile(request.profile)
+    contractRequireHttpTlsStartupProfile(template, "HTTP server startup")
+    let readiness = contractRequireHttpSshStartupProfile(
+        request.profile,
+        requestedAesEngine: request.requestedAesEngine,
+        aesBackendHint: request.aesBackendHint
+    )
+    let material = contractPrepareHttpServerTlsMaterialRequest(request.tls)
+    ContractHttpServerLibraryStartupBundle(template, readiness, material)
+}
+
+public func contractTryPrepareHttpServerLibraryStartupRequest(
+    request: ContractHttpServerLibraryStartupRequest
+): ContractHttpServerLibraryStartupOutcome {
+    try {
+        let result = contractPrepareHttpServerLibraryStartupRequest(request)
+        ContractHttpServerLibraryStartupOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpServerLibraryStartupOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareHttpClientLibraryStartupRequest(
+    request: ContractHttpClientLibraryStartupRequest
+): ContractHttpClientLibraryStartupBundle {
+    let template = contractDescribeHttpSshStartupProfile(request.profile)
+    contractRequireHttpTlsStartupProfile(template, "HTTP client startup")
+    let readiness = contractRequireHttpSshStartupProfile(
+        request.profile,
+        requestedAesEngine: request.requestedAesEngine,
+        aesBackendHint: request.aesBackendHint
+    )
+    let trust = contractPrepareHttpClientTlsTrustMaterialRequest(request.trust)
+    ContractHttpClientLibraryStartupBundle(template, readiness, trust)
+}
+
+public func contractTryPrepareHttpClientLibraryStartupRequest(
+    request: ContractHttpClientLibraryStartupRequest
+): ContractHttpClientLibraryStartupOutcome {
+    try {
+        let result = contractPrepareHttpClientLibraryStartupRequest(request)
+        ContractHttpClientLibraryStartupOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractHttpClientLibraryStartupOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareSshServerLibraryStartupX25519RsaPkcs8Request(
+    request: ContractSshServerLibraryStartupX25519RsaPkcs8Request
+): ContractSshServerLibraryStartupBundle {
+    try {
+        let template = contractDescribeHttpSshStartupProfile(request.profile)
+        contractRequireSshStartupProfile(template, "SSH server startup")
+        let readiness = contractRequireHttpSshStartupProfile(
+            request.profile,
+            requestedAesEngine: request.requestedAesEngine,
+            aesBackendHint: request.aesBackendHint
+        )
+        let hostPrivateKey = x509ParseRsaPrivateKeyPkcs8Pem(request.hostPrivateKeyPkcs8Pem)
+        let handshake = contractSshCompleteServerInitialHandshakeX25519Rsa(
+            contractToSshKexExchangeTranscript(request.transcript),
+            request.serverPrivateKey,
+            request.encodedClientInit,
+            hostPrivateKey,
+            contractToSshNegotiatedAlgorithms(request.negotiated),
+            request.encodedClientNewKeys,
+            request.encodedServerNewKeys,
+            signatureAlgorithm: request.signatureAlgorithm,
+            serverPublicKey: request.serverPublicKey
+        )
+        let runtime = contractSshCreateServerRuntimeRequest(ContractSshServerRuntimeRequest(handshake))
+        ContractSshServerLibraryStartupBundle(template, readiness, handshake, runtime)
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH server startup (RSA) failed: ${e.message}"
+        )
+    }
+}
+
+public func contractTryPrepareSshServerLibraryStartupX25519RsaPkcs8Request(
+    request: ContractSshServerLibraryStartupX25519RsaPkcs8Request
+): ContractSshServerLibraryStartupOutcome {
+    try {
+        let result = contractPrepareSshServerLibraryStartupX25519RsaPkcs8Request(request)
+        ContractSshServerLibraryStartupOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerLibraryStartupOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareSshServerLibraryStartupX25519EcdsaPkcs8Request(
+    request: ContractSshServerLibraryStartupX25519EcdsaPkcs8Request
+): ContractSshServerLibraryStartupBundle {
+    try {
+        let template = contractDescribeHttpSshStartupProfile(request.profile)
+        contractRequireSshStartupProfile(template, "SSH server startup")
+        let readiness = contractRequireHttpSshStartupProfile(
+            request.profile,
+            requestedAesEngine: request.requestedAesEngine,
+            aesBackendHint: request.aesBackendHint
+        )
+        let hostPrivateKey = x509ParseEcPrivateKeyPkcs8Pem(request.hostPrivateKeyPkcs8Pem)
+        let handshake = contractSshCompleteServerInitialHandshakeX25519Ecdsa(
+            contractToSshKexExchangeTranscript(request.transcript),
+            request.serverPrivateKey,
+            request.encodedClientInit,
+            hostPrivateKey,
+            contractToSshNegotiatedAlgorithms(request.negotiated),
+            request.encodedClientNewKeys,
+            request.encodedServerNewKeys,
+            serverPublicKey: request.serverPublicKey
+        )
+        let runtime = contractSshCreateServerRuntimeRequest(ContractSshServerRuntimeRequest(handshake))
+        ContractSshServerLibraryStartupBundle(template, readiness, handshake, runtime)
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH server startup (ECDSA) failed: ${e.message}"
+        )
+    }
+}
+
+public func contractTryPrepareSshServerLibraryStartupX25519EcdsaPkcs8Request(
+    request: ContractSshServerLibraryStartupX25519EcdsaPkcs8Request
+): ContractSshServerLibraryStartupOutcome {
+    try {
+        let result = contractPrepareSshServerLibraryStartupX25519EcdsaPkcs8Request(request)
+        ContractSshServerLibraryStartupOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerLibraryStartupOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareSshServerLibraryStartupX25519Ed25519SeedRequest(
+    request: ContractSshServerLibraryStartupX25519Ed25519SeedRequest
+): ContractSshServerLibraryStartupBundle {
+    try {
+        let template = contractDescribeHttpSshStartupProfile(request.profile)
+        contractRequireSshStartupProfile(template, "SSH server startup")
+        let readiness = contractRequireHttpSshStartupProfile(
+            request.profile,
+            requestedAesEngine: request.requestedAesEngine,
+            aesBackendHint: request.aesBackendHint
+        )
+        let handshake = contractSshCompleteServerInitialHandshakeX25519Ed25519(
+            contractToSshKexExchangeTranscript(request.transcript),
+            request.serverPrivateKey,
+            request.encodedClientInit,
+            request.hostPrivateKeySeed,
+            contractToSshNegotiatedAlgorithms(request.negotiated),
+            request.encodedClientNewKeys,
+            request.encodedServerNewKeys,
+            serverPublicKey: request.serverPublicKey
+        )
+        let runtime = contractSshCreateServerRuntimeRequest(ContractSshServerRuntimeRequest(handshake))
+        ContractSshServerLibraryStartupBundle(template, readiness, handshake, runtime)
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH server startup (Ed25519) failed: ${e.message}"
+        )
+    }
+}
+
+public func contractTryPrepareSshServerLibraryStartupX25519Ed25519SeedRequest(
+    request: ContractSshServerLibraryStartupX25519Ed25519SeedRequest
+): ContractSshServerLibraryStartupOutcome {
+    try {
+        let result = contractPrepareSshServerLibraryStartupX25519Ed25519SeedRequest(request)
+        ContractSshServerLibraryStartupOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerLibraryStartupOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractPrepareSshClientLibraryStartupX25519Request(
+    request: ContractSshClientLibraryStartupX25519Request
+): ContractSshClientLibraryStartupBundle {
+    try {
+        let template = contractDescribeHttpSshStartupProfile(request.profile)
+        contractRequireSshStartupProfile(template, "SSH client startup")
+        let readiness = contractRequireHttpSshStartupProfile(
+            request.profile,
+            requestedAesEngine: request.requestedAesEngine,
+            aesBackendHint: request.aesBackendHint
+        )
+        let handshake = contractSshCompleteClientInitialHandshakeX25519Request(request.handshake)
+        let runtime = contractSshCreateClientRuntimeRequest(ContractSshClientRuntimeRequest(handshake))
+        ContractSshClientLibraryStartupBundle(template, readiness, handshake, runtime)
+    } catch (e: ContractException) {
+        throw e
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "ssh"),
+            "SSH client startup failed: ${e.message}"
+        )
+    }
+}
+
+public func contractTryPrepareSshClientLibraryStartupX25519Request(
+    request: ContractSshClientLibraryStartupX25519Request
+): ContractSshClientLibraryStartupOutcome {
+    try {
+        let result = contractPrepareSshClientLibraryStartupX25519Request(request)
+        ContractSshClientLibraryStartupOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshClientLibraryStartupOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
 }
 
 public class ContractAeadEnvelopeV1 {
@@ -1024,6 +2694,102 @@ public class ContractHttpClientTlsConfigValidationOutcome {
     }
 }
 
+public class ContractHttpServerLibraryStartupBundle {
+    public let template: ContractHttpSshStartupProfileTemplate
+    public let readiness: ContractHttpSshStartupReadinessReport
+    public let material: ContractHttpServerTlsMaterial
+
+    public init(
+        template: ContractHttpSshStartupProfileTemplate,
+        readiness: ContractHttpSshStartupReadinessReport,
+        material: ContractHttpServerTlsMaterial
+    ) {
+        this.template = template
+        this.readiness = readiness
+        this.material = material
+    }
+}
+
+public class ContractHttpServerLibraryStartupOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractHttpServerLibraryStartupBundle
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractHttpServerLibraryStartupBundle = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "HTTP server startup outcome message must not be empty")
+        }
+        contractValidateOutcomeState(
+            ok,
+            code,
+            igniteCode,
+            result,
+            "HTTP server startup outcome result"
+        )
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
+public class ContractHttpClientLibraryStartupBundle {
+    public let template: ContractHttpSshStartupProfileTemplate
+    public let readiness: ContractHttpSshStartupReadinessReport
+    public let trust: ContractHttpClientTlsTrustMaterial
+
+    public init(
+        template: ContractHttpSshStartupProfileTemplate,
+        readiness: ContractHttpSshStartupReadinessReport,
+        trust: ContractHttpClientTlsTrustMaterial
+    ) {
+        this.template = template
+        this.readiness = readiness
+        this.trust = trust
+    }
+}
+
+public class ContractHttpClientLibraryStartupOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractHttpClientLibraryStartupBundle
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractHttpClientLibraryStartupBundle = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "HTTP client startup outcome message must not be empty")
+        }
+        contractValidateOutcomeState(
+            ok,
+            code,
+            igniteCode,
+            result,
+            "HTTP client startup outcome result"
+        )
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
 public class ContractHttpServerTlsConfigRequest {
     public let certificateChainPem: String
     public let privateKeyPem: String
@@ -1122,6 +2888,44 @@ public class ContractHttpClientTlsPeerChainRequest {
         }
         this.certificateChainPemBundle = certificateChainPemBundle
         this.trust = trust
+    }
+}
+
+public class ContractHttpServerLibraryStartupRequest {
+    public let tls: ContractHttpServerTlsConfigRequest
+    public let profile: ContractHttpSshStartupProfile
+    public let requestedAesEngine: ContractAesEngineKind
+    public let aesBackendHint: String
+
+    public init(
+        tls: ContractHttpServerTlsConfigRequest,
+        profile!: ContractHttpSshStartupProfile = ContractHttpSshStartupProfile.HttpServerLibrary,
+        requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+        aesBackendHint!: String = ""
+    ) {
+        this.tls = tls
+        this.profile = profile
+        this.requestedAesEngine = requestedAesEngine
+        this.aesBackendHint = aesBackendHint.trimAscii()
+    }
+}
+
+public class ContractHttpClientLibraryStartupRequest {
+    public let trust: ContractHttpClientTlsTrustRequest
+    public let profile: ContractHttpSshStartupProfile
+    public let requestedAesEngine: ContractAesEngineKind
+    public let aesBackendHint: String
+
+    public init(
+        trust: ContractHttpClientTlsTrustRequest,
+        profile!: ContractHttpSshStartupProfile = ContractHttpSshStartupProfile.HttpClientLibrary,
+        requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+        aesBackendHint!: String = ""
+    ) {
+        this.trust = trust
+        this.profile = profile
+        this.requestedAesEngine = requestedAesEngine
+        this.aesBackendHint = aesBackendHint.trimAscii()
     }
 }
 
@@ -2741,6 +4545,383 @@ public class ContractSshClientRuntimeRekeyResult {
     ) {
         this.runtime = runtime
         this.session = session
+    }
+}
+
+public class ContractSshServerRuntimeBundle {
+    public let runtime: ContractSshServerRuntime
+    public let session: ContractSshSessionState
+    public let snapshot: ContractSshRuntimeSnapshot
+
+    public init(
+        runtime: ContractSshServerRuntime,
+        session: ContractSshSessionState,
+        snapshot: ContractSshRuntimeSnapshot
+    ) {
+        this.runtime = runtime
+        this.session = session
+        this.snapshot = snapshot
+    }
+}
+
+public class ContractSshClientRuntimeBundle {
+    public let runtime: ContractSshClientRuntime
+    public let session: ContractSshSessionState
+    public let snapshot: ContractSshRuntimeSnapshot
+
+    public init(
+        runtime: ContractSshClientRuntime,
+        session: ContractSshSessionState,
+        snapshot: ContractSshRuntimeSnapshot
+    ) {
+        this.runtime = runtime
+        this.session = session
+        this.snapshot = snapshot
+    }
+}
+
+public class ContractSshServerRuntimeOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractSshServerRuntimeBundle
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractSshServerRuntimeBundle = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH server runtime outcome message must not be empty")
+        }
+        contractValidateOutcomeState(
+            ok,
+            code,
+            igniteCode,
+            result,
+            "SSH server runtime outcome result"
+        )
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
+public class ContractSshClientRuntimeOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractSshClientRuntimeBundle
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractSshClientRuntimeBundle = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH client runtime outcome message must not be empty")
+        }
+        contractValidateOutcomeState(
+            ok,
+            code,
+            igniteCode,
+            result,
+            "SSH client runtime outcome result"
+        )
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
+public class ContractSshServerLibraryStartupX25519RsaPkcs8Request {
+    public let transcript: ContractSshKexExchangeTranscript
+    public let serverPrivateKey: Array<Byte>
+    public let encodedClientInit: Array<Byte>
+    public let hostPrivateKeyPkcs8Pem: String
+    public let negotiated: ContractSshNegotiatedAlgorithms
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+    public let signatureAlgorithm: String
+    public let serverPublicKey: Array<Byte>
+    public let profile: ContractHttpSshStartupProfile
+    public let requestedAesEngine: ContractAesEngineKind
+    public let aesBackendHint: String
+
+    public init(
+        transcript: ContractSshKexExchangeTranscript,
+        serverPrivateKey: Array<Byte>,
+        encodedClientInit: Array<Byte>,
+        hostPrivateKeyPkcs8Pem: String,
+        negotiated: ContractSshNegotiatedAlgorithms,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>,
+        signatureAlgorithm!: String = "rsa-sha2-256",
+        serverPublicKey!: Array<Byte> = [],
+        profile!: ContractHttpSshStartupProfile = ContractHttpSshStartupProfile.SshServerLibrary,
+        requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+        aesBackendHint!: String = ""
+    ) {
+        if (
+            serverPrivateKey.size != 32 ||
+            encodedClientInit.size == 0 ||
+            hostPrivateKeyPkcs8Pem.trimAscii().size == 0 ||
+            encodedClientNewKeys.size == 0 ||
+            encodedServerNewKeys.size == 0 ||
+            signatureAlgorithm.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH server startup RSA request fields are invalid"
+            )
+        }
+        this.transcript = transcript
+        this.serverPrivateKey = serverPrivateKey.clone()
+        this.encodedClientInit = encodedClientInit.clone()
+        this.hostPrivateKeyPkcs8Pem = hostPrivateKeyPkcs8Pem
+        this.negotiated = negotiated
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+        this.signatureAlgorithm = signatureAlgorithm.trimAscii()
+        this.serverPublicKey = serverPublicKey.clone()
+        this.profile = profile
+        this.requestedAesEngine = requestedAesEngine
+        this.aesBackendHint = aesBackendHint.trimAscii()
+    }
+}
+
+public class ContractSshServerLibraryStartupX25519EcdsaPkcs8Request {
+    public let transcript: ContractSshKexExchangeTranscript
+    public let serverPrivateKey: Array<Byte>
+    public let encodedClientInit: Array<Byte>
+    public let hostPrivateKeyPkcs8Pem: String
+    public let negotiated: ContractSshNegotiatedAlgorithms
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+    public let serverPublicKey: Array<Byte>
+    public let profile: ContractHttpSshStartupProfile
+    public let requestedAesEngine: ContractAesEngineKind
+    public let aesBackendHint: String
+
+    public init(
+        transcript: ContractSshKexExchangeTranscript,
+        serverPrivateKey: Array<Byte>,
+        encodedClientInit: Array<Byte>,
+        hostPrivateKeyPkcs8Pem: String,
+        negotiated: ContractSshNegotiatedAlgorithms,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>,
+        serverPublicKey!: Array<Byte> = [],
+        profile!: ContractHttpSshStartupProfile = ContractHttpSshStartupProfile.SshServerLibrary,
+        requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+        aesBackendHint!: String = ""
+    ) {
+        if (
+            serverPrivateKey.size != 32 ||
+            encodedClientInit.size == 0 ||
+            hostPrivateKeyPkcs8Pem.trimAscii().size == 0 ||
+            encodedClientNewKeys.size == 0 ||
+            encodedServerNewKeys.size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH server startup ECDSA request fields are invalid"
+            )
+        }
+        this.transcript = transcript
+        this.serverPrivateKey = serverPrivateKey.clone()
+        this.encodedClientInit = encodedClientInit.clone()
+        this.hostPrivateKeyPkcs8Pem = hostPrivateKeyPkcs8Pem
+        this.negotiated = negotiated
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+        this.serverPublicKey = serverPublicKey.clone()
+        this.profile = profile
+        this.requestedAesEngine = requestedAesEngine
+        this.aesBackendHint = aesBackendHint.trimAscii()
+    }
+}
+
+public class ContractSshServerLibraryStartupX25519Ed25519SeedRequest {
+    public let transcript: ContractSshKexExchangeTranscript
+    public let serverPrivateKey: Array<Byte>
+    public let encodedClientInit: Array<Byte>
+    public let hostPrivateKeySeed: Array<Byte>
+    public let negotiated: ContractSshNegotiatedAlgorithms
+    public let encodedClientNewKeys: Array<Byte>
+    public let encodedServerNewKeys: Array<Byte>
+    public let serverPublicKey: Array<Byte>
+    public let profile: ContractHttpSshStartupProfile
+    public let requestedAesEngine: ContractAesEngineKind
+    public let aesBackendHint: String
+
+    public init(
+        transcript: ContractSshKexExchangeTranscript,
+        serverPrivateKey: Array<Byte>,
+        encodedClientInit: Array<Byte>,
+        hostPrivateKeySeed: Array<Byte>,
+        negotiated: ContractSshNegotiatedAlgorithms,
+        encodedClientNewKeys: Array<Byte>,
+        encodedServerNewKeys: Array<Byte>,
+        serverPublicKey!: Array<Byte> = [],
+        profile!: ContractHttpSshStartupProfile = ContractHttpSshStartupProfile.SshServerLibrary,
+        requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+        aesBackendHint!: String = ""
+    ) {
+        if (
+            serverPrivateKey.size != 32 ||
+            encodedClientInit.size == 0 ||
+            hostPrivateKeySeed.size != 32 ||
+            encodedClientNewKeys.size == 0 ||
+            encodedServerNewKeys.size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "SSH server startup Ed25519 request fields are invalid"
+            )
+        }
+        this.transcript = transcript
+        this.serverPrivateKey = serverPrivateKey.clone()
+        this.encodedClientInit = encodedClientInit.clone()
+        this.hostPrivateKeySeed = hostPrivateKeySeed.clone()
+        this.negotiated = negotiated
+        this.encodedClientNewKeys = encodedClientNewKeys.clone()
+        this.encodedServerNewKeys = encodedServerNewKeys.clone()
+        this.serverPublicKey = serverPublicKey.clone()
+        this.profile = profile
+        this.requestedAesEngine = requestedAesEngine
+        this.aesBackendHint = aesBackendHint.trimAscii()
+    }
+}
+
+public class ContractSshClientLibraryStartupX25519Request {
+    public let handshake: ContractSshClientInitialHandshakeX25519Request
+    public let profile: ContractHttpSshStartupProfile
+    public let requestedAesEngine: ContractAesEngineKind
+    public let aesBackendHint: String
+
+    public init(
+        handshake: ContractSshClientInitialHandshakeX25519Request,
+        profile!: ContractHttpSshStartupProfile = ContractHttpSshStartupProfile.SshClientLibrary,
+        requestedAesEngine!: ContractAesEngineKind = ContractAesEngineKind.Auto,
+        aesBackendHint!: String = ""
+    ) {
+        this.handshake = handshake
+        this.profile = profile
+        this.requestedAesEngine = requestedAesEngine
+        this.aesBackendHint = aesBackendHint.trimAscii()
+    }
+}
+
+public class ContractSshServerLibraryStartupBundle {
+    public let template: ContractHttpSshStartupProfileTemplate
+    public let readiness: ContractHttpSshStartupReadinessReport
+    public let handshake: ContractSshServerInitialHandshakeResult
+    public let runtime: ContractSshServerRuntime
+
+    public init(
+        template: ContractHttpSshStartupProfileTemplate,
+        readiness: ContractHttpSshStartupReadinessReport,
+        handshake: ContractSshServerInitialHandshakeResult,
+        runtime: ContractSshServerRuntime
+    ) {
+        this.template = template
+        this.readiness = readiness
+        this.handshake = handshake
+        this.runtime = runtime
+    }
+}
+
+public class ContractSshClientLibraryStartupBundle {
+    public let template: ContractHttpSshStartupProfileTemplate
+    public let readiness: ContractHttpSshStartupReadinessReport
+    public let handshake: ContractSshClientInitialHandshakeResult
+    public let runtime: ContractSshClientRuntime
+
+    public init(
+        template: ContractHttpSshStartupProfileTemplate,
+        readiness: ContractHttpSshStartupReadinessReport,
+        handshake: ContractSshClientInitialHandshakeResult,
+        runtime: ContractSshClientRuntime
+    ) {
+        this.template = template
+        this.readiness = readiness
+        this.handshake = handshake
+        this.runtime = runtime
+    }
+}
+
+public class ContractSshServerLibraryStartupOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractSshServerLibraryStartupBundle
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractSshServerLibraryStartupBundle = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH server startup outcome message must not be empty")
+        }
+        contractValidateOutcomeState(
+            ok,
+            code,
+            igniteCode,
+            result,
+            "SSH server startup outcome result"
+        )
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
+public class ContractSshClientLibraryStartupOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractSshClientLibraryStartupBundle
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractSshClientLibraryStartupBundle = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(ContractErrorCode.BadInput, "SSH client startup outcome message must not be empty")
+        }
+        contractValidateOutcomeState(
+            ok,
+            code,
+            igniteCode,
+            result,
+            "SSH client startup outcome result"
+        )
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
     }
 }
 
@@ -10298,6 +12479,30 @@ public func contractSshCreateServerRuntimeRequest(
     contractSshCreateServerRuntime(request.result)
 }
 
+public func contractPrepareSshServerRuntimeRequest(
+    request: ContractSshServerRuntimeRequest
+): ContractSshServerRuntimeBundle {
+    let runtime = contractSshCreateServerRuntimeRequest(request)
+    let session = runtime.currentSession()
+    ContractSshServerRuntimeBundle(runtime, session, runtime.snapshot())
+}
+
+public func contractTryPrepareSshServerRuntimeRequest(
+    request: ContractSshServerRuntimeRequest
+): ContractSshServerRuntimeOutcome {
+    try {
+        let result = contractPrepareSshServerRuntimeRequest(request)
+        ContractSshServerRuntimeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerRuntimeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
 public func contractSshCreateClientRuntime(
     result: ContractSshClientInitialHandshakeResult
 ): ContractSshClientRuntime {
@@ -10308,6 +12513,30 @@ public func contractSshCreateClientRuntimeRequest(
     request: ContractSshClientRuntimeRequest
 ): ContractSshClientRuntime {
     contractSshCreateClientRuntime(request.result)
+}
+
+public func contractPrepareSshClientRuntimeRequest(
+    request: ContractSshClientRuntimeRequest
+): ContractSshClientRuntimeBundle {
+    let runtime = contractSshCreateClientRuntimeRequest(request)
+    let session = runtime.currentSession()
+    ContractSshClientRuntimeBundle(runtime, session, runtime.snapshot())
+}
+
+public func contractTryPrepareSshClientRuntimeRequest(
+    request: ContractSshClientRuntimeRequest
+): ContractSshClientRuntimeOutcome {
+    try {
+        let result = contractPrepareSshClientRuntimeRequest(request)
+        ContractSshClientRuntimeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshClientRuntimeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
 }
 
 public func contractSshRekeyServerRuntimeX25519(
@@ -10348,6 +12577,29 @@ public func contractSshRekeyServerRuntimeX25519Request(
         request.encodedClientNewKeys,
         request.encodedServerNewKeys
     )
+}
+
+public func contractPrepareSshServerRuntimeRekeyX25519Request(
+    request: ContractSshServerRuntimeRekeyRequest
+): ContractSshServerRuntimeBundle {
+    let result = contractSshRekeyServerRuntimeX25519Request(request)
+    ContractSshServerRuntimeBundle(result.runtime, result.session, result.runtime.snapshot())
+}
+
+public func contractTryPrepareSshServerRuntimeRekeyX25519Request(
+    request: ContractSshServerRuntimeRekeyRequest
+): ContractSshServerRuntimeOutcome {
+    try {
+        let result = contractPrepareSshServerRuntimeRekeyX25519Request(request)
+        ContractSshServerRuntimeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerRuntimeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
 }
 
 public func contractSshRekeyClientRuntimeX25519(
@@ -10418,6 +12670,29 @@ public func contractSshRekeyClientRuntimeX25519Request(
     )
 }
 
+public func contractPrepareSshClientRuntimeRekeyX25519Request(
+    request: ContractSshClientRuntimeRekeyRequest
+): ContractSshClientRuntimeBundle {
+    let result = contractSshRekeyClientRuntimeX25519Request(request)
+    ContractSshClientRuntimeBundle(result.runtime, result.session, result.runtime.snapshot())
+}
+
+public func contractTryPrepareSshClientRuntimeRekeyX25519Request(
+    request: ContractSshClientRuntimeRekeyRequest
+): ContractSshClientRuntimeOutcome {
+    try {
+        let result = contractPrepareSshClientRuntimeRekeyX25519Request(request)
+        ContractSshClientRuntimeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshClientRuntimeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
 public func contractSshRekeyServerRuntimeFromSessionState(
     runtime: ContractSshServerRuntime,
     session: ContractSshSessionState,
@@ -10441,6 +12716,29 @@ public func contractSshRekeyServerRuntimeFromSessionStateRequest(
         request.encodedClientNewKeys,
         request.encodedServerNewKeys
     )
+}
+
+public func contractPrepareSshServerRuntimeRekeyFromSessionStateRequest(
+    request: ContractSshServerRuntimeSessionRekeyRequest
+): ContractSshServerRuntimeBundle {
+    let result = contractSshRekeyServerRuntimeFromSessionStateRequest(request)
+    ContractSshServerRuntimeBundle(result.runtime, result.session, result.runtime.snapshot())
+}
+
+public func contractTryPrepareSshServerRuntimeRekeyFromSessionStateRequest(
+    request: ContractSshServerRuntimeSessionRekeyRequest
+): ContractSshServerRuntimeOutcome {
+    try {
+        let result = contractPrepareSshServerRuntimeRekeyFromSessionStateRequest(request)
+        ContractSshServerRuntimeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshServerRuntimeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
 }
 
 public func contractSshRekeyClientRuntimeFromSessionState(
@@ -10469,6 +12767,29 @@ public func contractSshRekeyClientRuntimeFromSessionStateRequest(
         request.encodedServerNewKeys,
         policy: request.policy
     )
+}
+
+public func contractPrepareSshClientRuntimeRekeyFromSessionStateRequest(
+    request: ContractSshClientRuntimeSessionRekeyRequest
+): ContractSshClientRuntimeBundle {
+    let result = contractSshRekeyClientRuntimeFromSessionStateRequest(request)
+    ContractSshClientRuntimeBundle(result.runtime, result.session, result.runtime.snapshot())
+}
+
+public func contractTryPrepareSshClientRuntimeRekeyFromSessionStateRequest(
+    request: ContractSshClientRuntimeSessionRekeyRequest
+): ContractSshClientRuntimeOutcome {
+    try {
+        let result = contractPrepareSshClientRuntimeRekeyFromSessionStateRequest(request)
+        ContractSshClientRuntimeOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        ContractSshClientRuntimeOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
 }
 
 public func contractSshVerifyHostIdentity(
@@ -11374,6 +13695,266 @@ private func contractFromTlsSessionCacheStats(stats: TlsSessionCacheStats): Cont
         stats.evictions,
         stats.expiredRemovals
     )
+}
+
+private func contractFromAesHardwareMountPoint(
+    mount: AesHardwareMountPoint
+): ContractAesHardwareMountPointInfo {
+    ContractAesHardwareMountPointInfo(
+        mount.backend,
+        mount.available,
+        mount.accelerated,
+        mount.detected,
+        mount.detail
+    )
+}
+
+private func contractFromAesHardwareProbe(
+    probe: AesHardwareProbe
+): ContractAesHardwareProbeInfo {
+    ContractAesHardwareProbeInfo(
+        probe.available,
+        probe.backend,
+        probe.accelerated,
+        probe.detail
+    )
+}
+
+private func contractFromAesHardwareRoadmapEntry(
+    entry: AesHardwareRoadmapEntry
+): ContractAesHardwareRoadmapEntry {
+    ContractAesHardwareRoadmapEntry(
+        entry.architecture,
+        entry.backend,
+        entry.status,
+        entry.targetVersion,
+        entry.detail
+    )
+}
+
+private func contractFromAesEngineKind(kind: AesEngineKind): ContractAesEngineKind {
+    match (kind) {
+        case AUTO => ContractAesEngineKind.Auto
+        case SOFTWARE => ContractAesEngineKind.Software
+        case HARDWARE => ContractAesEngineKind.Hardware
+    }
+}
+
+private func contractToAesEngineKind(kind: ContractAesEngineKind): AesEngineKind {
+    match (kind) {
+        case ContractAesEngineKind.Auto => AesEngineKind.AUTO
+        case ContractAesEngineKind.Software => AesEngineKind.SOFTWARE
+        case ContractAesEngineKind.Hardware => AesEngineKind.HARDWARE
+    }
+}
+
+private func contractFromAesEngine(engine: AesEngine): ContractAesEngineInfo {
+    ContractAesEngineInfo(
+        contractFromAesEngineKind(engine.requested),
+        contractFromAesEngineKind(engine.active),
+        engine.backend,
+        engine.accelerated,
+        engine.detail
+    )
+}
+
+private func contractToAesNativeBridgeSpec(spec: ContractAesNativeBridgeSpec): AesNativeBridgeSpec {
+    AesNativeBridgeSpec(
+        spec.backend,
+        spec.libraryPath,
+        symbolPrefix: spec.symbolPrefix,
+        abiVersion: spec.abiVersion
+    )
+}
+
+private func contractFromAesNativeBridgeContract(
+    contract: AesNativeBridgeContract
+): ContractAesNativeBridgeContractInfo {
+    ContractAesNativeBridgeContractInfo(
+        contract.backend,
+        contract.abiVersion,
+        contract.expandKeySymbol,
+        contract.encryptBlocksSymbol,
+        contract.decryptBlocksSymbol,
+        contract.ghashMulSymbol,
+        contract.detail
+    )
+}
+
+private func contractFromAesNativeBridgeCallShape(
+    shape: AesNativeBridgeCallShape
+): ContractAesNativeBridgeCallShapeInfo {
+    ContractAesNativeBridgeCallShapeInfo(
+        shape.backend,
+        shape.abiVersion,
+        shape.keyBytes,
+        shape.roundCount,
+        shape.roundKeyWordCount,
+        shape.expandedKeyBlobBytes,
+        shape.blockBytes,
+        shape.requiresBlockAlignedPayload
+    )
+}
+
+private func contractFindAesMountPoint(
+    mounts: Array<ContractAesHardwareMountPointInfo>,
+    backend: String
+): ?ContractAesHardwareMountPointInfo {
+    for (mount in mounts) {
+        if (mount.backend == backend) {
+            return Some(mount)
+        }
+    }
+    None
+}
+
+private func contractFindPrimaryAesRoadmapBackend(
+    roadmap: Array<ContractAesHardwareRoadmapEntry>
+): String {
+    for (entry in roadmap) {
+        if (entry.status == "PRIMARY_ACTIVE") {
+            return entry.backend
+        }
+    }
+    throw ContractException(
+        ContractErrorCode.InternalError,
+        "AES roadmap does not define a primary active backend"
+    )
+}
+
+private func contractCollectAesRoadmapArchitectures(
+    roadmap: Array<ContractAesHardwareRoadmapEntry>,
+    status: String
+): Array<String> {
+    let values = ArrayList<String>()
+    for (entry in roadmap) {
+        if (entry.status == status) {
+            values.add(entry.architecture)
+        }
+    }
+    values.toArray()
+}
+
+private func contractCollectAesRoadmapBackendsByPrefix(
+    roadmap: Array<ContractAesHardwareRoadmapEntry>,
+    statusPrefix: String
+): Array<String> {
+    let values = ArrayList<String>()
+    for (entry in roadmap) {
+        if (entry.status.startsWith(statusPrefix)) {
+            values.add(entry.backend)
+        }
+    }
+    values.toArray()
+}
+
+private func contractHasAllFeatures(
+    features: Array<String>,
+    required: Array<String>
+): Bool {
+    for (item in required) {
+        var found = false
+        for (feature in features) {
+            if (feature == item) {
+                found = true
+                break
+            }
+        }
+        if (!found) {
+            return false
+        }
+    }
+    true
+}
+
+private func contractCollectHttpSshStartupPolicyFailures(
+    report: ContractHttpSshStartupReadinessReport,
+    policy: ContractHttpSshStartupPolicy
+): Array<String> {
+    let failures = ArrayList<String>()
+    if (policy.requireRandom && !report.randomAvailable) {
+        failures.add("system CSPRNG is unavailable")
+    }
+    if (policy.requireHttpTls && !report.httpTlsReady) {
+        failures.add("HTTP/TLS capability set is incomplete")
+    }
+    if (policy.requireSsh && !report.sshReady) {
+        failures.add("SSH capability set is incomplete")
+    }
+    if (policy.requireX509 && !report.x509Ready) {
+        failures.add("X.509 capability set is incomplete")
+    }
+    if (policy.requireAcceleration && !report.productionAccelerationReady) {
+        failures.add("accelerated AES backend is required but not ready")
+    }
+    if (policy.requireCurrentReleasePrimaryBackend) {
+        if (!report.aesCurrentReleasePlan.primaryBackendAvailable) {
+            failures.add(
+                "current release primary AES backend is unavailable: ${report.aesCurrentReleasePlan.primaryBackend}"
+            )
+        } else if (!report.aesCurrentReleasePlan.usingPrimaryBackend) {
+            failures.add(
+                "current release requires primary AES backend ${report.aesCurrentReleasePlan.primaryBackend}, but startup resolved ${report.aes.selectedEngine.backend}"
+            )
+        }
+    }
+    if (
+        policy.requireDirectStdxTlsServerConfigBridge &&
+        !report.capability.directStdxTlsServerConfigBridge
+    ) {
+        failures.add("direct stdx.net.tls.TlsServerConfig bridge is required but unavailable")
+    }
+    failures.toArray()
+}
+
+private func contractRequireHttpTlsStartupProfile(
+    template: ContractHttpSshStartupProfileTemplate,
+    scenario: String
+): Unit {
+    if (!template.policy.requireHttpTls) {
+        throw ContractException(
+            ContractErrorCode.Unsupported,
+            "HTTP startup profile ${template.profile.toString()} does not enable HTTP/TLS for ${scenario}"
+        )
+    }
+    if (!template.policy.requireX509) {
+        throw ContractException(
+            ContractErrorCode.Unsupported,
+            "HTTP startup profile ${template.profile.toString()} does not enable X.509 for ${scenario}"
+        )
+    }
+}
+
+private func contractRequireSshStartupProfile(
+    template: ContractHttpSshStartupProfileTemplate,
+    scenario: String
+): Unit {
+    if (!template.policy.requireSsh) {
+        throw ContractException(
+            ContractErrorCode.Unsupported,
+            "SSH startup profile ${template.profile.toString()} does not enable SSH for ${scenario}"
+        )
+    }
+}
+
+private func contractJoinMessages(
+    messages: Array<String>,
+    prefix: String
+): String {
+    if (messages.size == 0) {
+        return prefix.trimAscii()
+    }
+    var text = prefix
+    var first = true
+    for (message in messages) {
+        if (first) {
+            text = "${text}${message}"
+            first = false
+        } else {
+            text = "${text}; ${message}"
+        }
+    }
+    text
 }
 
 private func contractTls12ResolveEcdheCurveSpec(
@@ -12662,6 +15243,366 @@ private func contractValidateOutcomeState(
     code: ?ContractErrorCode,
     igniteCode: ?ContractIgniteCryptoErrorCode,
     result: ?ContractTls13HttpClientVerifiedSession,
+    resultLabel: String
+): Unit {
+    if (ok) {
+        match (code) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (igniteCode) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (result) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must exist when ok is true"
+                )
+        }
+    } else {
+        match (code) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must exist when ok is false"
+                )
+        }
+        match (igniteCode) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must exist when ok is false"
+                )
+        }
+        match (result) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must be empty when ok is false"
+                )
+            case None => ()
+        }
+    }
+}
+
+private func contractValidateOutcomeState(
+    ok: Bool,
+    code: ?ContractErrorCode,
+    igniteCode: ?ContractIgniteCryptoErrorCode,
+    result: ?ContractHttpServerLibraryStartupBundle,
+    resultLabel: String
+): Unit {
+    if (ok) {
+        match (code) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (igniteCode) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (result) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must exist when ok is true"
+                )
+        }
+    } else {
+        match (code) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must exist when ok is false"
+                )
+        }
+        match (igniteCode) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must exist when ok is false"
+                )
+        }
+        match (result) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must be empty when ok is false"
+                )
+            case None => ()
+        }
+    }
+}
+
+private func contractValidateOutcomeState(
+    ok: Bool,
+    code: ?ContractErrorCode,
+    igniteCode: ?ContractIgniteCryptoErrorCode,
+    result: ?ContractHttpClientLibraryStartupBundle,
+    resultLabel: String
+): Unit {
+    if (ok) {
+        match (code) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (igniteCode) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (result) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must exist when ok is true"
+                )
+        }
+    } else {
+        match (code) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must exist when ok is false"
+                )
+        }
+        match (igniteCode) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must exist when ok is false"
+                )
+        }
+        match (result) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must be empty when ok is false"
+                )
+            case None => ()
+        }
+    }
+}
+
+private func contractValidateOutcomeState(
+    ok: Bool,
+    code: ?ContractErrorCode,
+    igniteCode: ?ContractIgniteCryptoErrorCode,
+    result: ?ContractSshServerLibraryStartupBundle,
+    resultLabel: String
+): Unit {
+    if (ok) {
+        match (code) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (igniteCode) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (result) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must exist when ok is true"
+                )
+        }
+    } else {
+        match (code) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must exist when ok is false"
+                )
+        }
+        match (igniteCode) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must exist when ok is false"
+                )
+        }
+        match (result) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must be empty when ok is false"
+                )
+            case None => ()
+        }
+    }
+}
+
+private func contractValidateOutcomeState(
+    ok: Bool,
+    code: ?ContractErrorCode,
+    igniteCode: ?ContractIgniteCryptoErrorCode,
+    result: ?ContractSshServerRuntimeBundle,
+    resultLabel: String
+): Unit {
+    if (ok) {
+        match (code) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (igniteCode) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (result) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must exist when ok is true"
+                )
+        }
+    } else {
+        match (code) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must exist when ok is false"
+                )
+        }
+        match (igniteCode) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must exist when ok is false"
+                )
+        }
+        match (result) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must be empty when ok is false"
+                )
+            case None => ()
+        }
+    }
+}
+
+private func contractValidateOutcomeState(
+    ok: Bool,
+    code: ?ContractErrorCode,
+    igniteCode: ?ContractIgniteCryptoErrorCode,
+    result: ?ContractSshClientRuntimeBundle,
+    resultLabel: String
+): Unit {
+    if (ok) {
+        match (code) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (igniteCode) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must be empty when ok is true"
+                )
+            case None => ()
+        }
+        match (result) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must exist when ok is true"
+                )
+        }
+    } else {
+        match (code) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} code must exist when ok is false"
+                )
+        }
+        match (igniteCode) {
+            case Some(_) => ()
+            case None =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} ignite code must exist when ok is false"
+                )
+        }
+        match (result) {
+            case Some(_) =>
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "${resultLabel} must be empty when ok is false"
+                )
+            case None => ()
+        }
+    }
+}
+
+private func contractValidateOutcomeState(
+    ok: Bool,
+    code: ?ContractErrorCode,
+    igniteCode: ?ContractIgniteCryptoErrorCode,
+    result: ?ContractSshClientLibraryStartupBundle,
     resultLabel: String
 ): Unit {
     if (ok) {
