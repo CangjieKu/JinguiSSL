@@ -227,21 +227,21 @@ public class AesTestSuite {
 
     @TestCase
     public func testAesEngineSelectionAndEnforcement(): Unit {
-        @Assert(aesCurrentEngineKind().toString(), "SOFTWARE")
-        @Assert(aesHardwareAvailable(), false)
-        @Assert(aesProbeHardware().backend, "none")
+        @Assert(aesCurrentEngineKind(hardwareHint: "none").toString(), "SOFTWARE")
+        @Assert(aesHardwareAvailable(hardwareHint: "none"), false)
+        @Assert(aesProbeHardware(backendHint: "none").backend, "none")
 
         let key = hexToBytes("000102030405060708090a0b0c0d0e0f")
-        let schedule = aesPrepareKey(key, requestedEngine: SOFTWARE)
+        let schedule = aesPrepareKey(key, requestedEngine: SOFTWARE, hardwareHint: "none")
         @Assert(schedule.engine.active.toString(), "SOFTWARE")
         @Assert(schedule.engine.backend, "none")
 
-        let ctx = aesNewGcmContext(key, requestedEngine: AUTO)
+        let ctx = aesNewGcmContext(key, requestedEngine: AUTO, hardwareHint: "none")
         @Assert(ctx.engine.active.toString(), "SOFTWARE")
         @Assert(ctx.engine.backend, "none")
 
         try {
-            _ = aesPrepareKey(key, requestedEngine: HARDWARE)
+            _ = aesPrepareKey(key, requestedEngine: HARDWARE, hardwareHint: "none")
             @Fail("HARDWARE engine must fail when hardware is unavailable")
         } catch (e: CryptoException) {
             @Assert(e.code.toString(), "UNSUPPORTED")
@@ -261,7 +261,7 @@ public class AesTestSuite {
         @Assert(mounts[2].available, true)
         @Assert(mounts[2].accelerated, false)
         @Assert(mounts[2].detected, true)
-        @Assert(aesDefaultHardwareBackendHint(), "")
+        @Assert(aesDefaultHardwareBackendHint(), expectedDefaultAesHardwareBackendHint())
 
         let probe = aesProbeHardware(backendHint: "shim")
         @Assert(probe.available, true)
@@ -324,6 +324,24 @@ public class AesTestSuite {
         } catch (e: CryptoException) {
             @Assert(e.code.toString(), "UNSUPPORTED")
         }
+    }
+
+    @TestCase
+    public func testAesAutomaticDefaultSelection(): Unit {
+        let expectedDefault = expectedDefaultAesHardwareBackendHint()
+        @Assert(aesDefaultHardwareBackendHint(), expectedDefault)
+
+        let key = hexToBytes("000102030405060708090a0b0c0d0e0f")
+        let ctx = aesNewGcmContext(key)
+        if (expectedDefault == "armv8-ce") {
+            @Assert(ctx.engine.active.toString(), "HARDWARE")
+            @Assert(ctx.engine.backend, "armv8-ce")
+            @Assert(ctx.engine.accelerated, true)
+            return
+        }
+
+        @Assert(ctx.engine.active.toString(), "SOFTWARE")
+        @Assert(ctx.engine.backend, "none")
     }
 
     @TestCase
@@ -618,6 +636,20 @@ public class AesTestSuite {
 
 private func assertHex(actual: Array<Byte>, expectedHex: String): Unit {
     @Assert(bytesToHexLower(actual), expectedHex.toAsciiLower())
+}
+
+@When[os == "macOS" && arch == "aarch64"]
+private func expectedDefaultAesHardwareBackendHint(): String {
+    let probe = aesProbeHardware(backendHint: "armv8-ce")
+    if (probe.available && probe.accelerated) {
+        return "armv8-ce"
+    }
+    ""
+}
+
+@When[os != "macOS" || arch != "aarch64"]
+private func expectedDefaultAesHardwareBackendHint(): String {
+    ""
 }
 
 private func hexToBytes(hex: String): Array<Byte> {

@@ -86,9 +86,12 @@ private let AES_NATIVE_BRIDGE_KEY_BLOB_MAGIC_3: UInt8 = UInt8(0x31)
 private let AES_NATIVE_BRIDGE_KEY_BLOB_FLAG_RAW_KEY: UInt8 = UInt8(1)
 private let CC_STATUS_SUCCESS: Int32 = Int32(0)
 private let CC_STATUS_PARAM_ERROR: Int32 = Int32(-4300)
+private let CC_STATUS_ALIGNMENT_ERROR: Int32 = Int32(-4303)
 private let CC_STATUS_DECODE_ERROR: Int32 = Int32(-4304)
 private let CC_STATUS_UNIMPLEMENTED: Int32 = Int32(-4305)
+private let CC_STATUS_UNSPECIFIED_ERROR: Int32 = Int32(-4308)
 private let CC_STATUS_KEY_SIZE_ERROR: Int32 = Int32(-4310)
+private let CC_STATUS_INVALID_KEY: Int32 = Int32(-4311)
 private let CC_OPERATION_ENCRYPT: UInt32 = UInt32(0)
 private let CC_OPERATION_DECRYPT: UInt32 = UInt32(1)
 private let CC_ALGORITHM_AES: UInt32 = UInt32(0)
@@ -728,7 +731,21 @@ private func resolveAesHardwareBackendHint(backendHint: String): String {
     if (trimmedHint.size > 0) {
         return trimmedHint
     }
-    (getVariable(AES_HW_BACKEND_ENV) ?? "").trimAscii().toAsciiLower()
+    let envHint = (getVariable(AES_HW_BACKEND_ENV) ?? "").trimAscii().toAsciiLower()
+    if (envHint.size > 0) {
+        return envHint
+    }
+    resolveAutomaticAesHardwareBackendHint()
+}
+
+@When[os == "macOS" && arch == "aarch64"]
+private func resolveAutomaticAesHardwareBackendHint(): String {
+    AES_HW_BACKEND_ARMV8_CE
+}
+
+@When[os != "macOS" || arch != "aarch64"]
+private func resolveAutomaticAesHardwareBackendHint(): String {
+    ""
 }
 
 private func aesArmv8CeBackendReady(): Bool {
@@ -745,10 +762,18 @@ private func aesUseNativeArmv8Ce(engine: AesEngine): Bool {
 }
 
 private func throwCommonCryptoFailure(operation: String, status: Int32): Unit {
-    if (status == CC_STATUS_DECODE_ERROR) {
+    if (
+        status == CC_STATUS_DECODE_ERROR ||
+        status == CC_STATUS_ALIGNMENT_ERROR ||
+        status == CC_STATUS_UNSPECIFIED_ERROR
+    ) {
         throw CryptoException(InvalidArgument, "${operation} failed: authentication tag mismatch")
     }
-    if (status == CC_STATUS_PARAM_ERROR || status == CC_STATUS_KEY_SIZE_ERROR) {
+    if (
+        status == CC_STATUS_PARAM_ERROR ||
+        status == CC_STATUS_KEY_SIZE_ERROR ||
+        status == CC_STATUS_INVALID_KEY
+    ) {
         throw CryptoException(InvalidArgument, "${operation} failed with CommonCrypto status ${status}")
     }
     if (status == CC_STATUS_UNIMPLEMENTED) {

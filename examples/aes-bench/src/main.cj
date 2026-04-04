@@ -6,9 +6,21 @@ import jinguissl.crypto.compliance.FipsProfile
 import jinguissl.crypto.perf.*
 
 main(): Int64 {
-    println("[jinguiSSL] AES-256-GCM benchmark (software)")
+    try {
+        return runBench()
+    } catch (e: Exception) {
+        println("fatal=${e}")
+        1
+    }
+}
+
+private func runBench(): Int64 {
+    println("[jinguiSSL] AES-256-GCM benchmark")
     println("report=median/min/max/mean/trimmed_mean/spread_ratio with stability retries")
-    println("backend_hint_default=${aesDefaultHardwareBackendHint()}")
+    let defaultHint = aesDefaultHardwareBackendHint()
+    let requestedEngine = resolveBenchRequestedEngine()
+    println("backend_hint_default=${defaultHint}")
+    println("requested_engine=${requestedEngine.toString()}")
     let stability = resolveBenchStabilityConfig()
     println(
         "bench_stability max_spread_ratio=${stability.maxSpreadRatio} " +
@@ -23,17 +35,19 @@ main(): Int64 {
 
     let profile = FipsProfile.phase1Default()
     let key = sequenceBytes(32)
-    let ctx = aesNewGcmContext(key)
+    let ctx = aesNewGcmContext(key, requestedEngine: requestedEngine)
+    let primaryCaseLabel = describeManagedRoundTripLabel(ctx.engine)
     println(
         "engine=${ctx.engine.active.toString()} backend=${ctx.engine.backend} " +
         "accelerated=${ctx.engine.accelerated} (hardware_available=${aesHardwareAvailable()})"
     )
+    println("primary_case=${primaryCaseLabel} api_shape=managed-roundtrip-return-values")
     let ivSeed = sequenceBytes(12)
     let aad = "jinguiSSL-bench".toArray()
 
-    runCase(profile, ctx, ivSeed, aad, 1024, 160, 5, stability)
-    runCase(profile, ctx, ivSeed, aad, 16 * 1024, 24, 4, stability)
-    runCase(profile, ctx, ivSeed, aad, 1024 * 1024, 1, 3, stability)
+    runCase(primaryCaseLabel, profile, ctx, ivSeed, aad, 1024, 160, 5, stability)
+    runCase(primaryCaseLabel, profile, ctx, ivSeed, aad, 16 * 1024, 24, 4, stability)
+    runCase(primaryCaseLabel, profile, ctx, ivSeed, aad, 1024 * 1024, 1, 3, stability)
     runAcquirePointerVsArrayProbe(stability)
     runPointerAlignmentProbe()
 
@@ -52,6 +66,7 @@ main(): Int64 {
 }
 
 private func runCase(
+    caseLabel: String,
     profile: FipsProfile,
     ctx: AesGcmContext,
     ivSeed: Array<Byte>,
@@ -65,7 +80,7 @@ private func runCase(
     let iv = ivSeed.clone()
     let counter = BenchMutableInt64()
     let stable = benchRunStable(
-        BenchConfig("software-${payloadSize}", warmupRounds: 2, samples: samples),
+        BenchConfig("${caseLabel}-${payloadSize}", warmupRounds: 2, samples: samples),
         stability,
         { =>
         var processedBytes: Int64 = 0
@@ -85,6 +100,32 @@ private func runCase(
     println(
         "size=${payloadSize} rounds=${rounds} samples=${samples} " +
         benchFormatStableSummary(stable)
+    )
+}
+
+private func describeManagedRoundTripLabel(engine: AesEngine): String {
+    if (engine.active == HARDWARE) {
+        if (engine.accelerated) {
+            return "managed-roundtrip-hardware-${engine.backend}"
+        }
+        return "managed-roundtrip-hardware-dispatch-${engine.backend}"
+    }
+    "managed-roundtrip-software"
+}
+
+private func resolveBenchRequestedEngine(): AesEngineKind {
+    let raw = (getVariable("JINGUISSL_BENCH_ENGINE") ?? "").trimAscii().toAsciiLower()
+    if (raw.size == 0 || raw == "auto") {
+        return AUTO
+    }
+    if (raw == "hardware" || raw == "hw") {
+        return HARDWARE
+    }
+    if (raw == "software" || raw == "sw") {
+        return SOFTWARE
+    }
+    throw Exception(
+        "unsupported JINGUISSL_BENCH_ENGINE value: ${raw} (expected auto, hardware, or software)"
     )
 }
 
