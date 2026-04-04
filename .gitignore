@@ -6,6 +6,10 @@ target/
 
 examples/*/target/
 examples/*
+!examples/aes-bench/
+!examples/aes-bench/**
+examples/aes-bench/target/
+examples/aes-bench/target/**
 !examples/phase1-demo/
 !examples/phase1-demo/**
 
