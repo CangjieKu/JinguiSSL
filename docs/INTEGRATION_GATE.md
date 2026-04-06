@@ -40,6 +40,7 @@
 
 ```bash
 ./tools/cjpm_bundle_finish.sh
+./tools/cjpm_bundle_audit.sh
 ```
 
 发布前至少检查：
@@ -47,8 +48,15 @@
 1. `cjpm build`
 2. `cjpm test`
 3. `./tools/cjpm_bundle_finish.sh`
+4. `./tools/cjpm_bundle_audit.sh`
 
 若第 3 步成功，说明当前仓库可产出有效 `.cjp`，即使原生命令退出码仍受上游工具链 bug 影响。
+
+若第 4 步成功，说明：
+
+- `.cjp` 制品可读；
+- `.sha256` 与实际产物一致；
+- bundle manifest 与制品、日志、已知上游崩溃语义保持一致。
 
 ## Public Constraint
 
