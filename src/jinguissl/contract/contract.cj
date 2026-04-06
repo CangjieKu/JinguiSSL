@@ -11960,6 +11960,7 @@ public func contractSshEncodeNewKeys(): Array<Byte> {
 public func contractSshEncodeNewKeysRequest(
     request: ContractSshEncodeNewKeysRequest
 ): Array<Byte> {
+    let _ = request
     contractSshEncodeNewKeys()
 }
 

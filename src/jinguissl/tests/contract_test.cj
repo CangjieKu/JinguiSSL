@@ -4219,12 +4219,13 @@ public class ContractTestSuite {
 
     @TestCase
     public func testContractSshKexInitNegotiationFacadeHelpers(): Unit {
+        let chachaCipher = SSH_CIPHER_CHACHA20_POLY1305_OPENSSH
         let clientMessage = ContractSshKexInitMessage(
             incrementalBytes(16, start: 1400),
             ["curve25519-sha256", "ecdh-sha2-nistp256"],
             ["rsa-sha2-256", "ssh-ed25519"],
-            ["aes128-ctr", "chacha20-poly1305@openssh.com"],
-            ["aes128-ctr", "chacha20-poly1305@openssh.com"],
+            ["aes128-ctr", chachaCipher],
+            ["aes128-ctr", chachaCipher],
             ["hmac-sha2-256"],
             ["hmac-sha2-256"],
             ["none"],
