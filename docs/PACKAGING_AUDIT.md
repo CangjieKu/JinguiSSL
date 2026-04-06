@@ -8,6 +8,12 @@
 第一步负责拿到有效 `.cjp`，并在已知 SHA256 崩溃场景下补齐 `.sha256` 与 manifest。  
 第二步负责审计产物一致性，避免“产物看起来存在，但发布元数据不完整或不匹配”的伪成功。
 
+额外说明：
+
+- 若执行环境限制了 `std.unittest` 默认 transport 的本地 socket bind，`tools/cjpm_bundle_finish.sh` 现在会明确报出 `local unittest transport bind was denied`；
+- 这种情况说明当前是执行环境限制，而不是已知的 SHA256 workaround 命中路径；
+- 解除该限制后，再判断是否回到真正的 `cjpm bundle` SHA256 崩溃问题。
+
 ## 审计内容
 
 `tools/cjpm_bundle_audit.sh` 默认检查当前工作树对应版本的：

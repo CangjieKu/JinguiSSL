@@ -35,6 +35,7 @@ rm -f "$TMP_LOG_PATH"
 
 artifact_ready=false
 known_upstream_sha_bug=false
+known_local_bind_denied=false
 
 if [ -f "$ARTIFACT_PATH" ] && tar -tf "$ARTIFACT_PATH" >/dev/null 2>&1; then
   artifact_ready=true
@@ -45,6 +46,11 @@ if [ "$artifact_ready" = true ] \
   && rg 'stdx\.crypto\.digest|ArtifactIndex::genFileCheckSum|genFileCheckSum' "$LOG_PATH" >/dev/null 2>&1
 then
   known_upstream_sha_bug=true
+fi
+
+if rg 'SocketException: Failed to bind .*Operation not permitted|Transport::fromDefaultConfiguration|std\.unittest::testRunnerEntryMain' "$LOG_PATH" >/dev/null 2>&1
+then
+  known_local_bind_denied=true
 fi
 
 if [ "$bundle_status" -eq 0 ] || [ "$known_upstream_sha_bug" = true ]; then
@@ -82,6 +88,14 @@ EOF
   echo "manifest: $MANIFEST_PATH"
   echo "log: $LOG_PATH"
   exit 0
+fi
+
+if [ "$known_local_bind_denied" = true ]; then
+  echo "bundle-failed: local unittest transport bind was denied before bundle completion" >&2
+  echo "hint: rerun outside a restricted sandbox or environment that blocks local socket bind for std.unittest transport" >&2
+  echo "log: $LOG_PATH" >&2
+  tail -n 80 "$LOG_PATH" >&2 || true
+  exit "$bundle_status"
 fi
 
 echo "bundle-failed: no valid workaround path matched" >&2
