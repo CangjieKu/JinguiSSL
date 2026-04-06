@@ -10,7 +10,7 @@ import jinguissl.contract.*
 
 ## Status
 
-- Release line: `0.6.0`
+- Release line: `0.6.14`
 - Maturity: `pre-1.0`
 - Package type: `static` Cangjie library
 - Public integration surface: `jinguissl.contract.*`
@@ -88,13 +88,14 @@ The audit script then verifies that:
 - Index: `docs/README.md`
 - API boundary: `docs/API_BOUNDARY.md`
 - HTTP / SSH capability matrix: `docs/CAPABILITY_MATRIX.md`
+- Provider contract: `docs/PROVIDER_CONTRACT.md`
 - SSH facade: `docs/SSH_FACADE.md`
 - Integration gate: `docs/INTEGRATION_GATE.md`
 - Packaging audit: `docs/PACKAGING_AUDIT.md`
 
 ## Versioning
 
-`0.6.0` reflects that the library is well beyond the phase-1 skeleton, but not yet at a 1.0 stability promise. During the `0.x` line, the `contract` facade is intended to stay comparatively stable, while internal `crypto.*` implementation details may keep evolving.
+`0.6.14` reflects that the library is well beyond the phase-1 skeleton, but not yet at a 1.0 stability promise. During the `0.x` line, the `contract` facade is intended to stay comparatively stable, while internal `crypto.*` implementation details may keep evolving.
 
 ## License
 

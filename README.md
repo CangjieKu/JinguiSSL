@@ -12,7 +12,7 @@ import jinguissl.contract.*
 
 ## 当前状态
 
-- 版本阶段：`0.6.0`
+- 版本阶段：`0.6.14`
 - 发布定位：`pre-1.0`
 - 产物形态：`static` 仓颉库
 - 公开集成面：`jinguissl.contract.*`
@@ -94,13 +94,14 @@ cjpm test
 - 文档索引：`docs/README.md`
 - API 边界：`docs/API_BOUNDARY.md`
 - HTTP / SSH 能力矩阵：`docs/CAPABILITY_MATRIX.md`
+- Provider 合同：`docs/PROVIDER_CONTRACT.md`
 - SSH facade：`docs/SSH_FACADE.md`
 - 集成门禁：`docs/INTEGRATION_GATE.md`
 - 打包审计：`docs/PACKAGING_AUDIT.md`
 
 ## 版本说明
 
-`0.6.0` 表示当前库能力已明显超出阶段 1 的基础骨架，但仍未进入 1.0 稳定承诺阶段。后续在 `0.x` 期间，`contract` facade 会尽量保持稳定，而 `crypto.*` 的内部实现仍可能继续调整。
+`0.6.14` 表示当前库能力已明显超出阶段 1 的基础骨架，但仍未进入 1.0 稳定承诺阶段。后续在 `0.x` 期间，`contract` facade 会尽量保持稳定，而 `crypto.*` 的内部实现仍可能继续调整。
 
 ## 许可证
 

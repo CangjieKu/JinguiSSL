@@ -32,6 +32,41 @@
 2. 通过 precheck 后，再进入各自框架或运行时的 TLS / SSH 配置构造
 3. 统一使用 contract 返回面做错误分流，而不是自行解析底层异常
 
+## Provider Gate
+
+面向 `lisi` / provider 选择层，当前推荐直接消费下面这些稳定 contract：
+
+- `contractProviderCapabilityRecord()`
+- `contractProviderAttachContractInfo()`
+- `contractProviderServerAttachBoundary()`
+- `contractProviderSmokeFixtureCatalog()`
+- `contractRequireProviderSmokeFixture(...)`
+- `contractDescribeProviderSmokeBaseline(...)`
+- `contractDescribeProviderSmokeBaselineRequest(...)`
+- `contractTryDescribeProviderSmokeBaselineRequest(...)`
+- `contractDescribeProviderErrorCode(...)`
+- `contractDescribeProviderContractException(...)`
+- `contractDescribeProviderCryptoException(...)`
+- `contractRecommendProviderFallback(...)`
+
+当前 server attach 结论固定为：
+
+- `jinguissl` 在本仓公开范围内只保证 `precheck + material preparation`
+- 不保证稳定的 server-side TLS attach 入口
+- 若上层需要真实监听链 attach，应由 `lisi` 负责 provider 选择、fallback 与记录
+- 在现阶段，`jinguissl` 不能被表述为默认 HTTPS listener 路径
+
+## Fallback Guidance
+
+推荐由 `lisi` 执行并记录 fallback，`jinguissl` 侧给出如下边界建议：
+
+- `PROVIDER_UNAVAILABLE` / `CRYPTO_UNAVAILABLE` / `UNSUPPORTED`
+  - 允许回退到 `stdx`
+- `TLS_HANDSHAKE_ERROR`
+  - 可谨慎重试，或回退到 `stdx`
+- `BAD_INPUT` / `COMPLIANCE_REJECTED` / `TLS_PRECHECK_ERROR` / `TLS_VERIFY_ERROR`
+  - 不建议自动回退，应直接上抛并保留失败记录
+
 ## Packaging Gate
 
 当前工具链下，原生 `cjpm bundle` 仍可能在已生成有效产物后，因 SHA256 相关索引阶段崩溃退出。

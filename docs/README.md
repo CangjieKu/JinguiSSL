@@ -6,9 +6,10 @@
 
 1. `API_BOUNDARY.md`
 2. `CAPABILITY_MATRIX.md`
-3. `INTEGRATION_GATE.md`
-4. `PACKAGING_AUDIT.md`
-5. `SSH_FACADE.md`
+3. `PROVIDER_CONTRACT.md`
+4. `INTEGRATION_GATE.md`
+5. `PACKAGING_AUDIT.md`
+6. `SSH_FACADE.md`
 
 ## 文档索引
 
@@ -18,6 +19,8 @@
   - 汇总当前面向 HTTP / SSH 的库能力覆盖面
 - `INTEGRATION_GATE.md`
   - 说明集成侧推荐依赖方式、命名约束、发布门禁与打包注意事项
+- `PROVIDER_CONTRACT.md`
+  - 汇总 provider capability、attach boundary、错误模型与 fallback 建议
 - `PACKAGING_AUDIT.md`
   - 说明 `.cjp` / `.sha256` / manifest 的发布审计路径与检查项
 - `SSH_FACADE.md`

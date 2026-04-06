@@ -1,6 +1,7 @@
 package jinguissl.contract
 
 import std.collection.{ArrayList, HashMap}
+import jinguissl.LIBRARY_VERSION
 import jinguissl.crypto.aes.{
     AesEngine,
     AesEngineKind,
@@ -482,6 +483,982 @@ public func contractCapabilityInfo(): ContractCapabilityInfo {
             "HTTP/SSH-facing contract surface is prioritized over deep crypto internals"
         ]
     )
+}
+
+public enum ContractProviderServerAttachStatus <: Equatable<ContractProviderServerAttachStatus> & ToString {
+    | PrecheckOnly
+    | Experimental
+    | Stable
+
+    public operator func ==(right: ContractProviderServerAttachStatus): Bool {
+        ordinalValue() == right.ordinalValue()
+    }
+
+    public operator func !=(right: ContractProviderServerAttachStatus): Bool {
+        !(this == right)
+    }
+
+    public func ordinalValue(): Int64 {
+        match (this) {
+            case PrecheckOnly => 0
+            case Experimental => 1
+            case Stable => 2
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case PrecheckOnly => "PRECHECK_ONLY"
+            case Experimental => "EXPERIMENTAL"
+            case Stable => "STABLE"
+        }
+    }
+}
+
+public enum ContractProviderErrorPhase <: Equatable<ContractProviderErrorPhase> & ToString {
+    | ProviderSelection
+    | TlsPrecheck
+    | TlsHandshake
+    | TlsVerify
+    | ProviderRuntime
+
+    public operator func ==(right: ContractProviderErrorPhase): Bool {
+        ordinalValue() == right.ordinalValue()
+    }
+
+    public operator func !=(right: ContractProviderErrorPhase): Bool {
+        !(this == right)
+    }
+
+    public func ordinalValue(): Int64 {
+        match (this) {
+            case ProviderSelection => 0
+            case TlsPrecheck => 1
+            case TlsHandshake => 2
+            case TlsVerify => 3
+            case ProviderRuntime => 4
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case ProviderSelection => "PROVIDER_SELECTION"
+            case TlsPrecheck => "TLS_PRECHECK"
+            case TlsHandshake => "TLS_HANDSHAKE"
+            case TlsVerify => "TLS_VERIFY"
+            case ProviderRuntime => "PROVIDER_RUNTIME"
+        }
+    }
+}
+
+public enum ContractProviderErrorFamily <: Equatable<ContractProviderErrorFamily> & ToString {
+    | BadInput
+    | VerifyFailed
+    | KeyNotFound
+    | CryptoUnavailable
+    | ComplianceRejected
+    | Unsupported
+    | InternalError
+    | TlsPrecheckError
+    | TlsHandshakeError
+    | TlsVerifyError
+    | ProviderUnavailable
+
+    public operator func ==(right: ContractProviderErrorFamily): Bool {
+        ordinalValue() == right.ordinalValue()
+    }
+
+    public operator func !=(right: ContractProviderErrorFamily): Bool {
+        !(this == right)
+    }
+
+    public func ordinalValue(): Int64 {
+        match (this) {
+            case BadInput => 0
+            case VerifyFailed => 1
+            case KeyNotFound => 2
+            case CryptoUnavailable => 3
+            case ComplianceRejected => 4
+            case Unsupported => 5
+            case InternalError => 6
+            case TlsPrecheckError => 7
+            case TlsHandshakeError => 8
+            case TlsVerifyError => 9
+            case ProviderUnavailable => 10
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case BadInput => "BAD_INPUT"
+            case VerifyFailed => "VERIFY_FAILED"
+            case KeyNotFound => "KEY_NOT_FOUND"
+            case CryptoUnavailable => "CRYPTO_UNAVAILABLE"
+            case ComplianceRejected => "COMPLIANCE_REJECTED"
+            case Unsupported => "UNSUPPORTED"
+            case InternalError => "INTERNAL_ERROR"
+            case TlsPrecheckError => "TLS_PRECHECK_ERROR"
+            case TlsHandshakeError => "TLS_HANDSHAKE_ERROR"
+            case TlsVerifyError => "TLS_VERIFY_ERROR"
+            case ProviderUnavailable => "PROVIDER_UNAVAILABLE"
+        }
+    }
+}
+
+public class ContractProviderCapabilityRecord {
+    public let providerId: String
+    public let providerVersion: String
+    public let platformScope: String
+    public let cjScope: String
+    public let supportsClientTls: Bool
+    public let supportsServerTlsAttach: Bool
+    public let supportsX509Verify: Bool
+    public let supportsAlpnH2: Bool
+    public let supportsMtls: Bool
+    public let supportsSessionCache: Bool
+    public let experimental: Bool
+    public let defaultEligible: Bool
+    public let unsupportedReasons: Array<String>
+    public let notes: Array<String>
+
+    public init(
+        providerId: String,
+        providerVersion: String,
+        platformScope: String,
+        cjScope: String,
+        supportsClientTls: Bool,
+        supportsServerTlsAttach: Bool,
+        supportsX509Verify: Bool,
+        supportsAlpnH2: Bool,
+        supportsMtls: Bool,
+        supportsSessionCache: Bool,
+        experimental: Bool,
+        defaultEligible: Bool,
+        unsupportedReasons: Array<String>,
+        notes: Array<String>
+    ) {
+        if (
+            providerId.trimAscii().size == 0 ||
+            providerVersion.trimAscii().size == 0 ||
+            platformScope.trimAscii().size == 0 ||
+            cjScope.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider capability record string fields must not be empty"
+            )
+        }
+        this.providerId = providerId.trimAscii()
+        this.providerVersion = providerVersion.trimAscii()
+        this.platformScope = platformScope.trimAscii()
+        this.cjScope = cjScope.trimAscii()
+        this.supportsClientTls = supportsClientTls
+        this.supportsServerTlsAttach = supportsServerTlsAttach
+        this.supportsX509Verify = supportsX509Verify
+        this.supportsAlpnH2 = supportsAlpnH2
+        this.supportsMtls = supportsMtls
+        this.supportsSessionCache = supportsSessionCache
+        this.experimental = experimental
+        this.defaultEligible = defaultEligible
+        this.unsupportedReasons = unsupportedReasons.clone()
+        this.notes = notes.clone()
+    }
+}
+
+public class ContractProviderAttachContractInfo {
+    public let providerId: String
+    public let supportsTlsPrecheck: Bool
+    public let supportsClientTls: Bool
+    public let supportsServerTlsAttach: Bool
+    public let supportsX509Verify: Bool
+    public let supportsHostOrSni: Bool
+    public let supportsVerifyMode: Bool
+    public let supportsHandshakeTimeout: Bool
+    public let supportsSessionCache: Bool
+    public let tlsPrecheckInputs: Array<String>
+    public let tlsAttachInputs: Array<String>
+    public let x509VerifyInputs: Array<String>
+    public let failureFields: Array<String>
+    public let unsupportedReasons: Array<String>
+    public let notes: Array<String>
+
+    public init(
+        providerId: String,
+        supportsTlsPrecheck: Bool,
+        supportsClientTls: Bool,
+        supportsServerTlsAttach: Bool,
+        supportsX509Verify: Bool,
+        supportsHostOrSni: Bool,
+        supportsVerifyMode: Bool,
+        supportsHandshakeTimeout: Bool,
+        supportsSessionCache: Bool,
+        tlsPrecheckInputs: Array<String>,
+        tlsAttachInputs: Array<String>,
+        x509VerifyInputs: Array<String>,
+        failureFields: Array<String>,
+        unsupportedReasons: Array<String>,
+        notes: Array<String>
+    ) {
+        if (providerId.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider attach contract providerId must not be empty"
+            )
+        }
+        if (tlsPrecheckInputs.size == 0 || x509VerifyInputs.size == 0 || failureFields.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider attach contract input/output fields must not be empty"
+            )
+        }
+        this.providerId = providerId.trimAscii()
+        this.supportsTlsPrecheck = supportsTlsPrecheck
+        this.supportsClientTls = supportsClientTls
+        this.supportsServerTlsAttach = supportsServerTlsAttach
+        this.supportsX509Verify = supportsX509Verify
+        this.supportsHostOrSni = supportsHostOrSni
+        this.supportsVerifyMode = supportsVerifyMode
+        this.supportsHandshakeTimeout = supportsHandshakeTimeout
+        this.supportsSessionCache = supportsSessionCache
+        this.tlsPrecheckInputs = tlsPrecheckInputs.clone()
+        this.tlsAttachInputs = tlsAttachInputs.clone()
+        this.x509VerifyInputs = x509VerifyInputs.clone()
+        this.failureFields = failureFields.clone()
+        this.unsupportedReasons = unsupportedReasons.clone()
+        this.notes = notes.clone()
+    }
+}
+
+public class ContractProviderServerAttachBoundary {
+    public let providerId: String
+    public let status: ContractProviderServerAttachStatus
+    public let stableAttach: Bool
+    public let blockingLayer: String
+    public let recommendedFallback: String
+    public let detail: String
+    public let unsupportedReasons: Array<String>
+
+    public init(
+        providerId: String,
+        status: ContractProviderServerAttachStatus,
+        stableAttach: Bool,
+        blockingLayer: String,
+        recommendedFallback: String,
+        detail: String,
+        unsupportedReasons: Array<String>
+    ) {
+        if (
+            providerId.trimAscii().size == 0 ||
+            blockingLayer.trimAscii().size == 0 ||
+            recommendedFallback.trimAscii().size == 0 ||
+            detail.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider server attach boundary string fields must not be empty"
+            )
+        }
+        this.providerId = providerId.trimAscii()
+        this.status = status
+        this.stableAttach = stableAttach
+        this.blockingLayer = blockingLayer.trimAscii()
+        this.recommendedFallback = recommendedFallback.trimAscii()
+        this.detail = detail.trimAscii()
+        this.unsupportedReasons = unsupportedReasons.clone()
+    }
+}
+
+public class ContractProviderErrorDescriptor {
+    public let providerId: String
+    public let family: ContractProviderErrorFamily
+    public let phase: ContractProviderErrorPhase
+    public let retryable: Bool
+    public let fallbackSuggested: Bool
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let detail: String
+
+    public init(
+        providerId: String,
+        family: ContractProviderErrorFamily,
+        phase: ContractProviderErrorPhase,
+        retryable: Bool,
+        fallbackSuggested: Bool,
+        detail: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None
+    ) {
+        if (providerId.trimAscii().size == 0 || detail.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider error descriptor string fields must not be empty"
+            )
+        }
+        this.providerId = providerId.trimAscii()
+        this.family = family
+        this.phase = phase
+        this.retryable = retryable
+        this.fallbackSuggested = fallbackSuggested
+        this.code = code
+        this.igniteCode = igniteCode
+        this.detail = detail.trimAscii()
+    }
+}
+
+public class ContractProviderFallbackDecision {
+    public let providerId: String
+    public let fallbackSuggested: Bool
+    public let fallbackTarget: String
+    public let retryable: Bool
+    public let mustSurface: Bool
+    public let reason: String
+
+    public init(
+        providerId: String,
+        fallbackSuggested: Bool,
+        fallbackTarget: String,
+        retryable: Bool,
+        mustSurface: Bool,
+        reason: String
+    ) {
+        if (
+            providerId.trimAscii().size == 0 ||
+            reason.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider fallback decision string fields must not be empty"
+            )
+        }
+        this.providerId = providerId.trimAscii()
+        this.fallbackSuggested = fallbackSuggested
+        this.fallbackTarget = fallbackTarget.trimAscii()
+        this.retryable = retryable
+        this.mustSurface = mustSurface
+        this.reason = reason.trimAscii()
+    }
+}
+
+public enum ContractProviderSmokeFixtureCategory <: Equatable<ContractProviderSmokeFixtureCategory> & ToString {
+    | Success
+    | PrecheckFail
+    | HandshakeFail
+    | VerifyFail
+    | ProviderUnavailable
+
+    public operator func ==(right: ContractProviderSmokeFixtureCategory): Bool {
+        ordinalValue() == right.ordinalValue()
+    }
+
+    public operator func !=(right: ContractProviderSmokeFixtureCategory): Bool {
+        !(this == right)
+    }
+
+    public func ordinalValue(): Int64 {
+        match (this) {
+            case Success => 0
+            case PrecheckFail => 1
+            case HandshakeFail => 2
+            case VerifyFail => 3
+            case ProviderUnavailable => 4
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case Success => "SUCCESS"
+            case PrecheckFail => "PRECHECK_FAIL"
+            case HandshakeFail => "HANDSHAKE_FAIL"
+            case VerifyFail => "VERIFY_FAIL"
+            case ProviderUnavailable => "PROVIDER_UNAVAILABLE"
+        }
+    }
+}
+
+public class ContractProviderSmokeFixtureInfo {
+    public let providerId: String
+    public let fixtureId: String
+    public let category: ContractProviderSmokeFixtureCategory
+    public let summary: String
+    public let artifacts: Array<String>
+    public let entrypoints: Array<String>
+    public let expectedPhase: ?ContractProviderErrorPhase
+    public let expectedCode: ?ContractErrorCode
+    public let expectedFamily: ?ContractProviderErrorFamily
+    public let notes: Array<String>
+
+    public init(
+        providerId: String,
+        fixtureId: String,
+        category: ContractProviderSmokeFixtureCategory,
+        summary: String,
+        artifacts: Array<String>,
+        entrypoints: Array<String>,
+        notes!: Array<String>,
+        expectedPhase!: ?ContractProviderErrorPhase = None,
+        expectedCode!: ?ContractErrorCode = None,
+        expectedFamily!: ?ContractProviderErrorFamily = None
+    ) {
+        if (
+            providerId.trimAscii().size == 0 ||
+            fixtureId.trimAscii().size == 0 ||
+            summary.trimAscii().size == 0
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke fixture string fields must not be empty"
+            )
+        }
+        if (artifacts.size == 0 || entrypoints.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke fixture artifacts and entrypoints must not be empty"
+            )
+        }
+        this.providerId = providerId.trimAscii()
+        this.fixtureId = fixtureId.trimAscii()
+        this.category = category
+        this.summary = summary.trimAscii()
+        this.artifacts = artifacts.clone()
+        this.entrypoints = entrypoints.clone()
+        this.expectedPhase = expectedPhase
+        this.expectedCode = expectedCode
+        this.expectedFamily = expectedFamily
+        this.notes = notes.clone()
+    }
+}
+
+public enum ContractProviderSmokeExecutionMode <: Equatable<ContractProviderSmokeExecutionMode> & ToString {
+    | PrecheckPath
+    | VerifyPath
+    | ProviderSelectionPath
+    | MetadataOnly
+
+    public operator func ==(right: ContractProviderSmokeExecutionMode): Bool {
+        ordinalValue() == right.ordinalValue()
+    }
+
+    public operator func !=(right: ContractProviderSmokeExecutionMode): Bool {
+        !(this == right)
+    }
+
+    public func ordinalValue(): Int64 {
+        match (this) {
+            case PrecheckPath => 0
+            case VerifyPath => 1
+            case ProviderSelectionPath => 2
+            case MetadataOnly => 3
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case PrecheckPath => "PRECHECK_PATH"
+            case VerifyPath => "VERIFY_PATH"
+            case ProviderSelectionPath => "PROVIDER_SELECTION_PATH"
+            case MetadataOnly => "METADATA_ONLY"
+        }
+    }
+}
+
+public class ContractProviderSmokeBaselineRequest {
+    public let fixtureId: String
+
+    public init(fixtureId: String) {
+        if (fixtureId.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke baseline request fixtureId must not be empty"
+            )
+        }
+        this.fixtureId = fixtureId.trimAscii()
+    }
+}
+
+public class ContractProviderSmokeBaselineReport {
+    public let providerId: String
+    public let fixture: ContractProviderSmokeFixtureInfo
+    public let executionMode: ContractProviderSmokeExecutionMode
+    public let expectedSuccess: Bool
+    public let expectedDescriptor: ?ContractProviderErrorDescriptor
+    public let expectedFallback: ?ContractProviderFallbackDecision
+    public let capability: ContractProviderCapabilityRecord
+    public let attachBoundary: ContractProviderServerAttachBoundary
+    public let warnings: Array<String>
+
+    public init(
+        providerId: String,
+        fixture: ContractProviderSmokeFixtureInfo,
+        executionMode: ContractProviderSmokeExecutionMode,
+        expectedSuccess: Bool,
+        capability: ContractProviderCapabilityRecord,
+        attachBoundary: ContractProviderServerAttachBoundary,
+        warnings: Array<String>,
+        expectedDescriptor!: ?ContractProviderErrorDescriptor = None,
+        expectedFallback!: ?ContractProviderFallbackDecision = None
+    ) {
+        if (providerId.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke baseline report providerId must not be empty"
+            )
+        }
+        if (expectedSuccess) {
+            match (expectedDescriptor) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke baseline success report must not carry expected descriptor"
+                    )
+                case None => ()
+            }
+            match (expectedFallback) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke baseline success report must not carry fallback decision"
+                    )
+                case None => ()
+            }
+        } else {
+            match (expectedDescriptor) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke baseline failure report must carry expected descriptor"
+                    )
+            }
+            match (expectedFallback) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke baseline failure report must carry fallback decision"
+                    )
+            }
+        }
+        this.providerId = providerId.trimAscii()
+        this.fixture = fixture
+        this.executionMode = executionMode
+        this.expectedSuccess = expectedSuccess
+        this.expectedDescriptor = expectedDescriptor
+        this.expectedFallback = expectedFallback
+        this.capability = capability
+        this.attachBoundary = attachBoundary
+        this.warnings = warnings.clone()
+    }
+}
+
+public class ContractProviderSmokeBaselineOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractProviderSmokeBaselineReport
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractProviderSmokeBaselineReport = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke baseline outcome message must not be empty"
+            )
+        }
+        if (ok) {
+            match (code) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke baseline outcome code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (igniteCode) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke baseline outcome ignite code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (result) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke baseline outcome result must exist when ok is true"
+                    )
+            }
+        } else {
+            match (code) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke baseline outcome code must exist when ok is false"
+                    )
+            }
+            match (igniteCode) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke baseline outcome ignite code must exist when ok is false"
+                    )
+            }
+            match (result) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke baseline outcome result must be empty when ok is false"
+                    )
+                case None => ()
+            }
+        }
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
+public func contractProviderCapabilityRecord(): ContractProviderCapabilityRecord {
+    ContractProviderCapabilityRecord(
+        "jinguissl",
+        LIBRARY_VERSION,
+        "primary darwin/aarch64; compile-target linux/ohos aarch64; x86_64 deferred to 0.7; loongarch64/riscv64 reserved skeletons",
+        "cjc >= 1.1.0",
+        true,
+        false,
+        true,
+        true,
+        false,
+        true,
+        true,
+        false,
+        [
+            "stable server-side TLS attach contract is not exposed in this repo",
+            "direct stdx.net.tls.TlsServerConfig bridge is unavailable",
+            "current release line remains provider-candidate only and is not default HTTPS eligible"
+        ],
+        [
+            "client TLS, X.509 verification, ALPN normalization, and session cache are available through jinguissl.contract.*",
+            "server integrations should currently stop at precheck/material preparation and finish attach in upper-layer provider glue such as lisi",
+            "mTLS should remain experimental until a stable server attach contract is published"
+        ]
+    )
+}
+
+public func contractProviderAttachContractInfo(): ContractProviderAttachContractInfo {
+    ContractProviderAttachContractInfo(
+        "jinguissl",
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        true,
+        true,
+        [
+            "serverName",
+            "alpnProtocols",
+            "certificatePem",
+            "privateKeyPem",
+            "trustAnchorsPem",
+            "verifyMode",
+            "handshakeTimeoutMs"
+        ],
+        [
+            "serverName",
+            "alpnProtocols",
+            "certificatePem",
+            "privateKeyPem",
+            "clientAuthPolicy",
+            "sessionTicketPolicy",
+            "handshakeTimeoutMs"
+        ],
+        [
+            "peerCertificatePem",
+            "peerChainPem",
+            "trustAnchorsPem",
+            "expectedHost",
+            "verifyMode",
+            "pins"
+        ],
+        [
+            "family",
+            "phase",
+            "retryable",
+            "fallbackSuggested",
+            "contractCode",
+            "igniteCode",
+            "message"
+        ],
+        [
+            "stable server attach is not exposed; attach inputs are documented for upper-layer planning only"
+        ],
+        [
+            "TLS precheck is a stable contract surface today",
+            "client TLS and X.509 verify are stable library contracts",
+            "server attach fields are intentionally documented even though the final attach remains outside this repo"
+        ]
+    )
+}
+
+public func contractProviderServerAttachBoundary(): ContractProviderServerAttachBoundary {
+    ContractProviderServerAttachBoundary(
+        "jinguissl",
+        ContractProviderServerAttachStatus.PrecheckOnly,
+        false,
+        "stdx contract / attach bridge",
+        "fallback to stdx through lisi and keep jinguissl as provider-candidate only",
+        "this repository guarantees TLS precheck and material preparation, but does not expose a stable server-side attach entrypoint",
+        [
+            "server attach still depends on upper-layer stdx integration glue",
+            "without a stable attach bridge, jinguissl must not be presented as the default HTTPS listener path"
+        ]
+    )
+}
+
+public func contractProviderSmokeFixtureCatalog(): Array<ContractProviderSmokeFixtureInfo> {
+    let fixtures = ArrayList<ContractProviderSmokeFixtureInfo>()
+    fixtures.add(
+        ContractProviderSmokeFixtureInfo(
+            "jinguissl",
+            "success-x509-policy-chain",
+            ContractProviderSmokeFixtureCategory.Success,
+            "policy root + intermediate + leaf chain verifies cleanly for the bundled host policy fixture",
+            [
+                "testdata/x509/policy_root.pem",
+                "testdata/x509/policy_intermediate.pem",
+                "testdata/x509/policy_leaf.pem",
+                "testdata/x509/policy_leaf_key_pkcs8.pem"
+            ],
+            [
+                "contractVerifyServerCertificatePem(...)",
+                "contractVerifyServerCertificateChainPem(...)",
+                "contractTls13VerifyHttpServerFlightX25519(...)"
+            ],
+            notes: [
+                "recommended baseline success smoke for provider-side X.509 and TLS verification wiring",
+                "hostname expectation matches the policy leaf fixture used throughout contract tests"
+            ]
+        )
+    )
+    fixtures.add(
+        ContractProviderSmokeFixtureInfo(
+            "jinguissl",
+            "precheck-cert-key-mismatch",
+            ContractProviderSmokeFixtureCategory.PrecheckFail,
+            "certificate chain and private key mismatch must fail before any TLS attach or handshake",
+            [
+                "testdata/x509/policy_leaf.pem",
+                "testdata/x509/policy_intermediate.pem",
+                "testdata/x509/rsa_2048_pkcs8.pem"
+            ],
+            [
+                "contractValidateHttpServerTlsConfigInput(...)",
+                "contractPrepareHttpServerTlsMaterial(...)"
+            ],
+            expectedPhase: Some(ContractProviderErrorPhase.TlsPrecheck),
+            expectedCode: Some(ContractErrorCode.VerifyFailed),
+            expectedFamily: Some(ContractProviderErrorFamily.TlsPrecheckError),
+            notes: [
+                "maps provider failures into a deterministic precheck bucket for upper-layer startup smoke",
+                "useful when the provider advertises server material preparation but not final listener attach"
+            ]
+        )
+    )
+    fixtures.add(
+        ContractProviderSmokeFixtureInfo(
+            "jinguissl",
+            "verify-hostname-mismatch",
+            ContractProviderSmokeFixtureCategory.VerifyFail,
+            "server certificate verification must reject a hostname outside the policy leaf SAN set",
+            [
+                "testdata/x509/policy_root.pem",
+                "testdata/x509/policy_intermediate.pem",
+                "testdata/x509/policy_leaf.pem",
+                "hostname: api.policy.example"
+            ],
+            [
+                "contractVerifyServerCertificatePem(...)",
+                "contractTryVerifyServerCertificateChainPem(...)",
+                "contractTls13VerifyHttpServerFlightX25519(...)"
+            ],
+            expectedPhase: Some(ContractProviderErrorPhase.TlsVerify),
+            expectedCode: Some(ContractErrorCode.VerifyFailed),
+            expectedFamily: Some(ContractProviderErrorFamily.TlsVerifyError),
+            notes: [
+                "primary verify-fail baseline for HTTP client and provider-facing certificate checks"
+            ]
+        )
+    )
+    fixtures.add(
+        ContractProviderSmokeFixtureInfo(
+            "jinguissl",
+            "verify-pin-mismatch",
+            ContractProviderSmokeFixtureCategory.VerifyFail,
+            "leaf certificate pin mismatch must be surfaced as a verification failure instead of a parse/config error",
+            [
+                "testdata/x509/policy_root.pem",
+                "testdata/x509/policy_intermediate.pem",
+                "testdata/x509/policy_leaf.pem",
+                "pin-policy: wrong-der-or-spki-pin"
+            ],
+            [
+                "contractVerifyServerCertificatePem(...)",
+                "contractComputeLeafPinsFromPem(...)"
+            ],
+            expectedPhase: Some(ContractProviderErrorPhase.TlsVerify),
+            expectedCode: Some(ContractErrorCode.VerifyFailed),
+            expectedFamily: Some(ContractProviderErrorFamily.TlsVerifyError),
+            notes: [
+                "helps upper layers distinguish trust-policy failures from precheck/input failures"
+            ]
+        )
+    )
+    fixtures.add(
+        ContractProviderSmokeFixtureInfo(
+            "jinguissl",
+            "handshake-server-hello-decode",
+            ContractProviderSmokeFixtureCategory.HandshakeFail,
+            "server hello decode failure should be normalized into the handshake-fail bucket",
+            [
+                "inline: server hello decode failed",
+                "operation: tls"
+            ],
+            [
+                "contractDescribeProviderCryptoException(...)"
+            ],
+            expectedPhase: Some(ContractProviderErrorPhase.TlsHandshake),
+            expectedCode: Some(ContractErrorCode.VerifyFailed),
+            expectedFamily: Some(ContractProviderErrorFamily.TlsHandshakeError),
+            notes: [
+                "metadata fixture for provider adapters that need a deterministic handshake-failure baseline without mining test code"
+            ]
+        )
+    )
+    fixtures.add(
+        ContractProviderSmokeFixtureInfo(
+            "jinguissl",
+            "provider-not-linked",
+            ContractProviderSmokeFixtureCategory.ProviderUnavailable,
+            "provider selection should surface an unavailable provider explicitly when the candidate is not linked or gated off",
+            [
+                "detail: provider not linked",
+                "backend-hint: none"
+            ],
+            [
+                "contractDescribeProviderErrorCode(...)",
+                "contractRecommendProviderFallback(...)",
+                "contractTryResolveAesEngine(...)"
+            ],
+            expectedPhase: Some(ContractProviderErrorPhase.ProviderSelection),
+            expectedCode: Some(ContractErrorCode.CryptoUnavailable),
+            expectedFamily: Some(ContractProviderErrorFamily.ProviderUnavailable),
+            notes: [
+                "documents the intended fallback-to-stdx path when provider selection fails before runtime"
+            ]
+        )
+    )
+    fixtures.toArray()
+}
+
+public func contractRequireProviderSmokeFixture(
+    fixtureId: String
+): ContractProviderSmokeFixtureInfo {
+    let normalizedFixtureId = fixtureId.trimAscii()
+    if (normalizedFixtureId.size == 0) {
+        throw ContractException(
+            ContractErrorCode.BadInput,
+            "provider smoke fixture id must not be empty"
+        )
+    }
+    for (fixture in contractProviderSmokeFixtureCatalog()) {
+        if (fixture.fixtureId == normalizedFixtureId) {
+            return fixture
+        }
+    }
+    throw ContractException(
+        ContractErrorCode.BadInput,
+        "unknown provider smoke fixture: ${normalizedFixtureId}"
+    )
+}
+
+public func contractDescribeProviderSmokeBaseline(
+    fixtureId: String
+): ContractProviderSmokeBaselineReport {
+    contractDescribeProviderSmokeBaselineRequest(
+        ContractProviderSmokeBaselineRequest(fixtureId)
+    )
+}
+
+public func contractDescribeProviderSmokeBaselineRequest(
+    request: ContractProviderSmokeBaselineRequest
+): ContractProviderSmokeBaselineReport {
+    let fixture = contractRequireProviderSmokeFixture(request.fixtureId)
+    let capability = contractProviderCapabilityRecord()
+    let attachBoundary = contractProviderServerAttachBoundary()
+    let executionMode = contractProviderSmokeExecutionModeForFixture(fixture)
+    let warnings = contractProviderSmokeWarnings(
+        fixture,
+        executionMode,
+        capability,
+        attachBoundary
+    )
+    if (fixture.category == ContractProviderSmokeFixtureCategory.Success) {
+        return ContractProviderSmokeBaselineReport(
+            capability.providerId,
+            fixture,
+            executionMode,
+            true,
+            capability,
+            attachBoundary,
+            warnings
+        )
+    }
+    let descriptor = contractDescribeProviderErrorCode(
+        contractProviderSmokeExpectedCode(fixture),
+        phase: contractProviderSmokeExpectedPhase(fixture),
+        detail: "provider smoke baseline ${fixture.fixtureId}: ${fixture.summary}"
+    )
+    let fallback = contractRecommendProviderFallback(descriptor)
+    ContractProviderSmokeBaselineReport(
+        capability.providerId,
+        fixture,
+        executionMode,
+        false,
+        capability,
+        attachBoundary,
+        warnings,
+        expectedDescriptor: Some(descriptor),
+        expectedFallback: Some(fallback)
+    )
+}
+
+public func contractTryDescribeProviderSmokeBaselineRequest(
+    request: ContractProviderSmokeBaselineRequest
+): ContractProviderSmokeBaselineOutcome {
+    try {
+        let result = contractDescribeProviderSmokeBaselineRequest(request)
+        return ContractProviderSmokeBaselineOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        return ContractProviderSmokeBaselineOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
 }
 
 public class ContractAesHardwareMountPointInfo {
@@ -9469,6 +10446,80 @@ public func contractMapCryptoExceptionToIgniteCryptoErrorCode(
     contractMapToIgniteCryptoErrorCode(contractMapCryptoExceptionToErrorCode(exception, operation: operation))
 }
 
+public func contractDescribeProviderErrorCode(
+    code: ContractErrorCode,
+    phase!: ContractProviderErrorPhase = ContractProviderErrorPhase.ProviderRuntime,
+    detail!: String = ""
+): ContractProviderErrorDescriptor {
+    let family = contractMapProviderErrorFamily(code, phase)
+    let normalizedDetail = if (detail.trimAscii().size == 0) {
+        "provider error: ${family.toString()}"
+    } else {
+        detail.trimAscii()
+    }
+    ContractProviderErrorDescriptor(
+        "jinguissl",
+        family,
+        phase,
+        contractProviderErrorIsRetryable(family),
+        contractProviderErrorSuggestsFallback(family),
+        normalizedDetail,
+        code: Some(code),
+        igniteCode: Some(contractMapToIgniteCryptoErrorCode(code)),
+    )
+}
+
+public func contractDescribeProviderContractException(
+    exception: ContractException,
+    phase!: ContractProviderErrorPhase = ContractProviderErrorPhase.ProviderRuntime
+): ContractProviderErrorDescriptor {
+    contractDescribeProviderErrorCode(
+        exception.code,
+        phase: phase,
+        detail: exception.message
+    )
+}
+
+public func contractDescribeProviderCryptoException(
+    exception: CryptoException,
+    phase!: ContractProviderErrorPhase = ContractProviderErrorPhase.ProviderRuntime,
+    operation!: String = ""
+): ContractProviderErrorDescriptor {
+    let mapped = contractMapCryptoExceptionToErrorCode(exception, operation: operation)
+    contractDescribeProviderErrorCode(
+        mapped,
+        phase: phase,
+        detail: exception.message
+    )
+}
+
+public func contractRecommendProviderFallback(
+    error: ContractProviderErrorDescriptor
+): ContractProviderFallbackDecision {
+    let fallbackTarget = if (error.fallbackSuggested) {
+        "stdx"
+    } else {
+        ""
+    }
+    let mustSurface = match (error.family) {
+        case ContractProviderErrorFamily.BadInput => true
+        case ContractProviderErrorFamily.VerifyFailed => true
+        case ContractProviderErrorFamily.KeyNotFound => true
+        case ContractProviderErrorFamily.ComplianceRejected => true
+        case ContractProviderErrorFamily.TlsPrecheckError => true
+        case ContractProviderErrorFamily.TlsVerifyError => true
+        case _ => false
+    }
+    ContractProviderFallbackDecision(
+        error.providerId,
+        error.fallbackSuggested,
+        fallbackTarget,
+        error.retryable,
+        mustSurface,
+        contractProviderFallbackReason(error)
+    )
+}
+
 public func contractRandomAvailable(): Bool {
     csprngIsAvailable()
 }
@@ -15690,7 +16741,7 @@ private func requireTokenAscii(value: String, fieldName: String, allowEmpty!: Bo
 }
 
 private func mapCryptoErrorForOperation(e: CryptoException, operation: String): ContractErrorCode {
-    if (operation == "random" && e.code == Unsupported) {
+    if (operation == "random" && e.code == CryptoErrorCode.Unsupported) {
         return ContractErrorCode.CryptoUnavailable
     }
     if (operation == "decrypt") {
@@ -15705,7 +16756,7 @@ private func mapCryptoErrorForOperation(e: CryptoException, operation: String): 
         if (e.code == ParseError) {
             return ContractErrorCode.VerifyFailed
         }
-        if (e.code == Unsupported) {
+        if (e.code == CryptoErrorCode.Unsupported) {
             return ContractErrorCode.Unsupported
         }
     }
@@ -15713,11 +16764,155 @@ private func mapCryptoErrorForOperation(e: CryptoException, operation: String): 
         if (e.code == ParseError) {
             return ContractErrorCode.VerifyFailed
         }
-        if (e.code == Unsupported) {
+        if (e.code == CryptoErrorCode.Unsupported) {
             return ContractErrorCode.Unsupported
         }
     }
     contractMapCryptoErrorCode(e.code)
+}
+
+private func contractMapProviderErrorFamily(
+    code: ContractErrorCode,
+    phase: ContractProviderErrorPhase
+): ContractProviderErrorFamily {
+    match (code) {
+        case ContractErrorCode.BadInput => ContractProviderErrorFamily.BadInput
+        case ContractErrorCode.KeyNotFound => ContractProviderErrorFamily.KeyNotFound
+        case ContractErrorCode.CryptoUnavailable =>
+            if (
+                phase == ContractProviderErrorPhase.ProviderSelection ||
+                phase == ContractProviderErrorPhase.ProviderRuntime
+            ) {
+                ContractProviderErrorFamily.ProviderUnavailable
+            } else {
+                ContractProviderErrorFamily.CryptoUnavailable
+            }
+        case ContractErrorCode.ComplianceRejected => ContractProviderErrorFamily.ComplianceRejected
+        case ContractErrorCode.Unsupported => ContractProviderErrorFamily.Unsupported
+        case ContractErrorCode.InternalError => ContractProviderErrorFamily.InternalError
+        case ContractErrorCode.VerifyFailed =>
+            match (phase) {
+                case ContractProviderErrorPhase.TlsPrecheck => ContractProviderErrorFamily.TlsPrecheckError
+                case ContractProviderErrorPhase.TlsHandshake => ContractProviderErrorFamily.TlsHandshakeError
+                case ContractProviderErrorPhase.TlsVerify => ContractProviderErrorFamily.TlsVerifyError
+                case _ => ContractProviderErrorFamily.VerifyFailed
+            }
+    }
+}
+
+private func contractProviderErrorIsRetryable(family: ContractProviderErrorFamily): Bool {
+    match (family) {
+        case ContractProviderErrorFamily.TlsHandshakeError => true
+        case _ => false
+    }
+}
+
+private func contractProviderErrorSuggestsFallback(family: ContractProviderErrorFamily): Bool {
+    match (family) {
+        case ContractProviderErrorFamily.CryptoUnavailable => true
+        case ContractProviderErrorFamily.Unsupported => true
+        case ContractProviderErrorFamily.InternalError => true
+        case ContractProviderErrorFamily.TlsHandshakeError => true
+        case ContractProviderErrorFamily.ProviderUnavailable => true
+        case _ => false
+    }
+}
+
+private func contractProviderFallbackReason(error: ContractProviderErrorDescriptor): String {
+    if (!error.fallbackSuggested) {
+        return "surface ${error.family.toString()} to the caller and do not auto-fallback"
+    }
+    match (error.family) {
+        case ContractProviderErrorFamily.ProviderUnavailable =>
+            "provider is unavailable in the current runtime; prefer stdx fallback via lisi"
+        case ContractProviderErrorFamily.Unsupported =>
+            "requested capability is unsupported in jinguissl; prefer stdx fallback via lisi"
+        case ContractProviderErrorFamily.CryptoUnavailable =>
+            "crypto backend is unavailable; prefer stdx fallback via lisi"
+        case ContractProviderErrorFamily.InternalError =>
+            "provider hit an internal error; quarantine this provider and prefer stdx fallback"
+        case ContractProviderErrorFamily.TlsHandshakeError =>
+            "TLS handshake failed inside provider flow; retry cautiously or fall back to stdx"
+        case _ =>
+            "fallback is suggested by provider policy"
+    }
+}
+
+private func contractProviderSmokeExecutionModeForFixture(
+    fixture: ContractProviderSmokeFixtureInfo
+): ContractProviderSmokeExecutionMode {
+    match (fixture.category) {
+        case ContractProviderSmokeFixtureCategory.PrecheckFail =>
+            ContractProviderSmokeExecutionMode.PrecheckPath
+        case ContractProviderSmokeFixtureCategory.VerifyFail =>
+            ContractProviderSmokeExecutionMode.VerifyPath
+        case ContractProviderSmokeFixtureCategory.Success =>
+            ContractProviderSmokeExecutionMode.VerifyPath
+        case ContractProviderSmokeFixtureCategory.ProviderUnavailable =>
+            ContractProviderSmokeExecutionMode.ProviderSelectionPath
+        case ContractProviderSmokeFixtureCategory.HandshakeFail =>
+            ContractProviderSmokeExecutionMode.MetadataOnly
+    }
+}
+
+private func contractProviderSmokeExpectedCode(
+    fixture: ContractProviderSmokeFixtureInfo
+): ContractErrorCode {
+    match (fixture.expectedCode) {
+        case Some(value) => value
+        case None =>
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke fixture ${fixture.fixtureId} does not define an expected code"
+            )
+    }
+}
+
+private func contractProviderSmokeExpectedPhase(
+    fixture: ContractProviderSmokeFixtureInfo
+): ContractProviderErrorPhase {
+    match (fixture.expectedPhase) {
+        case Some(value) => value
+        case None =>
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke fixture ${fixture.fixtureId} does not define an expected phase"
+            )
+    }
+}
+
+private func contractProviderSmokeWarnings(
+    fixture: ContractProviderSmokeFixtureInfo,
+    executionMode: ContractProviderSmokeExecutionMode,
+    capability: ContractProviderCapabilityRecord,
+    attachBoundary: ContractProviderServerAttachBoundary
+): Array<String> {
+    let warnings = ArrayList<String>()
+    if (!capability.defaultEligible) {
+        warnings.add("provider is not default HTTPS eligible in the current public release line")
+    }
+    if (!attachBoundary.stableAttach) {
+        warnings.add("stable server attach is unavailable; keep smoke exercises within precheck, verify, or provider-selection boundaries")
+    }
+    match (executionMode) {
+        case ContractProviderSmokeExecutionMode.MetadataOnly =>
+            warnings.add("this smoke baseline is modeled through provider error normalization metadata rather than a live network handshake")
+        case ContractProviderSmokeExecutionMode.ProviderSelectionPath =>
+            warnings.add("provider-unavailable is an expected selection-path baseline and should not be counted as a functional regression by itself")
+        case ContractProviderSmokeExecutionMode.VerifyPath =>
+            if (!capability.supportsX509Verify) {
+                warnings.add("provider does not currently advertise X.509 verify support for verify-path smoke")
+            }
+        case ContractProviderSmokeExecutionMode.PrecheckPath =>
+            let attach = contractProviderAttachContractInfo()
+            if (!attach.supportsTlsPrecheck) {
+                warnings.add("provider does not currently advertise TLS precheck support for precheck-path smoke")
+            }
+    }
+    if (fixture.entrypoints.size == 1 && fixture.entrypoints[0].contains("contractDescribeProvider")) {
+        warnings.add("this baseline is descriptor-driven and should be exercised through contract-level error normalization helpers")
+    }
+    warnings.toArray()
 }
 
 private func clonePinList(pins: Array<Array<Byte>>, label: String): Array<Array<Byte>> {

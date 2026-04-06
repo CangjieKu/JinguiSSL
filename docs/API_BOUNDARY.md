@@ -2,7 +2,7 @@
 
 ## Freeze Meta
 
-- release line: `0.6.0`
+- release line: `0.6.14`
 - facade api version: `1.0.0`
 - stability level: `L1`
 - import rule: 默认仅 `import jinguissl.contract.*`
@@ -16,6 +16,7 @@
 - `ssh`：SSH KEX、host verification、host-signing material、transport protection 所需 facade
 - `hkdf`：HKDF extract / expand / derive 与场景化 key-set 导出
 - `random`：CSPRNG 探测与随机字节生成
+- `provider-info`：provider capability / attach boundary / error descriptor / fallback recommendation
 
 ## Stable Surface Notes
 
@@ -32,6 +33,26 @@
 - SSH version banner build / codec、plaintext transport packet codec、decoded prelude -> transcript builder 已进入稳定 contract 面
 - SSH `KEX_ECDH_INIT` / `KEX_ECDH_REPLY` message codec 已进入稳定 contract 面
 - SSH `NEWKEYS` message codec 已进入稳定 contract 面
+- provider 侧稳定暴露：
+  - `contractProviderCapabilityRecord()`
+  - `contractProviderAttachContractInfo()`
+  - `contractProviderServerAttachBoundary()`
+  - `ContractProviderSmokeFixtureCategory`
+  - `ContractProviderSmokeFixtureInfo`
+  - `ContractProviderSmokeExecutionMode`
+  - `ContractProviderSmokeBaselineRequest`
+  - `ContractProviderSmokeBaselineReport`
+  - `ContractProviderSmokeBaselineOutcome`
+  - `contractProviderSmokeFixtureCatalog()`
+  - `contractRequireProviderSmokeFixture(...)`
+  - `contractDescribeProviderSmokeBaseline(...)`
+  - `contractDescribeProviderSmokeBaselineRequest(...)`
+  - `contractTryDescribeProviderSmokeBaselineRequest(...)`
+  - `contractDescribeProviderErrorCode(...)`
+  - `contractDescribeProviderContractException(...)`
+  - `contractDescribeProviderCryptoException(...)`
+  - `contractRecommendProviderFallback(...)`
+- 当前 provider server attach 结论固定为：`PRECHECK_ONLY`
 - 当前不把 `jinguissl.crypto.*`、`bridges/`、`_helper/` 视为公开稳定契约的一部分
 
 ## Evolution Rule
@@ -64,3 +85,6 @@
 - SSH NEWKEYS codec facade
 - X.509 `try/outcome` 统一结果模型与 PEM bundle normalization
 - HKDF 的 HTTP / SSH key-set 导出入口
+- provider capability / attach boundary / error descriptor / fallback facade
+- provider smoke fixture catalog / lookup facade
+- provider smoke baseline report / outcome facade

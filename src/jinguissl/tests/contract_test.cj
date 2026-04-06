@@ -3497,6 +3497,234 @@ public class ContractTestSuite {
     }
 
     @TestCase
+    public func testContractProviderCapabilityAndAttachBoundary(): Unit {
+        let capability = contractProviderCapabilityRecord()
+        @Assert(capability.providerId, "jinguissl")
+        @Assert(capability.providerVersion, "0.6.14")
+        @Assert(capability.supportsClientTls, true)
+        @Assert(capability.supportsServerTlsAttach, false)
+        @Assert(capability.supportsX509Verify, true)
+        @Assert(capability.supportsAlpnH2, true)
+        @Assert(capability.supportsMtls, false)
+        @Assert(capability.supportsSessionCache, true)
+        @Assert(capability.experimental, true)
+        @Assert(capability.defaultEligible, false)
+        @Assert(
+            containsString(
+                capability.unsupportedReasons,
+                "stable server-side TLS attach contract is not exposed in this repo"
+            ),
+            true
+        )
+
+        let attach = contractProviderAttachContractInfo()
+        @Assert(attach.providerId, "jinguissl")
+        @Assert(attach.supportsTlsPrecheck, true)
+        @Assert(attach.supportsServerTlsAttach, false)
+        @Assert(containsString(attach.tlsPrecheckInputs, "serverName"), true)
+        @Assert(containsString(attach.tlsAttachInputs, "handshakeTimeoutMs"), true)
+        @Assert(containsString(attach.failureFields, "family"), true)
+        @Assert(containsString(attach.failureFields, "fallbackSuggested"), true)
+
+        let boundary = contractProviderServerAttachBoundary()
+        @Assert(boundary.providerId, "jinguissl")
+        @Assert(boundary.status.toString(), "PRECHECK_ONLY")
+        @Assert(boundary.stableAttach, false)
+        @Assert(boundary.recommendedFallback.contains("stdx"), true)
+    }
+
+    @TestCase
+    public func testContractProviderSmokeFixtureCatalog(): Unit {
+        let catalog = contractProviderSmokeFixtureCatalog()
+        @Assert(catalog.size >= 6, true)
+
+        var foundSuccess = false
+        var foundPrecheck = false
+        var foundVerify = false
+        var foundHandshake = false
+        var foundUnavailable = false
+        for (fixture in catalog) {
+            @Assert(fixture.providerId, "jinguissl")
+            @Assert(fixture.artifacts.size > 0, true)
+            @Assert(fixture.entrypoints.size > 0, true)
+            if (fixture.fixtureId == "success-x509-policy-chain") {
+                foundSuccess = true
+                @Assert(fixture.category.toString(), "SUCCESS")
+                match (fixture.expectedCode) {
+                    case Some(_value) => @Fail("success fixture should not carry expected code")
+                    case None => ()
+                }
+                match (fixture.expectedFamily) {
+                    case Some(_value) => @Fail("success fixture should not carry expected family")
+                    case None => ()
+                }
+            }
+            if (fixture.fixtureId == "precheck-cert-key-mismatch") {
+                foundPrecheck = true
+                @Assert(fixture.category.toString(), "PRECHECK_FAIL")
+                match (fixture.expectedPhase) {
+                    case Some(value) => @Assert(value.toString(), "TLS_PRECHECK")
+                    case None => @Fail("precheck fixture should carry expected phase")
+                }
+                match (fixture.expectedFamily) {
+                    case Some(value) => @Assert(value.toString(), "TLS_PRECHECK_ERROR")
+                    case None => @Fail("precheck fixture should carry expected family")
+                }
+            }
+            if (
+                fixture.fixtureId == "verify-hostname-mismatch" ||
+                fixture.fixtureId == "verify-pin-mismatch"
+            ) {
+                foundVerify = true
+                @Assert(fixture.category.toString(), "VERIFY_FAIL")
+                match (fixture.expectedFamily) {
+                    case Some(value) => @Assert(value.toString(), "TLS_VERIFY_ERROR")
+                    case None => @Fail("verify fixture should carry expected family")
+                }
+            }
+            if (fixture.fixtureId == "handshake-server-hello-decode") {
+                foundHandshake = true
+                @Assert(fixture.category.toString(), "HANDSHAKE_FAIL")
+                match (fixture.expectedPhase) {
+                    case Some(value) => @Assert(value.toString(), "TLS_HANDSHAKE")
+                    case None => @Fail("handshake fixture should carry expected phase")
+                }
+                match (fixture.expectedFamily) {
+                    case Some(value) => @Assert(value.toString(), "TLS_HANDSHAKE_ERROR")
+                    case None => @Fail("handshake fixture should carry expected family")
+                }
+            }
+            if (fixture.fixtureId == "provider-not-linked") {
+                foundUnavailable = true
+                @Assert(fixture.category.toString(), "PROVIDER_UNAVAILABLE")
+                match (fixture.expectedCode) {
+                    case Some(value) => @Assert(value.toString(), "CRYPTO_UNAVAILABLE")
+                    case None => @Fail("provider unavailable fixture should carry expected code")
+                }
+                match (fixture.expectedFamily) {
+                    case Some(value) => @Assert(value.toString(), "PROVIDER_UNAVAILABLE")
+                    case None => @Fail("provider unavailable fixture should carry expected family")
+                }
+            }
+        }
+        @Assert(foundSuccess, true)
+        @Assert(foundPrecheck, true)
+        @Assert(foundVerify, true)
+        @Assert(foundHandshake, true)
+        @Assert(foundUnavailable, true)
+
+        let required = contractRequireProviderSmokeFixture("provider-not-linked")
+        @Assert(required.fixtureId, "provider-not-linked")
+        @Assert(required.category.toString(), "PROVIDER_UNAVAILABLE")
+
+        try {
+            _ = contractRequireProviderSmokeFixture("")
+            @Fail("empty smoke fixture id should fail")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "BAD_INPUT")
+        }
+
+        try {
+            _ = contractRequireProviderSmokeFixture("missing-fixture")
+            @Fail("unknown smoke fixture id should fail")
+        } catch (e: ContractException) {
+            @Assert(e.code.toString(), "BAD_INPUT")
+        }
+    }
+
+    @TestCase
+    public func testContractProviderSmokeBaselineReportFacade(): Unit {
+        let success = contractDescribeProviderSmokeBaseline("success-x509-policy-chain")
+        @Assert(success.providerId, "jinguissl")
+        @Assert(success.executionMode.toString(), "VERIFY_PATH")
+        @Assert(success.expectedSuccess, true)
+        match (success.expectedDescriptor) {
+            case Some(_value) =>
+                @Fail("success baseline should not carry expected descriptor")
+            case None => ()
+        }
+        match (success.expectedFallback) {
+            case Some(_value) =>
+                @Fail("success baseline should not carry expected fallback")
+            case None => ()
+        }
+
+        let precheck = contractDescribeProviderSmokeBaselineRequest(
+            ContractProviderSmokeBaselineRequest("precheck-cert-key-mismatch")
+        )
+        @Assert(precheck.executionMode.toString(), "PRECHECK_PATH")
+        @Assert(precheck.expectedSuccess, false)
+        match (precheck.expectedDescriptor) {
+            case Some(value) =>
+                @Assert(value.family.toString(), "TLS_PRECHECK_ERROR")
+            case None =>
+                @Fail("precheck baseline should carry expected descriptor")
+        }
+        match (precheck.expectedFallback) {
+            case Some(value) =>
+                @Assert(value.fallbackSuggested, false)
+            case None =>
+                @Fail("precheck baseline should carry fallback decision")
+        }
+
+        let handshake = contractDescribeProviderSmokeBaseline("handshake-server-hello-decode")
+        @Assert(handshake.executionMode.toString(), "METADATA_ONLY")
+        match (handshake.expectedDescriptor) {
+            case Some(value) =>
+                @Assert(value.family.toString(), "TLS_HANDSHAKE_ERROR")
+            case None =>
+                @Fail("handshake baseline should carry expected descriptor")
+        }
+        match (handshake.expectedFallback) {
+            case Some(value) =>
+                @Assert(value.fallbackSuggested, true)
+                @Assert(value.fallbackTarget, "stdx")
+            case None =>
+                @Fail("handshake baseline should carry fallback decision")
+        }
+        @Assert(
+            containsString(
+                handshake.warnings,
+                "this smoke baseline is modeled through provider error normalization metadata rather than a live network handshake"
+            ),
+            true
+        )
+
+        let unavailable = contractDescribeProviderSmokeBaseline("provider-not-linked")
+        @Assert(unavailable.executionMode.toString(), "PROVIDER_SELECTION_PATH")
+        match (unavailable.expectedDescriptor) {
+            case Some(value) =>
+                @Assert(value.family.toString(), "PROVIDER_UNAVAILABLE")
+            case None =>
+                @Fail("provider unavailable baseline should carry expected descriptor")
+        }
+        match (unavailable.expectedFallback) {
+            case Some(value) =>
+                @Assert(value.fallbackSuggested, true)
+                @Assert(value.fallbackTarget, "stdx")
+            case None =>
+                @Fail("provider unavailable baseline should carry fallback decision")
+        }
+
+        let failed = contractTryDescribeProviderSmokeBaselineRequest(
+            ContractProviderSmokeBaselineRequest("missing-fixture")
+        )
+        @Assert(failed.ok, false)
+        match (failed.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "BAD_INPUT")
+            case None =>
+                @Fail("missing baseline outcome should carry contract code")
+        }
+        match (failed.igniteCode) {
+            case Some(value) =>
+                @Assert(value.toString(), "BAD_ENVELOPE")
+            case None =>
+                @Fail("missing baseline outcome should carry ignite code")
+        }
+    }
+
+    @TestCase
     public func testContractIgniteCompatibilityFacade(): Unit {
         let key = incrementalBytes(32, start: 11)
         let plaintext = "ignite-contract-bridge".toArray()
@@ -3580,6 +3808,37 @@ public class ContractTestSuite {
             contractMapCryptoExceptionToIgniteCryptoErrorCode(parseFailure, operation: "x509").toString(),
             "DECRYPT_FAILED"
         )
+
+        let verifyDescriptor = contractDescribeProviderErrorCode(
+            ContractErrorCode.VerifyFailed,
+            phase: ContractProviderErrorPhase.TlsVerify,
+            detail: "certificate chain rejected"
+        )
+        @Assert(verifyDescriptor.family.toString(), "TLS_VERIFY_ERROR")
+        @Assert(verifyDescriptor.retryable, false)
+        @Assert(verifyDescriptor.fallbackSuggested, false)
+
+        let unavailableDescriptor = contractDescribeProviderErrorCode(
+            ContractErrorCode.CryptoUnavailable,
+            phase: ContractProviderErrorPhase.ProviderSelection,
+            detail: "provider not linked"
+        )
+        @Assert(unavailableDescriptor.family.toString(), "PROVIDER_UNAVAILABLE")
+        @Assert(unavailableDescriptor.fallbackSuggested, true)
+
+        let fallbackDecision = contractRecommendProviderFallback(unavailableDescriptor)
+        @Assert(fallbackDecision.fallbackSuggested, true)
+        @Assert(fallbackDecision.fallbackTarget, "stdx")
+        @Assert(fallbackDecision.mustSurface, false)
+
+        let handshakeDescriptor = contractDescribeProviderCryptoException(
+            CryptoException(CryptoErrorCode.ParseError, "server hello decode failed"),
+            phase: ContractProviderErrorPhase.TlsHandshake,
+            operation: "tls"
+        )
+        @Assert(handshakeDescriptor.family.toString(), "TLS_HANDSHAKE_ERROR")
+        @Assert(handshakeDescriptor.retryable, true)
+        @Assert(handshakeDescriptor.fallbackSuggested, true)
     }
 
     @TestCase
@@ -4150,7 +4409,7 @@ public class ContractTestSuite {
     public func testContractSshVersionBannerAndTransportPacketFacadeHelpers(): Unit {
         let banner = contractSshBuildVersionBannerRequest(
             ContractSshBuildVersionBannerRequest(
-                "jinkuiSSL_0.6.0",
+                "jinkuiSSL_0.6.14",
                 comments: "contract-test"
             )
         )
@@ -4163,11 +4422,11 @@ public class ContractTestSuite {
         )
 
         @Assert(decodedBanner.protocolVersion, "2.0")
-        @Assert(decodedBanner.softwareVersion, "jinkuiSSL_0.6.0")
+        @Assert(decodedBanner.softwareVersion, "jinkuiSSL_0.6.14")
         @Assert(decodedBanner.comments, "contract-test")
         @Assert(
             String.fromUtf8(encodedBanner),
-            "SSH-2.0-jinkuiSSL_0.6.0 contract-test\r\n"
+            "SSH-2.0-jinkuiSSL_0.6.14 contract-test\r\n"
         )
 
         let payload = "abc".toArray()

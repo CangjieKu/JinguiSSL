@@ -4,7 +4,30 @@
 
 本清单仅覆盖 **库能力**，不包含 HTTP 服务框架、SSH daemon 或客户端应用层编排。
 
-当前版本快照：`0.6.0`
+当前版本快照：`0.6.14`
+
+## Provider Candidate Snapshot
+
+当前公开 provider 候选记录固定为：
+
+- `providerId`: `jinguissl`
+- `providerVersion`: `0.6.14`
+- `platformScope`: `primary darwin/aarch64; compile-target linux/ohos aarch64; x86_64 deferred to 0.7; loongarch64/riscv64 reserved skeletons`
+- `cjScope`: `cjc >= 1.1.0`
+- `supportsClientTls`: `true`
+- `supportsServerTlsAttach`: `false`
+- `supportsX509Verify`: `true`
+- `supportsAlpnH2`: `true`
+- `supportsMtls`: `false`
+- `supportsSessionCache`: `true`
+- `experimental`: `true`
+- `defaultEligible`: `false`
+
+当前 `unsupportedReasons`：
+
+- 稳定的 server-side TLS attach contract 尚未在本仓公开
+- 不提供直接 `stdx.net.tls.TlsServerConfig` bridge
+- 当前发布线仍是 provider-candidate，不应被表述为默认 HTTPS 路径
 
 ## HTTP / HTTPS
 
@@ -91,3 +114,11 @@
 - 仅在库内部实现中使用 `jinguissl.crypto.*`
 - 当前公开仓库优先交付库核心，不包含动态 bridge 与应用层框架接线代码
 - HTTP / SSH 上层优先消费 contract 的 request/result/outcome 类型，而不是自己拼接底层 crypto 细节
+- provider 选择层应额外读取：
+  - `contractProviderCapabilityRecord()`
+  - `contractProviderAttachContractInfo()`
+  - `contractProviderServerAttachBoundary()`
+  - `contractProviderSmokeFixtureCatalog()`
+  - `contractRequireProviderSmokeFixture(...)`
+  - `contractDescribeProviderSmokeBaseline(...)`
+  - `contractTryDescribeProviderSmokeBaselineRequest(...)`
