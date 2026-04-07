@@ -23,11 +23,24 @@
 - `ContractProviderSmokeBaselineRequest`
 - `ContractProviderSmokeBaselineReport`
 - `ContractProviderSmokeBaselineOutcome`
+- `ContractProviderSmokeSuiteRequest`
+- `ContractProviderSmokeSuiteReport`
+- `ContractProviderSmokeSuiteOutcome`
+- `ContractProviderSmokeSelfCheckPolicy`
+- `ContractProviderSmokeSelfCheckReport`
+- `ContractProviderSmokeSelfCheckOutcome`
 - `contractProviderSmokeFixtureCatalog()`
 - `contractRequireProviderSmokeFixture(...)`
 - `contractDescribeProviderSmokeBaseline(...)`
 - `contractDescribeProviderSmokeBaselineRequest(...)`
 - `contractTryDescribeProviderSmokeBaselineRequest(...)`
+- `contractDescribeProviderSmokeSuite()`
+- `contractDescribeProviderSmokeSuiteRequest(...)`
+- `contractTryDescribeProviderSmokeSuiteRequest(...)`
+- `contractProviderSmokeSelfCheck(...)`
+- `contractRequireProviderSmokeSelfCheck(...)`
+- `contractTryProviderSmokeSelfCheck(...)`
+- `contractTryRequireProviderSmokeSelfCheck(...)`
 - `contractDescribeProviderErrorCode(...)`
 - `contractDescribeProviderContractException(...)`
 - `contractDescribeProviderCryptoException(...)`
@@ -35,10 +48,10 @@
 
 ## Capability Record
 
-当前 `0.6.14` provider 记录：
+当前 `0.6.16` provider 记录：
 
 - `providerId`: `jinguissl`
-- `providerVersion`: `0.6.14`
+- `providerVersion`: `0.6.16`
 - `platformScope`: `primary darwin/aarch64; compile-target linux/ohos aarch64; x86_64 deferred to 0.7; loongarch64/riscv64 reserved skeletons`
 - `cjScope`: `cjc >= 1.1.0`
 - `supportsClientTls`: `true`
@@ -240,6 +253,64 @@ report 会把下面几层统一组装好：
 - 上层不必重复调用 `contractDescribeProviderErrorCode(...)` / `contractRecommendProviderFallback(...)`
 - 上层可以直接按 `executionMode` 决定 smoke suite 应跑 precheck、verify、provider-selection，还是仅做 metadata assertion
 - 当前 `HANDSHAKE_FAIL` baseline 会固定走 `METADATA_ONLY`，因为公开仓库尚未承诺稳定的 server-side attach / live provider handshake 入口
+
+## Smoke Suite Report
+
+如果上层不想逐个 fixture 查询，也可以直接用：
+
+- `contractDescribeProviderSmokeSuite()`
+- `contractDescribeProviderSmokeSuiteRequest(...)`
+- `contractTryDescribeProviderSmokeSuiteRequest(...)`
+
+suite report 会额外聚合：
+
+- `baselines`
+- `totalFixtureCount`
+- `successFixtureCount`
+- `failureFixtureCount`
+- `precheckPathCount`
+- `verifyPathCount`
+- `providerSelectionPathCount`
+- `metadataOnlyCount`
+- `recommendedOrder`
+
+这适合 provider 选择层在启动时拿一份“当前公开 smoke 计划总览”，再决定：
+
+- 哪些项在 CI 中跑真实 precheck / verify
+- 哪些项只做 metadata assertion
+- 哪些项属于 provider-unavailable 预期路径，不应误报成运行故障
+
+## Smoke Self-Check
+
+如果上层希望把 smoke suite 再进一步收敛成一个“是否满足 provider 接入门槛”的 readiness 结论，可直接使用：
+
+- `contractProviderSmokeSelfCheck(...)`
+- `contractRequireProviderSmokeSelfCheck(...)`
+- `contractTryProviderSmokeSelfCheck(...)`
+- `contractTryRequireProviderSmokeSelfCheck(...)`
+
+默认 policy 会要求：
+
+- `client TLS`
+- `X.509 verify`
+- `TLS precheck`
+- 至少一个 success baseline
+- precheck / verify / provider-selection / handshake coverage
+- 所有失败 baseline 都给出 fallback decision
+
+默认 policy **不会**要求：
+
+- stable server-side attach
+- default HTTPS eligible
+- live handshake coverage
+
+这样做的原因是当前公开边界仍然是 `PRECHECK_ONLY`。因此默认 self-check 可以在“provider-candidate 可接入”层级返回 `overallReady = true`，同时通过 `warnings` 明确提示：
+
+- 当前 release line 仍是 experimental / provider-candidate
+- stable server attach 尚未发布
+- handshake coverage 目前仍是 metadata-only
+
+如果上层想收紧门槛，例如要求 stable attach 或 live handshake coverage，可以在 policy 中显式打开对应项；这时 `contractRequireProviderSmokeSelfCheck(...)` 会以 `UNSUPPORTED` 失败返回，便于 provider selector 或 CI gate 直接阻断。
 
 ## Non-Goals
 

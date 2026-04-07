@@ -44,6 +44,13 @@
 - `contractDescribeProviderSmokeBaseline(...)`
 - `contractDescribeProviderSmokeBaselineRequest(...)`
 - `contractTryDescribeProviderSmokeBaselineRequest(...)`
+- `contractDescribeProviderSmokeSuite()`
+- `contractDescribeProviderSmokeSuiteRequest(...)`
+- `contractTryDescribeProviderSmokeSuiteRequest(...)`
+- `contractProviderSmokeSelfCheck(...)`
+- `contractRequireProviderSmokeSelfCheck(...)`
+- `contractTryProviderSmokeSelfCheck(...)`
+- `contractTryRequireProviderSmokeSelfCheck(...)`
 - `contractDescribeProviderErrorCode(...)`
 - `contractDescribeProviderContractException(...)`
 - `contractDescribeProviderCryptoException(...)`

@@ -1129,6 +1129,368 @@ public class ContractProviderSmokeBaselineOutcome {
     }
 }
 
+public class ContractProviderSmokeSuiteRequest {
+    public let fixtureIds: Array<String>
+
+    public init(fixtureIds!: Array<String> = []) {
+        let normalized = ArrayList<String>()
+        for (fixtureId in fixtureIds) {
+            let trimmed = fixtureId.trimAscii()
+            if (trimmed.size == 0) {
+                throw ContractException(
+                    ContractErrorCode.BadInput,
+                    "provider smoke suite request fixtureIds must not contain empty values"
+                )
+            }
+            normalized.add(trimmed)
+        }
+        this.fixtureIds = normalized.toArray()
+    }
+}
+
+public class ContractProviderSmokeSuiteReport {
+    public let providerId: String
+    public let baselines: Array<ContractProviderSmokeBaselineReport>
+    public let totalFixtureCount: Int64
+    public let successFixtureCount: Int64
+    public let failureFixtureCount: Int64
+    public let precheckPathCount: Int64
+    public let verifyPathCount: Int64
+    public let providerSelectionPathCount: Int64
+    public let metadataOnlyCount: Int64
+    public let recommendedOrder: Array<String>
+    public let capability: ContractProviderCapabilityRecord
+    public let attachBoundary: ContractProviderServerAttachBoundary
+    public let warnings: Array<String>
+
+    public init(
+        providerId: String,
+        baselines: Array<ContractProviderSmokeBaselineReport>,
+        totalFixtureCount: Int64,
+        successFixtureCount: Int64,
+        failureFixtureCount: Int64,
+        precheckPathCount: Int64,
+        verifyPathCount: Int64,
+        providerSelectionPathCount: Int64,
+        metadataOnlyCount: Int64,
+        recommendedOrder: Array<String>,
+        capability: ContractProviderCapabilityRecord,
+        attachBoundary: ContractProviderServerAttachBoundary,
+        warnings: Array<String>
+    ) {
+        if (providerId.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke suite report providerId must not be empty"
+            )
+        }
+        if (baselines.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke suite report must contain at least one baseline"
+            )
+        }
+        if (recommendedOrder.size != baselines.size) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke suite report recommended order must match baseline count"
+            )
+        }
+        if (totalFixtureCount != Int64(baselines.size)) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke suite report totalFixtureCount must match baseline count"
+            )
+        }
+        if (successFixtureCount + failureFixtureCount != totalFixtureCount) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke suite report success/failure counts must match totalFixtureCount"
+            )
+        }
+        if (
+            precheckPathCount +
+            verifyPathCount +
+            providerSelectionPathCount +
+            metadataOnlyCount != totalFixtureCount
+        ) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke suite report execution-mode counts must match totalFixtureCount"
+            )
+        }
+        this.providerId = providerId.trimAscii()
+        this.baselines = baselines.clone()
+        this.totalFixtureCount = totalFixtureCount
+        this.successFixtureCount = successFixtureCount
+        this.failureFixtureCount = failureFixtureCount
+        this.precheckPathCount = precheckPathCount
+        this.verifyPathCount = verifyPathCount
+        this.providerSelectionPathCount = providerSelectionPathCount
+        this.metadataOnlyCount = metadataOnlyCount
+        this.recommendedOrder = recommendedOrder.clone()
+        this.capability = capability
+        this.attachBoundary = attachBoundary
+        this.warnings = warnings.clone()
+    }
+}
+
+public class ContractProviderSmokeSuiteOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractProviderSmokeSuiteReport
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractProviderSmokeSuiteReport = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke suite outcome message must not be empty"
+            )
+        }
+        if (ok) {
+            match (code) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke suite outcome code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (igniteCode) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke suite outcome ignite code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (result) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke suite outcome result must exist when ok is true"
+                    )
+            }
+        } else {
+            match (code) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke suite outcome code must exist when ok is false"
+                    )
+            }
+            match (igniteCode) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke suite outcome ignite code must exist when ok is false"
+                    )
+            }
+            match (result) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke suite outcome result must be empty when ok is false"
+                    )
+                case None => ()
+            }
+        }
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
+public class ContractProviderSmokeSelfCheckPolicy {
+    public let requireClientTls: Bool
+    public let requireX509Verify: Bool
+    public let requireTlsPrecheck: Bool
+    public let requireSuccessBaseline: Bool
+    public let requirePrecheckCoverage: Bool
+    public let requireVerifyCoverage: Bool
+    public let requireProviderSelectionCoverage: Bool
+    public let requireHandshakeCoverage: Bool
+    public let requireFallbackPlan: Bool
+    public let requireStableServerAttach: Bool
+    public let requireDefaultEligible: Bool
+    public let requireLiveHandshakeCoverage: Bool
+
+    public init(
+        requireClientTls!: Bool = true,
+        requireX509Verify!: Bool = true,
+        requireTlsPrecheck!: Bool = true,
+        requireSuccessBaseline!: Bool = true,
+        requirePrecheckCoverage!: Bool = true,
+        requireVerifyCoverage!: Bool = true,
+        requireProviderSelectionCoverage!: Bool = true,
+        requireHandshakeCoverage!: Bool = true,
+        requireFallbackPlan!: Bool = true,
+        requireStableServerAttach!: Bool = false,
+        requireDefaultEligible!: Bool = false,
+        requireLiveHandshakeCoverage!: Bool = false
+    ) {
+        this.requireClientTls = requireClientTls
+        this.requireX509Verify = requireX509Verify
+        this.requireTlsPrecheck = requireTlsPrecheck
+        this.requireSuccessBaseline = requireSuccessBaseline
+        this.requirePrecheckCoverage = requirePrecheckCoverage
+        this.requireVerifyCoverage = requireVerifyCoverage
+        this.requireProviderSelectionCoverage = requireProviderSelectionCoverage
+        this.requireHandshakeCoverage = requireHandshakeCoverage
+        this.requireFallbackPlan = requireFallbackPlan
+        this.requireStableServerAttach = requireStableServerAttach
+        this.requireDefaultEligible = requireDefaultEligible
+        this.requireLiveHandshakeCoverage = requireLiveHandshakeCoverage
+    }
+}
+
+public class ContractProviderSmokeSelfCheckReport {
+    public let policy: ContractProviderSmokeSelfCheckPolicy
+    public let suite: ContractProviderSmokeSuiteReport
+    public let supportsClientTls: Bool
+    public let supportsX509Verify: Bool
+    public let supportsTlsPrecheck: Bool
+    public let hasSuccessBaseline: Bool
+    public let hasPrecheckCoverage: Bool
+    public let hasVerifyCoverage: Bool
+    public let hasProviderSelectionCoverage: Bool
+    public let hasHandshakeCoverage: Bool
+    public let hasLiveHandshakeCoverage: Bool
+    public let hasFallbackPlanCoverage: Bool
+    public let stableServerAttach: Bool
+    public let defaultEligible: Bool
+    public let overallReady: Bool
+    public let warnings: Array<String>
+
+    public init(
+        policy: ContractProviderSmokeSelfCheckPolicy,
+        suite: ContractProviderSmokeSuiteReport,
+        supportsClientTls: Bool,
+        supportsX509Verify: Bool,
+        supportsTlsPrecheck: Bool,
+        hasSuccessBaseline: Bool,
+        hasPrecheckCoverage: Bool,
+        hasVerifyCoverage: Bool,
+        hasProviderSelectionCoverage: Bool,
+        hasHandshakeCoverage: Bool,
+        hasLiveHandshakeCoverage: Bool,
+        hasFallbackPlanCoverage: Bool,
+        stableServerAttach: Bool,
+        defaultEligible: Bool,
+        overallReady: Bool,
+        warnings: Array<String>
+    ) {
+        this.policy = policy
+        this.suite = suite
+        this.supportsClientTls = supportsClientTls
+        this.supportsX509Verify = supportsX509Verify
+        this.supportsTlsPrecheck = supportsTlsPrecheck
+        this.hasSuccessBaseline = hasSuccessBaseline
+        this.hasPrecheckCoverage = hasPrecheckCoverage
+        this.hasVerifyCoverage = hasVerifyCoverage
+        this.hasProviderSelectionCoverage = hasProviderSelectionCoverage
+        this.hasHandshakeCoverage = hasHandshakeCoverage
+        this.hasLiveHandshakeCoverage = hasLiveHandshakeCoverage
+        this.hasFallbackPlanCoverage = hasFallbackPlanCoverage
+        this.stableServerAttach = stableServerAttach
+        this.defaultEligible = defaultEligible
+        this.overallReady = overallReady
+        this.warnings = warnings.clone()
+    }
+}
+
+public class ContractProviderSmokeSelfCheckOutcome {
+    public let ok: Bool
+    public let message: String
+    public let code: ?ContractErrorCode
+    public let igniteCode: ?ContractIgniteCryptoErrorCode
+    public let result: ?ContractProviderSmokeSelfCheckReport
+
+    public init(
+        ok: Bool,
+        message: String,
+        code!: ?ContractErrorCode = None,
+        igniteCode!: ?ContractIgniteCryptoErrorCode = None,
+        result!: ?ContractProviderSmokeSelfCheckReport = None
+    ) {
+        if (message.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke self-check outcome message must not be empty"
+            )
+        }
+        if (ok) {
+            match (code) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke self-check outcome code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (igniteCode) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke self-check outcome ignite code must be empty when ok is true"
+                    )
+                case None => ()
+            }
+            match (result) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke self-check outcome result must exist when ok is true"
+                    )
+            }
+        } else {
+            match (code) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke self-check outcome code must exist when ok is false"
+                    )
+            }
+            match (igniteCode) {
+                case Some(_) => ()
+                case None =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke self-check outcome ignite code must exist when ok is false"
+                    )
+            }
+            match (result) {
+                case Some(_) =>
+                    throw ContractException(
+                        ContractErrorCode.BadInput,
+                        "provider smoke self-check outcome result must be empty when ok is false"
+                    )
+                case None => ()
+            }
+        }
+        this.ok = ok
+        this.message = message.trimAscii()
+        this.code = code
+        this.igniteCode = igniteCode
+        this.result = result
+    }
+}
+
 public func contractProviderCapabilityRecord(): ContractProviderCapabilityRecord {
     ContractProviderCapabilityRecord(
         "jinguissl",
@@ -1453,6 +1815,190 @@ public func contractTryDescribeProviderSmokeBaselineRequest(
         return ContractProviderSmokeBaselineOutcome(true, "OK", result: Some(result))
     } catch (e: ContractException) {
         return ContractProviderSmokeBaselineOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractDescribeProviderSmokeSuite(): ContractProviderSmokeSuiteReport {
+    contractDescribeProviderSmokeSuiteRequest(ContractProviderSmokeSuiteRequest())
+}
+
+public func contractDescribeProviderSmokeSuiteRequest(
+    request: ContractProviderSmokeSuiteRequest
+): ContractProviderSmokeSuiteReport {
+    let fixtureIds = contractProviderSmokeSuiteFixtureIds(request)
+    let baselines = ArrayList<ContractProviderSmokeBaselineReport>()
+    let recommendedOrder = ArrayList<String>()
+    let warnings = ArrayList<String>()
+    let capability = contractProviderCapabilityRecord()
+    let attachBoundary = contractProviderServerAttachBoundary()
+    var successFixtureCount: Int64 = 0
+    var failureFixtureCount: Int64 = 0
+    var precheckPathCount: Int64 = 0
+    var verifyPathCount: Int64 = 0
+    var providerSelectionPathCount: Int64 = 0
+    var metadataOnlyCount: Int64 = 0
+    for (fixtureId in fixtureIds) {
+        let baseline = contractDescribeProviderSmokeBaseline(fixtureId)
+        baselines.add(baseline)
+        recommendedOrder.add(baseline.fixture.fixtureId)
+        if (baseline.expectedSuccess) {
+            successFixtureCount += 1
+        } else {
+            failureFixtureCount += 1
+        }
+        match (baseline.executionMode) {
+            case ContractProviderSmokeExecutionMode.PrecheckPath =>
+                precheckPathCount += 1
+            case ContractProviderSmokeExecutionMode.VerifyPath =>
+                verifyPathCount += 1
+            case ContractProviderSmokeExecutionMode.ProviderSelectionPath =>
+                providerSelectionPathCount += 1
+            case ContractProviderSmokeExecutionMode.MetadataOnly =>
+                metadataOnlyCount += 1
+        }
+        for (warning in baseline.warnings) {
+            contractAppendUniqueString(warnings, warning)
+        }
+    }
+    if (metadataOnlyCount > 0) {
+        contractAppendUniqueString(
+            warnings,
+            "metadata-only smoke baselines should be asserted through contract descriptors instead of being counted as live handshake regressions"
+        )
+    }
+    ContractProviderSmokeSuiteReport(
+        capability.providerId,
+        baselines.toArray(),
+        Int64(baselines.size),
+        successFixtureCount,
+        failureFixtureCount,
+        precheckPathCount,
+        verifyPathCount,
+        providerSelectionPathCount,
+        metadataOnlyCount,
+        recommendedOrder.toArray(),
+        capability,
+        attachBoundary,
+        warnings.toArray()
+    )
+}
+
+public func contractTryDescribeProviderSmokeSuiteRequest(
+    request: ContractProviderSmokeSuiteRequest
+): ContractProviderSmokeSuiteOutcome {
+    try {
+        let result = contractDescribeProviderSmokeSuiteRequest(request)
+        return ContractProviderSmokeSuiteOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        return ContractProviderSmokeSuiteOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractProviderSmokeSelfCheck(
+    policy!: ContractProviderSmokeSelfCheckPolicy = ContractProviderSmokeSelfCheckPolicy()
+): ContractProviderSmokeSelfCheckReport {
+    let suite = contractDescribeProviderSmokeSuite()
+    let capability = suite.capability
+    let attach = contractProviderAttachContractInfo()
+    let hasSuccessBaseline = suite.successFixtureCount > 0
+    let hasPrecheckCoverage = suite.precheckPathCount > 0
+    let hasVerifyCoverage = suite.verifyPathCount > 0
+    let hasProviderSelectionCoverage = suite.providerSelectionPathCount > 0
+    let hasHandshakeCoverage = suite.metadataOnlyCount > 0
+    let hasLiveHandshakeCoverage = false
+    var hasFallbackPlanCoverage = true
+    for (baseline in suite.baselines) {
+        if (!baseline.expectedSuccess) {
+            match (baseline.expectedFallback) {
+                case Some(_) => ()
+                case None =>
+                    hasFallbackPlanCoverage = false
+            }
+        }
+    }
+    let warnings = ArrayList<String>()
+    for (warning in suite.warnings) {
+        contractAppendUniqueString(warnings, warning)
+    }
+    let overallReady = contractProviderSmokeSelfCheckRequirement(
+        warnings,
+        policy,
+        capability,
+        attach,
+        suite,
+        hasSuccessBaseline,
+        hasPrecheckCoverage,
+        hasVerifyCoverage,
+        hasProviderSelectionCoverage,
+        hasHandshakeCoverage,
+        hasLiveHandshakeCoverage,
+        hasFallbackPlanCoverage
+    )
+    ContractProviderSmokeSelfCheckReport(
+        policy,
+        suite,
+        capability.supportsClientTls,
+        capability.supportsX509Verify,
+        attach.supportsTlsPrecheck,
+        hasSuccessBaseline,
+        hasPrecheckCoverage,
+        hasVerifyCoverage,
+        hasProviderSelectionCoverage,
+        hasHandshakeCoverage,
+        hasLiveHandshakeCoverage,
+        hasFallbackPlanCoverage,
+        suite.attachBoundary.stableAttach,
+        capability.defaultEligible,
+        overallReady,
+        warnings.toArray()
+    )
+}
+
+public func contractRequireProviderSmokeSelfCheck(
+    policy!: ContractProviderSmokeSelfCheckPolicy = ContractProviderSmokeSelfCheckPolicy()
+): ContractProviderSmokeSelfCheckReport {
+    let report = contractProviderSmokeSelfCheck(policy: policy)
+    if (!report.overallReady) {
+        let detail = contractProviderSmokeSelfCheckFailureDetail(report)
+        throw ContractException(ContractErrorCode.Unsupported, detail)
+    }
+    report
+}
+
+public func contractTryProviderSmokeSelfCheck(
+    policy!: ContractProviderSmokeSelfCheckPolicy = ContractProviderSmokeSelfCheckPolicy()
+): ContractProviderSmokeSelfCheckOutcome {
+    try {
+        let result = contractProviderSmokeSelfCheck(policy: policy)
+        return ContractProviderSmokeSelfCheckOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        return ContractProviderSmokeSelfCheckOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractTryRequireProviderSmokeSelfCheck(
+    policy!: ContractProviderSmokeSelfCheckPolicy = ContractProviderSmokeSelfCheckPolicy()
+): ContractProviderSmokeSelfCheckOutcome {
+    try {
+        let result = contractRequireProviderSmokeSelfCheck(policy: policy)
+        return ContractProviderSmokeSelfCheckOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        return ContractProviderSmokeSelfCheckOutcome(
             false,
             e.message,
             code: Some(e.code),
@@ -16913,6 +17459,162 @@ private func contractProviderSmokeWarnings(
         warnings.add("this baseline is descriptor-driven and should be exercised through contract-level error normalization helpers")
     }
     warnings.toArray()
+}
+
+private func contractProviderSmokeSelfCheckRequirement(
+    warnings: ArrayList<String>,
+    policy: ContractProviderSmokeSelfCheckPolicy,
+    capability: ContractProviderCapabilityRecord,
+    attach: ContractProviderAttachContractInfo,
+    suite: ContractProviderSmokeSuiteReport,
+    hasSuccessBaseline: Bool,
+    hasPrecheckCoverage: Bool,
+    hasVerifyCoverage: Bool,
+    hasProviderSelectionCoverage: Bool,
+    hasHandshakeCoverage: Bool,
+    hasLiveHandshakeCoverage: Bool,
+    hasFallbackPlanCoverage: Bool
+): Bool {
+    var overallReady = true
+    if (capability.experimental) {
+        contractAppendUniqueString(
+            warnings,
+            "provider remains experimental in the current public release line"
+        )
+    }
+    if (policy.requireClientTls && (!capability.supportsClientTls || !attach.supportsClientTls)) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires client TLS facade support, but the published capability/attach contract is incomplete"
+        )
+        overallReady = false
+    }
+    if (policy.requireX509Verify && (!capability.supportsX509Verify || !attach.supportsX509Verify)) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires X.509 verify support, but the published capability/attach contract is incomplete"
+        )
+        overallReady = false
+    }
+    if (policy.requireTlsPrecheck && !attach.supportsTlsPrecheck) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires TLS precheck support, but the public attach contract does not advertise it"
+        )
+        overallReady = false
+    }
+    if (policy.requireSuccessBaseline && !hasSuccessBaseline) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires at least one success baseline fixture"
+        )
+        overallReady = false
+    }
+    if (policy.requirePrecheckCoverage && !hasPrecheckCoverage) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires at least one precheck-path smoke baseline"
+        )
+        overallReady = false
+    }
+    if (policy.requireVerifyCoverage && !hasVerifyCoverage) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires at least one verify-path smoke baseline"
+        )
+        overallReady = false
+    }
+    if (policy.requireProviderSelectionCoverage && !hasProviderSelectionCoverage) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires at least one provider-selection-path smoke baseline"
+        )
+        overallReady = false
+    }
+    if (policy.requireHandshakeCoverage && !hasHandshakeCoverage) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires at least one handshake coverage baseline"
+        )
+        overallReady = false
+    }
+    if (hasHandshakeCoverage && !hasLiveHandshakeCoverage) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check handshake coverage is currently metadata-only; a stable live attach path is not published yet"
+        )
+    }
+    if (policy.requireLiveHandshakeCoverage && !hasLiveHandshakeCoverage) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires live handshake coverage, but the current suite only exposes metadata-only handshake baselines"
+        )
+        overallReady = false
+    }
+    if (policy.requireFallbackPlan && !hasFallbackPlanCoverage) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires fallback decisions for every non-success smoke baseline"
+        )
+        overallReady = false
+    }
+    if (
+        policy.requireStableServerAttach &&
+        (!capability.supportsServerTlsAttach || !attach.supportsServerTlsAttach || !suite.attachBoundary.stableAttach)
+    ) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires stable server attach coverage, but the public boundary remains precheck-only"
+        )
+        overallReady = false
+    }
+    if (policy.requireDefaultEligible && !capability.defaultEligible) {
+        contractAppendUniqueString(
+            warnings,
+            "provider smoke self-check requires default HTTPS eligibility, but the current release line keeps jinguissl provider-candidate only"
+        )
+        overallReady = false
+    }
+    overallReady
+}
+
+private func contractProviderSmokeSelfCheckFailureDetail(
+    report: ContractProviderSmokeSelfCheckReport
+): String {
+    for (warning in report.warnings) {
+        if (warning.contains("provider smoke self-check requires")) {
+            return warning
+        }
+    }
+    if (report.warnings.size > 0) {
+        return report.warnings[0]
+    }
+    "provider smoke self-check policy requirements are not satisfied"
+}
+
+private func contractProviderSmokeSuiteFixtureIds(
+    request: ContractProviderSmokeSuiteRequest
+): Array<String> {
+    if (request.fixtureIds.size == 0) {
+        let fixtureIds = ArrayList<String>()
+        for (fixture in contractProviderSmokeFixtureCatalog()) {
+            fixtureIds.add(fixture.fixtureId)
+        }
+        return fixtureIds.toArray()
+    }
+    request.fixtureIds.clone()
+}
+
+private func contractAppendUniqueString(
+    values: ArrayList<String>,
+    value: String
+): Unit {
+    for (existing in values) {
+        if (existing == value) {
+            return
+        }
+    }
+    values.add(value)
 }
 
 private func clonePinList(pins: Array<Array<Byte>>, label: String): Array<Array<Byte>> {

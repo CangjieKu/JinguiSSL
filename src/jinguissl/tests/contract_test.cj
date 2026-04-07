@@ -3500,7 +3500,7 @@ public class ContractTestSuite {
     public func testContractProviderCapabilityAndAttachBoundary(): Unit {
         let capability = contractProviderCapabilityRecord()
         @Assert(capability.providerId, "jinguissl")
-        @Assert(capability.providerVersion, "0.6.14")
+        @Assert(capability.providerVersion, "0.6.16")
         @Assert(capability.supportsClientTls, true)
         @Assert(capability.supportsServerTlsAttach, false)
         @Assert(capability.supportsX509Verify, true)
@@ -3722,6 +3722,130 @@ public class ContractTestSuite {
             case None =>
                 @Fail("missing baseline outcome should carry ignite code")
         }
+    }
+
+    @TestCase
+    public func testContractProviderSmokeSuiteReportFacade(): Unit {
+        let suite = contractDescribeProviderSmokeSuite()
+        @Assert(suite.providerId, "jinguissl")
+        @Assert(suite.totalFixtureCount >= 6, true)
+        @Assert(suite.successFixtureCount, 1)
+        @Assert(suite.failureFixtureCount, suite.totalFixtureCount - 1)
+        @Assert(suite.precheckPathCount, 1)
+        @Assert(suite.verifyPathCount, 3)
+        @Assert(suite.providerSelectionPathCount, 1)
+        @Assert(suite.metadataOnlyCount, 1)
+        @Assert(suite.recommendedOrder[0], "success-x509-policy-chain")
+        @Assert(
+            containsString(
+                suite.warnings,
+                "metadata-only smoke baselines should be asserted through contract descriptors instead of being counted as live handshake regressions"
+            ),
+            true
+        )
+
+        let subset = contractDescribeProviderSmokeSuiteRequest(
+            ContractProviderSmokeSuiteRequest(
+                fixtureIds: [
+                    "provider-not-linked",
+                    "handshake-server-hello-decode"
+                ]
+            )
+        )
+        @Assert(subset.totalFixtureCount, 2)
+        @Assert(subset.successFixtureCount, 0)
+        @Assert(subset.failureFixtureCount, 2)
+        @Assert(subset.providerSelectionPathCount, 1)
+        @Assert(subset.metadataOnlyCount, 1)
+        @Assert(subset.recommendedOrder, ["provider-not-linked", "handshake-server-hello-decode"])
+
+        let failed = contractTryDescribeProviderSmokeSuiteRequest(
+            ContractProviderSmokeSuiteRequest(
+                fixtureIds: [
+                    "provider-not-linked",
+                    "missing-fixture"
+                ]
+            )
+        )
+        @Assert(failed.ok, false)
+        match (failed.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "BAD_INPUT")
+            case None =>
+                @Fail("missing suite fixture should carry contract code")
+        }
+        match (failed.igniteCode) {
+            case Some(value) =>
+                @Assert(value.toString(), "BAD_ENVELOPE")
+            case None =>
+                @Fail("missing suite fixture should carry ignite code")
+        }
+    }
+
+    @TestCase
+    public func testContractProviderSmokeSelfCheckFacade(): Unit {
+        let report = contractProviderSmokeSelfCheck()
+        @Assert(report.overallReady, true)
+        @Assert(report.supportsClientTls, true)
+        @Assert(report.supportsX509Verify, true)
+        @Assert(report.supportsTlsPrecheck, true)
+        @Assert(report.hasSuccessBaseline, true)
+        @Assert(report.hasPrecheckCoverage, true)
+        @Assert(report.hasVerifyCoverage, true)
+        @Assert(report.hasProviderSelectionCoverage, true)
+        @Assert(report.hasHandshakeCoverage, true)
+        @Assert(report.hasLiveHandshakeCoverage, false)
+        @Assert(report.hasFallbackPlanCoverage, true)
+        @Assert(report.stableServerAttach, false)
+        @Assert(report.defaultEligible, false)
+        @Assert(
+            containsString(
+                report.warnings,
+                "provider smoke self-check handshake coverage is currently metadata-only; a stable live attach path is not published yet"
+            ),
+            true
+        )
+
+        let required = contractRequireProviderSmokeSelfCheck()
+        @Assert(required.overallReady, true)
+
+        let strictPolicy = ContractProviderSmokeSelfCheckPolicy(
+            requireStableServerAttach: true
+        )
+        let strictReport = contractProviderSmokeSelfCheck(policy: strictPolicy)
+        @Assert(strictReport.overallReady, false)
+        @Assert(
+            containsString(
+                strictReport.warnings,
+                "provider smoke self-check requires stable server attach coverage, but the public boundary remains precheck-only"
+            ),
+            true
+        )
+
+        let relaxedOutcome = contractTryProviderSmokeSelfCheck(policy: strictPolicy)
+        @Assert(relaxedOutcome.ok, true)
+        match (relaxedOutcome.result) {
+            case Some(value) =>
+                @Assert(value.overallReady, false)
+            case None =>
+                @Fail("provider smoke self-check outcome should carry report")
+        }
+
+        let strictOutcome = contractTryRequireProviderSmokeSelfCheck(policy: strictPolicy)
+        @Assert(strictOutcome.ok, false)
+        match (strictOutcome.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("strict provider smoke self-check should carry contract code")
+        }
+        match (strictOutcome.igniteCode) {
+            case Some(value) =>
+                @Assert(value.toString(), "CRYPTO_UNAVAILABLE")
+            case None =>
+                @Fail("strict provider smoke self-check should carry ignite code")
+        }
+        @Assert(strictOutcome.message.contains("stable server attach"), true)
     }
 
     @TestCase
@@ -4409,7 +4533,7 @@ public class ContractTestSuite {
     public func testContractSshVersionBannerAndTransportPacketFacadeHelpers(): Unit {
         let banner = contractSshBuildVersionBannerRequest(
             ContractSshBuildVersionBannerRequest(
-                "jinkuiSSL_0.6.14",
+                "jinkuiSSL_0.6.16",
                 comments: "contract-test"
             )
         )
@@ -4422,11 +4546,11 @@ public class ContractTestSuite {
         )
 
         @Assert(decodedBanner.protocolVersion, "2.0")
-        @Assert(decodedBanner.softwareVersion, "jinkuiSSL_0.6.14")
+        @Assert(decodedBanner.softwareVersion, "jinkuiSSL_0.6.16")
         @Assert(decodedBanner.comments, "contract-test")
         @Assert(
             String.fromUtf8(encodedBanner),
-            "SSH-2.0-jinkuiSSL_0.6.14 contract-test\r\n"
+            "SSH-2.0-jinkuiSSL_0.6.16 contract-test\r\n"
         )
 
         let payload = "abc".toArray()
