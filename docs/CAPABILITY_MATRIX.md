@@ -4,14 +4,14 @@
 
 本清单仅覆盖 **库能力**，不包含 HTTP 服务框架、SSH daemon 或客户端应用层编排。
 
-当前版本快照：`0.6.16`
+当前版本快照：`0.6.17`
 
 ## Provider Candidate Snapshot
 
 当前公开 provider 候选记录固定为：
 
 - `providerId`: `jinguissl`
-- `providerVersion`: `0.6.16`
+- `providerVersion`: `0.6.17`
 - `platformScope`: `primary darwin/aarch64; compile-target linux/ohos aarch64; x86_64 deferred to 0.7; loongarch64/riscv64 reserved skeletons`
 - `cjScope`: `cjc >= 1.1.0`
 - `supportsClientTls`: `true`
@@ -126,3 +126,6 @@
   - `contractTryDescribeProviderSmokeSuiteRequest(...)`
   - `contractProviderSmokeSelfCheck(...)`
   - `contractRequireProviderSmokeSelfCheck(...)`
+  - `contractDescribeProviderSmokeProfile(...)`
+  - `contractListProviderSmokeProfiles()`
+  - `contractTryRequireProviderSmokeProfile(...)`

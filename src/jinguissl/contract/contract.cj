@@ -1491,6 +1491,86 @@ public class ContractProviderSmokeSelfCheckOutcome {
     }
 }
 
+public enum ContractProviderSmokeProfile <: Equatable<ContractProviderSmokeProfile> & ToString {
+    | ProviderCandidate
+    | AttachPlanning
+    | DefaultHttpsEligible
+    | LiveAttachExperimental
+    | ProductionStrict
+
+    public operator func ==(right: ContractProviderSmokeProfile): Bool {
+        ordinalValue() == right.ordinalValue()
+    }
+
+    public operator func !=(right: ContractProviderSmokeProfile): Bool {
+        !(this == right)
+    }
+
+    public func ordinalValue(): Int64 {
+        match (this) {
+            case ProviderCandidate => 0
+            case AttachPlanning => 1
+            case DefaultHttpsEligible => 2
+            case LiveAttachExperimental => 3
+            case ProductionStrict => 4
+        }
+    }
+
+    public func toString(): String {
+        match (this) {
+            case ProviderCandidate => "PROVIDER_CANDIDATE"
+            case AttachPlanning => "ATTACH_PLANNING"
+            case DefaultHttpsEligible => "DEFAULT_HTTPS_ELIGIBLE"
+            case LiveAttachExperimental => "LIVE_ATTACH_EXPERIMENTAL"
+            case ProductionStrict => "PRODUCTION_STRICT"
+        }
+    }
+}
+
+public class ContractProviderSmokeProfileTemplate {
+    public let profile: ContractProviderSmokeProfile
+    public let label: String
+    public let policy: ContractProviderSmokeSelfCheckPolicy
+    public let notes: Array<String>
+
+    public init(
+        profile: ContractProviderSmokeProfile,
+        label: String,
+        policy: ContractProviderSmokeSelfCheckPolicy,
+        notes: Array<String>
+    ) {
+        if (label.trimAscii().size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke profile label must not be empty"
+            )
+        }
+        if (notes.size == 0) {
+            throw ContractException(
+                ContractErrorCode.BadInput,
+                "provider smoke profile notes must not be empty"
+            )
+        }
+        this.profile = profile
+        this.label = label.trimAscii()
+        this.policy = ContractProviderSmokeSelfCheckPolicy(
+            requireClientTls: policy.requireClientTls,
+            requireX509Verify: policy.requireX509Verify,
+            requireTlsPrecheck: policy.requireTlsPrecheck,
+            requireSuccessBaseline: policy.requireSuccessBaseline,
+            requirePrecheckCoverage: policy.requirePrecheckCoverage,
+            requireVerifyCoverage: policy.requireVerifyCoverage,
+            requireProviderSelectionCoverage: policy.requireProviderSelectionCoverage,
+            requireHandshakeCoverage: policy.requireHandshakeCoverage,
+            requireFallbackPlan: policy.requireFallbackPlan,
+            requireStableServerAttach: policy.requireStableServerAttach,
+            requireDefaultEligible: policy.requireDefaultEligible,
+            requireLiveHandshakeCoverage: policy.requireLiveHandshakeCoverage
+        )
+        this.notes = notes.clone()
+    }
+}
+
 public func contractProviderCapabilityRecord(): ContractProviderCapabilityRecord {
     ContractProviderCapabilityRecord(
         "jinguissl",
@@ -1996,6 +2076,110 @@ public func contractTryRequireProviderSmokeSelfCheck(
 ): ContractProviderSmokeSelfCheckOutcome {
     try {
         let result = contractRequireProviderSmokeSelfCheck(policy: policy)
+        return ContractProviderSmokeSelfCheckOutcome(true, "OK", result: Some(result))
+    } catch (e: ContractException) {
+        return ContractProviderSmokeSelfCheckOutcome(
+            false,
+            e.message,
+            code: Some(e.code),
+            igniteCode: Some(contractMapToIgniteCryptoErrorCode(e.code))
+        )
+    }
+}
+
+public func contractDescribeProviderSmokeProfile(
+    profile: ContractProviderSmokeProfile
+): ContractProviderSmokeProfileTemplate {
+    match (profile) {
+        case ContractProviderSmokeProfile.ProviderCandidate =>
+            ContractProviderSmokeProfileTemplate(
+                profile,
+                "provider-candidate",
+                ContractProviderSmokeSelfCheckPolicy(),
+                [
+                    "default public gate for the current release line",
+                    "requires provider-candidate readiness but does not require stable attach or default HTTPS eligibility"
+                ]
+            )
+        case ContractProviderSmokeProfile.AttachPlanning =>
+            ContractProviderSmokeProfileTemplate(
+                profile,
+                "attach-planning",
+                ContractProviderSmokeSelfCheckPolicy(
+                    requireProviderSelectionCoverage: false,
+                    requireHandshakeCoverage: false,
+                    requireFallbackPlan: true
+                ),
+                [
+                    "optimized for teams that are still planning upper-layer attach integration",
+                    "focuses on client TLS, X.509 verify, TLS precheck, success baseline, and fallback discipline"
+                ]
+            )
+        case ContractProviderSmokeProfile.DefaultHttpsEligible =>
+            ContractProviderSmokeProfileTemplate(
+                profile,
+                "default-https-eligible",
+                ContractProviderSmokeSelfCheckPolicy(
+                    requireStableServerAttach: true,
+                    requireDefaultEligible: true
+                ),
+                [
+                    "intended for release gates that want to promote jinguissl beyond provider-candidate status",
+                    "fails until stable server attach and default HTTPS eligibility become public facts"
+                ]
+            )
+        case ContractProviderSmokeProfile.LiveAttachExperimental =>
+            ContractProviderSmokeProfileTemplate(
+                profile,
+                "live-attach-experimental",
+                ContractProviderSmokeSelfCheckPolicy(
+                    requireStableServerAttach: true,
+                    requireLiveHandshakeCoverage: true
+                ),
+                [
+                    "intended for experimental live attach validation work",
+                    "requires a published stable attach path and a real handshake coverage baseline"
+                ]
+            )
+        case ContractProviderSmokeProfile.ProductionStrict =>
+            ContractProviderSmokeProfileTemplate(
+                profile,
+                "production-strict",
+                ContractProviderSmokeSelfCheckPolicy(
+                    requireStableServerAttach: true,
+                    requireDefaultEligible: true,
+                    requireLiveHandshakeCoverage: true
+                ),
+                [
+                    "strictest provider gate for future production promotion",
+                    "requires stable attach, default HTTPS eligibility, and live handshake coverage"
+                ]
+            )
+    }
+}
+
+public func contractListProviderSmokeProfiles(): Array<ContractProviderSmokeProfileTemplate> {
+    [
+        contractDescribeProviderSmokeProfile(ContractProviderSmokeProfile.ProviderCandidate),
+        contractDescribeProviderSmokeProfile(ContractProviderSmokeProfile.AttachPlanning),
+        contractDescribeProviderSmokeProfile(ContractProviderSmokeProfile.DefaultHttpsEligible),
+        contractDescribeProviderSmokeProfile(ContractProviderSmokeProfile.LiveAttachExperimental),
+        contractDescribeProviderSmokeProfile(ContractProviderSmokeProfile.ProductionStrict)
+    ]
+}
+
+public func contractRequireProviderSmokeProfile(
+    profile: ContractProviderSmokeProfile
+): ContractProviderSmokeSelfCheckReport {
+    let template = contractDescribeProviderSmokeProfile(profile)
+    contractRequireProviderSmokeSelfCheck(policy: template.policy)
+}
+
+public func contractTryRequireProviderSmokeProfile(
+    profile: ContractProviderSmokeProfile
+): ContractProviderSmokeSelfCheckOutcome {
+    try {
+        let result = contractRequireProviderSmokeProfile(profile)
         return ContractProviderSmokeSelfCheckOutcome(true, "OK", result: Some(result))
     } catch (e: ContractException) {
         return ContractProviderSmokeSelfCheckOutcome(
@@ -17581,6 +17765,21 @@ private func contractProviderSmokeSelfCheckRequirement(
 private func contractProviderSmokeSelfCheckFailureDetail(
     report: ContractProviderSmokeSelfCheckReport
 ): String {
+    for (warning in report.warnings) {
+        if (warning.contains("stable server attach")) {
+            return warning
+        }
+    }
+    for (warning in report.warnings) {
+        if (warning.contains("default HTTPS eligibility")) {
+            return warning
+        }
+    }
+    for (warning in report.warnings) {
+        if (warning.contains("live handshake coverage")) {
+            return warning
+        }
+    }
     for (warning in report.warnings) {
         if (warning.contains("provider smoke self-check requires")) {
             return warning

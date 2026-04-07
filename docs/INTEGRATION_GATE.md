@@ -51,6 +51,10 @@
 - `contractRequireProviderSmokeSelfCheck(...)`
 - `contractTryProviderSmokeSelfCheck(...)`
 - `contractTryRequireProviderSmokeSelfCheck(...)`
+- `contractDescribeProviderSmokeProfile(...)`
+- `contractListProviderSmokeProfiles()`
+- `contractRequireProviderSmokeProfile(...)`
+- `contractTryRequireProviderSmokeProfile(...)`
 - `contractDescribeProviderErrorCode(...)`
 - `contractDescribeProviderContractException(...)`
 - `contractDescribeProviderCryptoException(...)`

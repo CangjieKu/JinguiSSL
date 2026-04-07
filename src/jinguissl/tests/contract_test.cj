@@ -3500,7 +3500,7 @@ public class ContractTestSuite {
     public func testContractProviderCapabilityAndAttachBoundary(): Unit {
         let capability = contractProviderCapabilityRecord()
         @Assert(capability.providerId, "jinguissl")
-        @Assert(capability.providerVersion, "0.6.16")
+        @Assert(capability.providerVersion, "0.6.17")
         @Assert(capability.supportsClientTls, true)
         @Assert(capability.supportsServerTlsAttach, false)
         @Assert(capability.supportsX509Verify, true)
@@ -3846,6 +3846,65 @@ public class ContractTestSuite {
                 @Fail("strict provider smoke self-check should carry ignite code")
         }
         @Assert(strictOutcome.message.contains("stable server attach"), true)
+    }
+
+    @TestCase
+    public func testContractProviderSmokeProfilesFacade(): Unit {
+        let templates = contractListProviderSmokeProfiles()
+        @Assert(templates.size, 5)
+
+        let candidate = contractDescribeProviderSmokeProfile(
+            ContractProviderSmokeProfile.ProviderCandidate
+        )
+        @Assert(candidate.label, "provider-candidate")
+        @Assert(candidate.policy.requireStableServerAttach, false)
+        @Assert(candidate.policy.requireDefaultEligible, false)
+        @Assert(candidate.policy.requireLiveHandshakeCoverage, false)
+
+        let planning = contractDescribeProviderSmokeProfile(
+            ContractProviderSmokeProfile.AttachPlanning
+        )
+        @Assert(planning.label, "attach-planning")
+        @Assert(planning.policy.requireProviderSelectionCoverage, false)
+        @Assert(planning.policy.requireHandshakeCoverage, false)
+        @Assert(planning.policy.requireFallbackPlan, true)
+
+        let strict = contractDescribeProviderSmokeProfile(
+            ContractProviderSmokeProfile.ProductionStrict
+        )
+        @Assert(strict.label, "production-strict")
+        @Assert(strict.policy.requireStableServerAttach, true)
+        @Assert(strict.policy.requireDefaultEligible, true)
+        @Assert(strict.policy.requireLiveHandshakeCoverage, true)
+
+        let required = contractRequireProviderSmokeProfile(
+            ContractProviderSmokeProfile.ProviderCandidate
+        )
+        @Assert(required.overallReady, true)
+
+        let strictOutcome = contractTryRequireProviderSmokeProfile(
+            ContractProviderSmokeProfile.DefaultHttpsEligible
+        )
+        @Assert(strictOutcome.ok, false)
+        match (strictOutcome.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("strict provider smoke profile should carry contract code")
+        }
+        match (strictOutcome.igniteCode) {
+            case Some(value) =>
+                @Assert(value.toString(), "CRYPTO_UNAVAILABLE")
+            case None =>
+                @Fail("strict provider smoke profile should carry ignite code")
+        }
+        @Assert(strictOutcome.message.contains("stable server attach"), true)
+
+        let liveAttachOutcome = contractTryRequireProviderSmokeProfile(
+            ContractProviderSmokeProfile.LiveAttachExperimental
+        )
+        @Assert(liveAttachOutcome.ok, false)
+        @Assert(liveAttachOutcome.message.contains("stable server attach"), true)
     }
 
     @TestCase
@@ -4533,7 +4592,7 @@ public class ContractTestSuite {
     public func testContractSshVersionBannerAndTransportPacketFacadeHelpers(): Unit {
         let banner = contractSshBuildVersionBannerRequest(
             ContractSshBuildVersionBannerRequest(
-                "jinkuiSSL_0.6.16",
+                "jinkuiSSL_0.6.17",
                 comments: "contract-test"
             )
         )
@@ -4546,11 +4605,11 @@ public class ContractTestSuite {
         )
 
         @Assert(decodedBanner.protocolVersion, "2.0")
-        @Assert(decodedBanner.softwareVersion, "jinkuiSSL_0.6.16")
+        @Assert(decodedBanner.softwareVersion, "jinkuiSSL_0.6.17")
         @Assert(decodedBanner.comments, "contract-test")
         @Assert(
             String.fromUtf8(encodedBanner),
-            "SSH-2.0-jinkuiSSL_0.6.16 contract-test\r\n"
+            "SSH-2.0-jinkuiSSL_0.6.17 contract-test\r\n"
         )
 
         let payload = "abc".toArray()

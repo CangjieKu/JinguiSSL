@@ -2,7 +2,7 @@
 
 ## Freeze Meta
 
-- release line: `0.6.16`
+- release line: `0.6.17`
 - facade api version: `1.0.0`
 - stability level: `L1`
 - import rule: 默认仅 `import jinguissl.contract.*`
@@ -49,6 +49,8 @@
   - `ContractProviderSmokeSelfCheckPolicy`
   - `ContractProviderSmokeSelfCheckReport`
   - `ContractProviderSmokeSelfCheckOutcome`
+  - `ContractProviderSmokeProfile`
+  - `ContractProviderSmokeProfileTemplate`
   - `contractProviderSmokeFixtureCatalog()`
   - `contractRequireProviderSmokeFixture(...)`
   - `contractDescribeProviderSmokeBaseline(...)`
@@ -61,6 +63,10 @@
   - `contractRequireProviderSmokeSelfCheck(...)`
   - `contractTryProviderSmokeSelfCheck(...)`
   - `contractTryRequireProviderSmokeSelfCheck(...)`
+  - `contractDescribeProviderSmokeProfile(...)`
+  - `contractListProviderSmokeProfiles()`
+  - `contractRequireProviderSmokeProfile(...)`
+  - `contractTryRequireProviderSmokeProfile(...)`
   - `contractDescribeProviderErrorCode(...)`
   - `contractDescribeProviderContractException(...)`
   - `contractDescribeProviderCryptoException(...)`
@@ -103,3 +109,4 @@
 - provider smoke baseline report / outcome facade
 - provider smoke suite aggregation facade
 - provider smoke self-check readiness facade
+- provider smoke profile / gate template facade

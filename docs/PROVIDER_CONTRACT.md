@@ -29,6 +29,8 @@
 - `ContractProviderSmokeSelfCheckPolicy`
 - `ContractProviderSmokeSelfCheckReport`
 - `ContractProviderSmokeSelfCheckOutcome`
+- `ContractProviderSmokeProfile`
+- `ContractProviderSmokeProfileTemplate`
 - `contractProviderSmokeFixtureCatalog()`
 - `contractRequireProviderSmokeFixture(...)`
 - `contractDescribeProviderSmokeBaseline(...)`
@@ -41,6 +43,10 @@
 - `contractRequireProviderSmokeSelfCheck(...)`
 - `contractTryProviderSmokeSelfCheck(...)`
 - `contractTryRequireProviderSmokeSelfCheck(...)`
+- `contractDescribeProviderSmokeProfile(...)`
+- `contractListProviderSmokeProfiles()`
+- `contractRequireProviderSmokeProfile(...)`
+- `contractTryRequireProviderSmokeProfile(...)`
 - `contractDescribeProviderErrorCode(...)`
 - `contractDescribeProviderContractException(...)`
 - `contractDescribeProviderCryptoException(...)`
@@ -48,10 +54,10 @@
 
 ## Capability Record
 
-当前 `0.6.16` provider 记录：
+当前 `0.6.17` provider 记录：
 
 - `providerId`: `jinguissl`
-- `providerVersion`: `0.6.16`
+- `providerVersion`: `0.6.17`
 - `platformScope`: `primary darwin/aarch64; compile-target linux/ohos aarch64; x86_64 deferred to 0.7; loongarch64/riscv64 reserved skeletons`
 - `cjScope`: `cjc >= 1.1.0`
 - `supportsClientTls`: `true`
@@ -311,6 +317,35 @@ suite report 会额外聚合：
 - handshake coverage 目前仍是 metadata-only
 
 如果上层想收紧门槛，例如要求 stable attach 或 live handshake coverage，可以在 policy 中显式打开对应项；这时 `contractRequireProviderSmokeSelfCheck(...)` 会以 `UNSUPPORTED` 失败返回，便于 provider selector 或 CI gate 直接阻断。
+
+## Smoke Profiles
+
+如果上层不想直接自己组装 policy，而是希望拿“命名好的门槛模板”，可以直接使用：
+
+- `contractDescribeProviderSmokeProfile(...)`
+- `contractListProviderSmokeProfiles()`
+- `contractRequireProviderSmokeProfile(...)`
+- `contractTryRequireProviderSmokeProfile(...)`
+
+当前公开 profile：
+
+- `provider-candidate`
+  - 对应当前 release line 的默认门槛
+  - 接受 `PRECHECK_ONLY` 与 metadata-only handshake coverage
+- `attach-planning`
+  - 适用于仍处于 attach 规划期的上层
+  - 不要求 provider-selection / handshake coverage，但保留 fallback discipline
+- `default-https-eligible`
+  - 面向“是否能升级成默认 HTTPS 路径”的门槛
+  - 需要 stable attach 与 default eligibility
+- `live-attach-experimental`
+  - 面向实验性 live attach 验证
+  - 需要 stable attach 与 live handshake coverage
+- `production-strict`
+  - 最严格 profile
+  - 同时要求 stable attach、default eligibility、live handshake coverage
+
+这样 provider selector / CI gate 可以直接固定 profile 名称，而不用把一大串 policy bool 散落在业务仓里。
 
 ## Non-Goals
 
