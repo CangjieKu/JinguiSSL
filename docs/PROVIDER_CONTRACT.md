@@ -31,6 +31,16 @@
 - `ContractProviderSmokeSelfCheckOutcome`
 - `ContractProviderSmokeProfile`
 - `ContractProviderSmokeProfileTemplate`
+- `ContractProviderConsumptionPath`
+- `ContractProviderConsumptionPathGuide`
+- `ContractProviderConsumptionGateStatus`
+- `ContractProviderConsumptionGateReport`
+- `ContractProviderConsumptionGateOutcome`
+- `ContractProviderFallbackCauseCode`
+- `ContractProviderFallbackOutcome`
+- `ContractProviderFallbackOutcomeGuide`
+- `ContractProviderFallbackResolutionRequest`
+- `ContractProviderFallbackResolution`
 - `contractProviderSmokeFixtureCatalog()`
 - `contractRequireProviderSmokeFixture(...)`
 - `contractDescribeProviderSmokeBaseline(...)`
@@ -47,6 +57,15 @@
 - `contractListProviderSmokeProfiles()`
 - `contractRequireProviderSmokeProfile(...)`
 - `contractTryRequireProviderSmokeProfile(...)`
+- `contractDescribeProviderConsumptionPath(...)`
+- `contractListProviderConsumptionPaths()`
+- `contractDescribeProviderConsumptionGate(...)`
+- `contractListProviderConsumptionGates()`
+- `contractRequireProviderConsumptionGate(...)`
+- `contractTryRequireProviderConsumptionGate(...)`
+- `contractDescribeProviderFallbackOutcomeGuide(...)`
+- `contractListProviderFallbackOutcomeGuides()`
+- `contractResolveProviderFallbackOutcome(...)`
 - `contractDescribeProviderErrorCode(...)`
 - `contractDescribeProviderContractException(...)`
 - `contractDescribeProviderCryptoException(...)`
@@ -54,10 +73,10 @@
 
 ## Capability Record
 
-当前 `0.6.17` provider 记录：
+当前 `0.6.21` provider 记录：
 
 - `providerId`: `jinguissl`
-- `providerVersion`: `0.6.17`
+- `providerVersion`: `0.6.21`
 - `platformScope`: `primary darwin/aarch64; compile-target linux/ohos aarch64; x86_64 deferred to 0.7; loongarch64/riscv64 reserved skeletons`
 - `cjScope`: `cjc >= 1.1.0`
 - `supportsClientTls`: `true`
@@ -142,6 +161,121 @@ provider 侧建议上层至少记录：
 - `jinguissl` 目前不能在公开契约上承诺 server-side attach
 - 真正的 attach、fallback 与记录应由 `lisi` 负责
 
+## Consumption Paths
+
+当前建议上层直接消费：
+
+- `contractDescribeProviderConsumptionPath(...)`
+- `contractListProviderConsumptionPaths()`
+- `contractDescribeProviderConsumptionGate(...)`
+- `contractListProviderConsumptionGates()`
+- `contractRequireProviderConsumptionGate(...)`
+- `contractTryRequireProviderConsumptionGate(...)`
+
+当前固定的消费路径解释：
+
+- `HTTP_CLIENT_TLS`
+  - 可以尝试 `jinguissl`
+  - 仍属于 provider-candidate 路径，不等于默认切换
+  - 推荐 smoke profile：`provider-candidate`
+- `HTTP_SERVER_ATTACH_PLANNING`
+  - 可以尝试 `jinguissl`
+  - 但只到 `precheck + material preparation + attach planning`
+  - 推荐 smoke profile：`attach-planning`
+- `HTTP_SERVER_STABLE_ATTACH`
+  - 当前不允许当作公开稳定路径尝试
+  - 推荐继续停在 `stdx-default`
+  - 推荐 smoke profile：`default-https-eligible`（当前应失败关闭）
+- `SSH_CLIENT_LIBRARY`
+  - 可以直接消费 `jinguissl.contract.*`
+  - 这不是 `stdx` TLS attach 问题，而是稳定库面
+- `SSH_SERVER_LIBRARY`
+  - 可以直接消费 `jinguissl.contract.*`
+  - 这同样不是 `stdx.net.tls.TlsServerConfig` bridge 问题
+
+这里对 `buildTlsAttachPlan(...)` 的公开解释固定为：
+
+- 在 HTTP client 路径上，它可以被看作真实 provider 尝试计划；
+- 在 HTTP server 路径上，它当前只表示 planning contract，不表示稳定 listener attach 已经存在；
+- 在 SSH 路径上，它不适用，SSH 应直接消费 `jinguissl.contract.*` 的 handshake/runtime facade。
+
+## Consumption Gate
+
+若上层不想自己拼装：
+
+- path guide
+- smoke profile
+- smoke readiness
+- fallback target
+- 当前 selected reason
+
+则可以直接消费 `contractDescribeProviderConsumptionGate(...)` 或 `contractRequireProviderConsumptionGate(...)`。
+
+当前 gate status 含义固定为：
+
+- `PROVIDER_CANDIDATE`
+  - 当前公开为 provider-candidate 路径
+  - `readyNow = true` 时表示上层可尝试 `jinguissl`，但仍应保留 `stdx-default` fallback
+- `PLANNING_ONLY`
+  - 当前公开为 planning-only 路径
+  - `readyNow = true` 只表示可做 precheck / material preparation / planning，不表示可直接完成 listener attach
+- `LIBRARY_CONTRACT`
+  - 当前公开为稳定库面
+  - 适用于 SSH client/server 这类不依赖 provider attach glue 的路径
+- `BLOCKED`
+  - 当前不是公开稳定路径
+  - `contractRequireProviderConsumptionGate(...)` 应直接失败关闭
+
+当前 gate report 同时固定补齐：
+
+- `providerId`
+  - 当前固定返回 `jinguissl`
+- `selectedEntryId`
+  - `readyNow = true` 时返回当前可消费的 provider entry
+  - `readyNow = false` 时返回空字符串，避免把 blocked / fail-closed 路径伪装成已选中
+- `candidateOrder`
+  - 当前按 `jinguissl` provider entry 在前、稳定 fallback 在后给出固定顺序
+- `blockedCandidates`
+  - 当前用结构化 `entry:reason` 形式记录 blocked / smoke-not-ready 原因
+- `releasePath`
+  - 便于上层把 provider gate 直接映射到更高层的 release/observe 语义
+  - 当前仅返回：
+    - `experimental-only`
+    - `library-direct`
+    - `unsupported`
+- `riskLevel`
+  - 当前固定返回：
+    - provider-candidate / planning-only => `medium`
+    - library-contract => `low`
+    - blocked => `high`
+- `fallbackChain`
+  - 当前若仍建议回到稳定默认路径，则返回：
+    - `["stdx-default"]`
+  - 对 SSH library-contract 这类稳定库面，当前返回空链
+- `observabilityTags`
+  - 当前固定补齐 `provider_id`、`provider_entry`、`selected_entry`、`path`、`consumer_kind`、`public_path`、`release_path`、`risk_level`、`ready_now` 等标签
+
+当前固定 gate 结果：
+
+- `HTTP_CLIENT_TLS`
+  - `status = PROVIDER_CANDIDATE`
+  - `publicPath = provider-candidate`
+  - 绑定 smoke profile：`provider-candidate`
+- `HTTP_SERVER_ATTACH_PLANNING`
+  - `status = PLANNING_ONLY`
+  - `publicPath = attach-planning`
+  - 绑定 smoke profile：`attach-planning`
+- `HTTP_SERVER_STABLE_ATTACH`
+  - `status = BLOCKED`
+  - `publicPath = blocked`
+  - 绑定 smoke profile：`default-https-eligible`，当前应失败关闭
+- `SSH_CLIENT_LIBRARY`
+  - `status = LIBRARY_CONTRACT`
+  - `publicPath = library-contract`
+- `SSH_SERVER_LIBRARY`
+  - `status = LIBRARY_CONTRACT`
+  - `publicPath = library-contract`
+
 ## Error Model
 
 ### Family
@@ -189,6 +323,33 @@ provider 侧建议上层至少记录：
 - `BAD_INPUT` / `COMPLIANCE_REJECTED` / `TLS_PRECHECK_ERROR` / `TLS_VERIFY_ERROR`
   - 不建议自动回退，应直接上抛
 
+如果上层还需要把这些建议进一步收成试运行 / 观测口径，当前推荐直接消费：
+
+- `contractDescribeProviderFallbackOutcomeGuide(...)`
+- `contractListProviderFallbackOutcomeGuides()`
+- `contractResolveProviderFallbackOutcome(...)`
+
+当前固定 outcome 口径：
+
+- `suggested-only`
+  - 允许建议回到 `stdx-default`
+  - 但不代表已经自动切换成功
+- `no-auto-fallback`
+  - 必须保留错误语义，不允许静默降级
+- `no-fallback`
+  - 当前已经在稳定默认路径上，没有第二条自动降级链
+- `manual-review`
+  - 当前路径已消耗连接，或已在稳定默认路径上且仍无可行自动降级，应交给上层重试/人工判定
+
+当前推荐重点观察的 cause code：
+
+- `provider_unavailable`
+- `tls_handshake_error`
+- `tls_verify_error`
+- `tls_precheck_error`
+- `tls_not_configured`
+- `crypto_unavailable`
+
 ## Smoke Fixture Coverage
 
 当前公开仓库现在通过 `contractProviderSmokeFixtureCatalog()` / `contractRequireProviderSmokeFixture(...)`
@@ -212,10 +373,19 @@ provider 侧建议上层至少记录：
 - `verify-pin-mismatch`
   - category: `VERIFY_FAIL`
   - expected phase / family: `TLS_VERIFY` / `TLS_VERIFY_ERROR`
+- `verify-untrusted-chain`
+  - category: `VERIFY_FAIL`
+  - expected phase / family: `TLS_VERIFY` / `TLS_VERIFY_ERROR`
 - `handshake-server-hello-decode`
   - category: `HANDSHAKE_FAIL`
   - expected phase / family: `TLS_HANDSHAKE` / `TLS_HANDSHAKE_ERROR`
+- `attach-stable-listener-unpublished`
+  - category: `HANDSHAKE_FAIL`
+  - expected phase / family: `PROVIDER_RUNTIME` / `UNSUPPORTED`
 - `provider-not-linked`
+  - category: `PROVIDER_UNAVAILABLE`
+  - expected phase / family: `PROVIDER_SELECTION` / `PROVIDER_UNAVAILABLE`
+- `provider-experimental-gated-off`
   - category: `PROVIDER_UNAVAILABLE`
   - expected phase / family: `PROVIDER_SELECTION` / `PROVIDER_UNAVAILABLE`
 

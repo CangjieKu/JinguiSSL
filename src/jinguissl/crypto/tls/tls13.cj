@@ -570,6 +570,7 @@ public let TLS13_CIPHER_SUITE_AES_128_GCM_SHA256: Int64 = 0x1301
 public let TLS13_CIPHER_SUITE_CHACHA20_POLY1305_SHA256: Int64 = 0x1303
 
 private let TLS13_VERSION: Int64 = 0x0304
+private let TLS13_EXT_SUPPORTED_GROUPS: Int64 = 0x000a
 private let TLS13_EXT_SUPPORTED_VERSIONS: Int64 = 0x002b
 private let TLS13_EXT_KEY_SHARE: Int64 = 0x0033
 private let TLS13_EXT_PSK_KEY_EXCHANGE_MODES: Int64 = 0x002d
@@ -630,6 +631,14 @@ public func tls13CipherSuiteIvLen(cipherSuite: Int64): Int64 {
     TLS13_DEFAULT_AEAD_IV_LEN
 }
 
+private func tls13DefaultClientSignatureSchemes(): Array<Int64> {
+    [
+        TLS13_SIG_SCHEME_ECDSA_SECP256R1_SHA256,
+        TLS13_SIG_SCHEME_ECDSA_SECP384R1_SHA384,
+        TLS13_SIG_SCHEME_RSA_PSS_RSAE_SHA256
+    ]
+}
+
 public func tls13BuildClientHelloEcdhe(
     clientKeyShare: EcPublicKey,
     sessionId!: Array<Byte> = []
@@ -646,7 +655,7 @@ public func tls13BuildClientHelloEcdheWithCipherSuites(
     cipherSuites: Array<Int64>,
     sessionId!: Array<Byte> = []
 ): Array<Byte> {
-    _ = tls13ResolveEcdheCurveSpecFromPublicKey(clientKeyShare)
+    let (supportedGroup, _) = tls13ResolveEcdheCurveSpecFromPublicKey(clientKeyShare)
     tls13ValidateOfferedCipherSuites(cipherSuites)
 
     let hello = TlsClientHello(
@@ -656,6 +665,8 @@ public func tls13BuildClientHelloEcdheWithCipherSuites(
         compressionMethods: [UInt8(0x00)],
         extensions: [
             TlsExtension(TLS13_EXT_SUPPORTED_VERSIONS, tls13EncodeClientSupportedVersions()),
+            tls13EncodeSupportedGroupsExtension([supportedGroup]),
+            tls13EncodeSignatureAlgorithmsExtension(tls13DefaultClientSignatureSchemes()),
             TlsExtension(TLS13_EXT_KEY_SHARE, tls13EncodeClientKeyShare(clientKeyShare))
         ],
         legacyVersion: TLS1_2
@@ -689,6 +700,8 @@ public func tls13BuildClientHelloX25519WithCipherSuites(
         compressionMethods: [UInt8(0x00)],
         extensions: [
             TlsExtension(TLS13_EXT_SUPPORTED_VERSIONS, tls13EncodeClientSupportedVersions()),
+            tls13EncodeSupportedGroupsExtension([TLS13_GROUP_X25519]),
+            tls13EncodeSignatureAlgorithmsExtension(tls13DefaultClientSignatureSchemes()),
             TlsExtension(TLS13_EXT_KEY_SHARE, tls13EncodeClientX25519KeyShare(clientKeyShare))
         ],
         legacyVersion: TLS1_2
@@ -2962,6 +2975,46 @@ private func tls13RequireExtension(extensions: Array<TlsExtension>, extType: Int
         }
     }
     throw CryptoException(ParseError, "${label} extension is missing")
+}
+
+private func tls13NormalizeSupportedGroups(groups: Array<Int64>): Array<Int64> {
+    if (groups.size == 0) {
+        throw CryptoException(InvalidArgument, "TLS1.3 supported group list must not be empty")
+    }
+
+    let out = ArrayList<Int64>()
+    for (group in groups) {
+        if (group < 0 || group > 65535) {
+            throw CryptoException(InvalidArgument, "TLS1.3 supported group must fit uint16")
+        }
+        var duplicate = false
+        for (current in out.toArray()) {
+            if (current == group) {
+                duplicate = true
+                break
+            }
+        }
+        if (!duplicate) {
+            out.add(group)
+        }
+    }
+    if (out.size == 0) {
+        throw CryptoException(InvalidArgument, "TLS1.3 supported group list must not be empty")
+    }
+    out.toArray()
+}
+
+private func tls13EncodeSupportedGroupsExtension(groups: Array<Int64>): TlsExtension {
+    let normalizedGroups = tls13NormalizeSupportedGroups(groups)
+    let encoded = Array<Byte>(normalizedGroups.size * 2, repeat: 0)
+    var i = 0
+    while (i < normalizedGroups.size) {
+        let group = tls13EncodeUInt16(normalizedGroups[i])
+        encoded[i * 2] = group[0]
+        encoded[i * 2 + 1] = group[1]
+        i += 1
+    }
+    TlsExtension(TLS13_EXT_SUPPORTED_GROUPS, tls13EncodeVector16(encoded))
 }
 
 private func tls13NormalizeSignatureSchemes(signatureSchemes: Array<Int64>): Array<Int64> {

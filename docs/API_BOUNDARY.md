@@ -2,7 +2,7 @@
 
 ## Freeze Meta
 
-- release line: `0.6.17`
+- release line: `0.6.21`
 - facade api version: `1.0.0`
 - stability level: `L1`
 - import rule: 默认仅 `import jinguissl.contract.*`
@@ -67,6 +67,25 @@
   - `contractListProviderSmokeProfiles()`
   - `contractRequireProviderSmokeProfile(...)`
   - `contractTryRequireProviderSmokeProfile(...)`
+  - `ContractProviderConsumptionPath`
+  - `ContractProviderConsumptionPathGuide`
+  - `ContractProviderConsumptionGateStatus`
+  - `ContractProviderConsumptionGateReport`
+  - `ContractProviderConsumptionGateOutcome`
+  - `contractDescribeProviderConsumptionPath(...)`
+  - `contractListProviderConsumptionPaths()`
+  - `contractDescribeProviderConsumptionGate(...)`
+  - `contractListProviderConsumptionGates()`
+  - `contractRequireProviderConsumptionGate(...)`
+  - `contractTryRequireProviderConsumptionGate(...)`
+  - `ContractProviderFallbackCauseCode`
+  - `ContractProviderFallbackOutcome`
+  - `ContractProviderFallbackOutcomeGuide`
+  - `ContractProviderFallbackResolutionRequest`
+  - `ContractProviderFallbackResolution`
+  - `contractDescribeProviderFallbackOutcomeGuide(...)`
+  - `contractListProviderFallbackOutcomeGuides()`
+  - `contractResolveProviderFallbackOutcome(...)`
   - `contractDescribeProviderErrorCode(...)`
   - `contractDescribeProviderContractException(...)`
   - `contractDescribeProviderCryptoException(...)`
@@ -110,3 +129,7 @@
 - provider smoke suite aggregation facade
 - provider smoke self-check readiness facade
 - provider smoke profile / gate template facade
+- provider consumption path guidance facade
+- provider consumption gate / require facade
+  - gate report now also carries direct selector / observe fields such as `providerId`, `selectedEntryId`, `candidateOrder`, `blockedCandidates`, `releasePath`, `riskLevel`, `fallbackChain`, and `observabilityTags`
+- provider fallback outcome matrix / resolution facade

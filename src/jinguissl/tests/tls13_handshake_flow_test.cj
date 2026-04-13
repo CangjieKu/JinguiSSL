@@ -18,6 +18,9 @@ private let P256_2G_Y: BigNum = BigNum.fromHex("07775510DB8ED040293D9AC69F7430DB
 private let P384_GX: BigNum = BigNum.fromHex("AA87CA22BE8B05378EB1C71EF320AD746E1D3B628BA79B9859F741E082542A385502F25DBF55296C3A545E3872760AB7")
 private let P384_GY: BigNum = BigNum.fromHex("3617DE4A96262C6F5D9E98BF9292DC29F8F41DBD289A147CE9DA3113B5F0B8C00A60B1CE1D7E819D7A431D7C90EA0E5F")
 private let TLS13_KEY_SHARE_EXTENSION_TYPE: Int64 = 0x0033
+private let TLS13_SUPPORTED_GROUPS_EXTENSION_TYPE: Int64 = 0x000a
+private let TLS13_GROUP_SECP256R1_TEST: Int64 = 0x0017
+private let TLS13_GROUP_X25519_TEST: Int64 = 0x001d
 
 @Test
 public class Tls13HandshakeFlowTestSuite {
@@ -167,6 +170,18 @@ public class Tls13HandshakeFlowTestSuite {
         let encrypted = clientRecord.seal(ApplicationData, "tls13-x25519-data".toArray())
         let opened = serverRecord.open(encrypted)
         @Assert(opened.fragment, "tls13-x25519-data".toArray())
+    }
+
+    @TestCase
+    public func testTls13ClientHelloBuildersCarryInteropExtensions(): Unit {
+        let ecdhePublic = EcPublicKey(P256, P256_2G_X, P256_2G_Y)
+        let ecdheHello = tlsDecodeClientHelloHandshake(tls13BuildClientHelloEcdhe(ecdhePublic))
+        assertTls13ClientHelloInteropExtensions(ecdheHello, [TLS13_GROUP_SECP256R1_TEST])
+
+        let x25519Private = hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+        let x25519Public = x25519PublicFromPrivate(x25519Private)
+        let x25519Hello = tlsDecodeClientHelloHandshake(tls13BuildClientHelloX25519(x25519Public))
+        assertTls13ClientHelloInteropExtensions(x25519Hello, [TLS13_GROUP_X25519_TEST])
     }
 
     @TestCase
@@ -1561,6 +1576,7 @@ public class Tls13HandshakeFlowTestSuite {
             "Api.Example.COM"
         )
         let decodedEcdhe = tlsDecodeClientHelloHandshake(ecdheHello)
+        assertTls13ClientHelloInteropExtensions(decodedEcdhe, [TLS13_GROUP_SECP256R1_TEST])
 
         if (let Some(sniExt) <- tlsFindExtension(decodedEcdhe.extensions, TLS_EXT_SERVER_NAME)) {
             let serverNames = tlsParseServerNameExtension(sniExt)
@@ -1584,6 +1600,7 @@ public class Tls13HandshakeFlowTestSuite {
             alpnProtocols: ["http/1.1"]
         )
         let decodedX25519 = tlsDecodeClientHelloHandshake(x25519Hello)
+        assertTls13ClientHelloInteropExtensions(decodedX25519, [TLS13_GROUP_X25519_TEST])
         if (let Some(alpnExt) <- tlsFindExtension(decodedX25519.extensions, TLS_EXT_ALPN)) {
             let alpn = tlsParseAlpnExtension(alpnExt)
             @Assert(alpn, ["http/1.1"])
@@ -2292,6 +2309,69 @@ private func concat(left: Array<Byte>, right: Array<Byte>): Array<Byte> {
         i += 1
     }
     out
+}
+
+private func assertTls13ClientHelloInteropExtensions(
+    clientHello: TlsClientHello,
+    expectedSupportedGroups: Array<Int64>
+): Unit {
+    if (let Some(groupsExt) <- tlsFindExtension(clientHello.extensions, TLS13_SUPPORTED_GROUPS_EXTENSION_TYPE)) {
+        @Assert(parseTls13SupportedGroupsExtension(groupsExt), expectedSupportedGroups)
+    } else {
+        @Fail("TLS1.3 ClientHello should carry supported_groups extension")
+    }
+
+    if (let Some(signatureExt) <- tlsFindExtension(clientHello.extensions, TLS13_EXT_SIGNATURE_ALGORITHMS)) {
+        @Assert(
+            parseTls13SignatureAlgorithmsExtensionForTest(signatureExt),
+            [
+                TLS13_SIG_SCHEME_ECDSA_SECP256R1_SHA256,
+                TLS13_SIG_SCHEME_ECDSA_SECP384R1_SHA384,
+                TLS13_SIG_SCHEME_RSA_PSS_RSAE_SHA256
+            ]
+        )
+    } else {
+        @Fail("TLS1.3 ClientHello should carry signature_algorithms extension")
+    }
+}
+
+private func parseTls13SupportedGroupsExtension(extension: TlsExtension): Array<Int64> {
+    if (extension.extType != TLS13_SUPPORTED_GROUPS_EXTENSION_TYPE) {
+        throw Exception("TLS1.3 extension is not supported_groups")
+    }
+    parseTls13UInt16VectorExtension(extension.data, "TLS1.3 supported_groups")
+}
+
+private func parseTls13SignatureAlgorithmsExtensionForTest(extension: TlsExtension): Array<Int64> {
+    if (extension.extType != TLS13_EXT_SIGNATURE_ALGORITHMS) {
+        throw Exception("TLS1.3 extension is not signature_algorithms")
+    }
+    parseTls13UInt16VectorExtension(extension.data, "TLS1.3 signature_algorithms")
+}
+
+private func parseTls13UInt16VectorExtension(data: Array<Byte>, label: String): Array<Int64> {
+    if (data.size < 2) {
+        throw Exception("${label} extension is truncated")
+    }
+    let encodedLen = readUInt16BeForTest(data, 0)
+    if (encodedLen == 0 || (encodedLen % 2) != 0 || encodedLen + 2 != data.size) {
+        throw Exception("${label} vector length is invalid")
+    }
+
+    let values = ArrayList<Int64>()
+    var offset = 2
+    while (offset < data.size) {
+        values.add(readUInt16BeForTest(data, offset))
+        offset += 2
+    }
+    values.toArray()
+}
+
+private func readUInt16BeForTest(data: Array<Byte>, offset: Int64): Int64 {
+    if (offset + 2 > data.size) {
+        throw Exception("uint16 read exceeds buffer")
+    }
+    (Int64(UInt8(data[offset])) << 8) | Int64(UInt8(data[offset + 1]))
 }
 
 private func hexToBytes(hex: String): Array<Byte> {

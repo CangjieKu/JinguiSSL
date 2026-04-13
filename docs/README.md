@@ -20,7 +20,7 @@
 - `INTEGRATION_GATE.md`
   - 说明集成侧推荐依赖方式、命名约束、发布门禁与打包注意事项
 - `PROVIDER_CONTRACT.md`
-  - 汇总 provider capability、attach boundary、错误模型与 fallback 建议
+  - 汇总 provider capability、attach boundary、consumption gate、错误模型与 fallback 建议
 - `PACKAGING_AUDIT.md`
   - 说明 `.cjp` / `.sha256` / manifest 的发布审计路径与检查项
 - `SSH_FACADE.md`

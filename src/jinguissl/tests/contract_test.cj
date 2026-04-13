@@ -8,6 +8,7 @@ import jinguissl.crypto.digest.{HashAlgorithm, hkdf, hkdfExpand, hkdfExtract, sh
 import jinguissl.crypto.ecc.{EcPrivateKey, NamedCurve, ecPublicFromPrivateKey}
 import jinguissl.crypto.error.{CryptoErrorCode, CryptoException}
 import jinguissl.crypto.ssh.*
+import jinguissl.crypto.tls.*
 import jinguissl.crypto.x25519.x25519PublicFromPrivate
 import jinguissl.crypto.x509.{
     X509SelfSignedConfig,
@@ -15,6 +16,9 @@ import jinguissl.crypto.x509.{
     x509ParseEcPrivateKeyPkcs8Pem,
     x509ParseRsaPrivateKeyPkcs8Pem
 }
+
+private let CONTRACT_TLS13_SUPPORTED_GROUPS_EXTENSION_TYPE: Int64 = 0x000a
+private let CONTRACT_TLS13_GROUP_X25519_TEST: Int64 = 0x001d
 
 @Test
 public class ContractTestSuite {
@@ -1331,6 +1335,35 @@ public class ContractTestSuite {
             @Fail("hostname mismatch should fail TLS1.3 HTTP contract verification")
         } catch (e: ContractException) {
             @Assert(e.code.toString(), "VERIFY_FAILED")
+        }
+    }
+
+    @TestCase
+    public func testContractTls13HttpClientHelloCarriesInteropExtensions(): Unit {
+        let clientHello = contractTls13BuildHttpClientHelloX25519(
+            TEST_HOST_WWW,
+            alpnProtocols: ["h2", "http/1.1"],
+            clientPrivateKey: Some(incrementalBytes(32, start: 73))
+        )
+        let decoded = tlsDecodeClientHelloHandshake(clientHello.encodedClientHello)
+
+        if (let Some(groupsExt) <- tlsFindExtension(decoded.extensions, CONTRACT_TLS13_SUPPORTED_GROUPS_EXTENSION_TYPE)) {
+            @Assert(parseContractTls13UInt16VectorExtension(groupsExt.data), [CONTRACT_TLS13_GROUP_X25519_TEST])
+        } else {
+            @Fail("TLS1.3 contract ClientHello should carry supported_groups extension")
+        }
+
+        if (let Some(signatureExt) <- tlsFindExtension(decoded.extensions, TLS13_EXT_SIGNATURE_ALGORITHMS)) {
+            @Assert(
+                parseContractTls13UInt16VectorExtension(signatureExt.data),
+                [
+                    TLS13_SIG_SCHEME_ECDSA_SECP256R1_SHA256,
+                    TLS13_SIG_SCHEME_ECDSA_SECP384R1_SHA384,
+                    TLS13_SIG_SCHEME_RSA_PSS_RSAE_SHA256
+                ]
+            )
+        } else {
+            @Fail("TLS1.3 contract ClientHello should carry signature_algorithms extension")
         }
     }
 
@@ -3500,7 +3533,7 @@ public class ContractTestSuite {
     public func testContractProviderCapabilityAndAttachBoundary(): Unit {
         let capability = contractProviderCapabilityRecord()
         @Assert(capability.providerId, "jinguissl")
-        @Assert(capability.providerVersion, "0.6.17")
+        @Assert(capability.providerVersion, "0.6.21")
         @Assert(capability.supportsClientTls, true)
         @Assert(capability.supportsServerTlsAttach, false)
         @Assert(capability.supportsX509Verify, true)
@@ -3536,13 +3569,16 @@ public class ContractTestSuite {
     @TestCase
     public func testContractProviderSmokeFixtureCatalog(): Unit {
         let catalog = contractProviderSmokeFixtureCatalog()
-        @Assert(catalog.size >= 6, true)
+        @Assert(catalog.size >= 9, true)
 
         var foundSuccess = false
         var foundPrecheck = false
         var foundVerify = false
         var foundHandshake = false
         var foundUnavailable = false
+        var foundAttach = false
+        var foundVerifyTrust = false
+        var foundUnavailableGate = false
         for (fixture in catalog) {
             @Assert(fixture.providerId, "jinguissl")
             @Assert(fixture.artifacts.size > 0, true)
@@ -3573,13 +3609,17 @@ public class ContractTestSuite {
             }
             if (
                 fixture.fixtureId == "verify-hostname-mismatch" ||
-                fixture.fixtureId == "verify-pin-mismatch"
+                fixture.fixtureId == "verify-pin-mismatch" ||
+                fixture.fixtureId == "verify-untrusted-chain"
             ) {
                 foundVerify = true
                 @Assert(fixture.category.toString(), "VERIFY_FAIL")
                 match (fixture.expectedFamily) {
                     case Some(value) => @Assert(value.toString(), "TLS_VERIFY_ERROR")
                     case None => @Fail("verify fixture should carry expected family")
+                }
+                if (fixture.fixtureId == "verify-untrusted-chain") {
+                    foundVerifyTrust = true
                 }
             }
             if (fixture.fixtureId == "handshake-server-hello-decode") {
@@ -3594,6 +3634,22 @@ public class ContractTestSuite {
                     case None => @Fail("handshake fixture should carry expected family")
                 }
             }
+            if (fixture.fixtureId == "attach-stable-listener-unpublished") {
+                foundAttach = true
+                @Assert(fixture.category.toString(), "HANDSHAKE_FAIL")
+                match (fixture.expectedCode) {
+                    case Some(value) => @Assert(value.toString(), "UNSUPPORTED")
+                    case None => @Fail("attach fixture should carry expected code")
+                }
+                match (fixture.expectedPhase) {
+                    case Some(value) => @Assert(value.toString(), "PROVIDER_RUNTIME")
+                    case None => @Fail("attach fixture should carry expected phase")
+                }
+                match (fixture.expectedFamily) {
+                    case Some(value) => @Assert(value.toString(), "UNSUPPORTED")
+                    case None => @Fail("attach fixture should carry expected family")
+                }
+            }
             if (fixture.fixtureId == "provider-not-linked") {
                 foundUnavailable = true
                 @Assert(fixture.category.toString(), "PROVIDER_UNAVAILABLE")
@@ -3606,12 +3662,27 @@ public class ContractTestSuite {
                     case None => @Fail("provider unavailable fixture should carry expected family")
                 }
             }
+            if (fixture.fixtureId == "provider-experimental-gated-off") {
+                foundUnavailableGate = true
+                @Assert(fixture.category.toString(), "PROVIDER_UNAVAILABLE")
+                match (fixture.expectedPhase) {
+                    case Some(value) => @Assert(value.toString(), "PROVIDER_SELECTION")
+                    case None => @Fail("provider gated fixture should carry expected phase")
+                }
+                match (fixture.expectedFamily) {
+                    case Some(value) => @Assert(value.toString(), "PROVIDER_UNAVAILABLE")
+                    case None => @Fail("provider gated fixture should carry expected family")
+                }
+            }
         }
         @Assert(foundSuccess, true)
         @Assert(foundPrecheck, true)
         @Assert(foundVerify, true)
+        @Assert(foundVerifyTrust, true)
         @Assert(foundHandshake, true)
+        @Assert(foundAttach, true)
         @Assert(foundUnavailable, true)
+        @Assert(foundUnavailableGate, true)
 
         let required = contractRequireProviderSmokeFixture("provider-not-linked")
         @Assert(required.fixtureId, "provider-not-linked")
@@ -3728,13 +3799,13 @@ public class ContractTestSuite {
     public func testContractProviderSmokeSuiteReportFacade(): Unit {
         let suite = contractDescribeProviderSmokeSuite()
         @Assert(suite.providerId, "jinguissl")
-        @Assert(suite.totalFixtureCount >= 6, true)
+        @Assert(suite.totalFixtureCount >= 9, true)
         @Assert(suite.successFixtureCount, 1)
         @Assert(suite.failureFixtureCount, suite.totalFixtureCount - 1)
         @Assert(suite.precheckPathCount, 1)
-        @Assert(suite.verifyPathCount, 3)
-        @Assert(suite.providerSelectionPathCount, 1)
-        @Assert(suite.metadataOnlyCount, 1)
+        @Assert(suite.verifyPathCount, 4)
+        @Assert(suite.providerSelectionPathCount, 2)
+        @Assert(suite.metadataOnlyCount, 2)
         @Assert(suite.recommendedOrder[0], "success-x509-policy-chain")
         @Assert(
             containsString(
@@ -3905,6 +3976,275 @@ public class ContractTestSuite {
         )
         @Assert(liveAttachOutcome.ok, false)
         @Assert(liveAttachOutcome.message.contains("stable server attach"), true)
+    }
+
+    @TestCase
+    public func testContractProviderConsumptionPathGuidance(): Unit {
+        let paths = contractListProviderConsumptionPaths()
+        @Assert(paths.size, 5)
+
+        let httpClient = contractDescribeProviderConsumptionPath(
+            ContractProviderConsumptionPath.HttpClientTls
+        )
+        @Assert(httpClient.label, "http-client-tls")
+        @Assert(httpClient.consumerKind, "provider-selection")
+        @Assert(httpClient.attemptAllowed, true)
+        @Assert(httpClient.useProviderSelection, true)
+        @Assert(httpClient.requiresUpperLayerAttachGlue, false)
+        @Assert(httpClient.publishedContractPath, true)
+        @Assert(httpClient.suggestedFallbackTarget, "stdx-default")
+        @Assert(httpClient.attachPlanMeaning.contains("buildTlsAttachPlan"), true)
+        match (httpClient.suggestedSmokeProfile) {
+            case Some(value) =>
+                @Assert(value.toString(), "PROVIDER_CANDIDATE")
+            case None =>
+                @Fail("HTTP client path should suggest a provider smoke profile")
+        }
+
+        let httpPlanning = contractDescribeProviderConsumptionPath(
+            ContractProviderConsumptionPath.HttpServerAttachPlanning
+        )
+        @Assert(httpPlanning.attemptAllowed, true)
+        @Assert(httpPlanning.requiresUpperLayerAttachGlue, true)
+        @Assert(httpPlanning.publishedContractPath, true)
+        @Assert(httpPlanning.attachPlanMeaning.contains("planning metadata only"), true)
+        match (httpPlanning.suggestedSmokeProfile) {
+            case Some(value) =>
+                @Assert(value.toString(), "ATTACH_PLANNING")
+            case None =>
+                @Fail("HTTP server planning path should suggest attach-planning profile")
+        }
+
+        let httpStable = contractDescribeProviderConsumptionPath(
+            ContractProviderConsumptionPath.HttpServerStableAttach
+        )
+        @Assert(httpStable.attemptAllowed, false)
+        @Assert(httpStable.publishedContractPath, false)
+        @Assert(httpStable.attachPlanMeaning.contains("not a published jinguissl contract"), true)
+        match (httpStable.suggestedSmokeProfile) {
+            case Some(value) =>
+                @Assert(value.toString(), "DEFAULT_HTTPS_ELIGIBLE")
+            case None =>
+                @Fail("HTTP stable attach path should suggest strict profile")
+        }
+
+        let sshClient = contractDescribeProviderConsumptionPath(
+            ContractProviderConsumptionPath.SshClientLibrary
+        )
+        @Assert(sshClient.attemptAllowed, true)
+        @Assert(sshClient.useProviderSelection, false)
+        @Assert(sshClient.publishedContractPath, true)
+        @Assert(sshClient.attachPlanMeaning.contains("does not apply to SSH client runtime"), true)
+        match (sshClient.suggestedSmokeProfile) {
+            case Some(_value) =>
+                @Fail("SSH client path should not suggest a provider smoke profile")
+            case None => ()
+        }
+
+        let sshServer = contractDescribeProviderConsumptionPath(
+            ContractProviderConsumptionPath.SshServerLibrary
+        )
+        @Assert(sshServer.attemptAllowed, true)
+        @Assert(sshServer.useProviderSelection, false)
+        @Assert(sshServer.publishedContractPath, true)
+        @Assert(sshServer.attachPlanMeaning.contains("does not apply to SSH server runtime"), true)
+    }
+
+    @TestCase
+    public func testContractProviderFallbackOutcomeGuidance(): Unit {
+        let guides = contractListProviderFallbackOutcomeGuides()
+        @Assert(guides.size, 6)
+
+        let unavailableGuide = contractDescribeProviderFallbackOutcomeGuide(
+            ContractProviderFallbackCauseCode.ProviderUnavailable
+        )
+        @Assert(unavailableGuide.wireName, "provider_unavailable")
+        @Assert(unavailableGuide.defaultOutcome.toString(), "SUGGESTED_ONLY")
+        @Assert(unavailableGuide.stableDefaultOutcome.toString(), "NO_FALLBACK")
+        @Assert(unavailableGuide.suggestedFallbackTarget, "stdx-default")
+
+        let unavailableResolution = contractResolveProviderFallbackOutcome(
+            ContractProviderFallbackResolutionRequest(
+                ContractProviderFallbackCauseCode.ProviderUnavailable
+            )
+        )
+        @Assert(unavailableResolution.finalOutcome.toString(), "SUGGESTED_ONLY")
+        @Assert(unavailableResolution.fallbackTarget, "stdx-default")
+
+        let unavailableStableResolution = contractResolveProviderFallbackOutcome(
+            ContractProviderFallbackResolutionRequest(
+                ContractProviderFallbackCauseCode.ProviderUnavailable,
+                alreadyOnStableDefault: true
+            )
+        )
+        @Assert(unavailableStableResolution.finalOutcome.toString(), "NO_FALLBACK")
+        @Assert(unavailableStableResolution.fallbackTarget, "")
+
+        let handshakeResolution = contractResolveProviderFallbackOutcome(
+            ContractProviderFallbackResolutionRequest(
+                ContractProviderFallbackCauseCode.TlsHandshakeError,
+                connectionConsumed: true
+            )
+        )
+        @Assert(handshakeResolution.finalOutcome.toString(), "MANUAL_REVIEW")
+        @Assert(handshakeResolution.fallbackTarget, "")
+
+        let verifyResolution = contractResolveProviderFallbackOutcome(
+            ContractProviderFallbackResolutionRequest(
+                ContractProviderFallbackCauseCode.TlsVerifyError
+            )
+        )
+        @Assert(verifyResolution.finalOutcome.toString(), "NO_AUTO_FALLBACK")
+        @Assert(verifyResolution.mustSurface, true)
+
+        let precheckResolution = contractResolveProviderFallbackOutcome(
+            ContractProviderFallbackResolutionRequest(
+                ContractProviderFallbackCauseCode.TlsPrecheckError
+            )
+        )
+        @Assert(precheckResolution.finalOutcome.toString(), "NO_AUTO_FALLBACK")
+        @Assert(precheckResolution.mustSurface, true)
+
+        let cryptoStableResolution = contractResolveProviderFallbackOutcome(
+            ContractProviderFallbackResolutionRequest(
+                ContractProviderFallbackCauseCode.CryptoUnavailable,
+                alreadyOnStableDefault: true
+            )
+        )
+        @Assert(cryptoStableResolution.finalOutcome.toString(), "MANUAL_REVIEW")
+    }
+
+    @TestCase
+    public func testContractProviderConsumptionGateFacade(): Unit {
+        let gates = contractListProviderConsumptionGates()
+        @Assert(gates.size, 5)
+
+        let httpClient = contractDescribeProviderConsumptionGate(
+            ContractProviderConsumptionPath.HttpClientTls
+        )
+        @Assert(httpClient.status.toString(), "PROVIDER_CANDIDATE")
+        @Assert(httpClient.providerId, "jinguissl")
+        @Assert(httpClient.selectedEntryId, "jinguissl-provider-candidate")
+        @Assert(httpClient.candidateOrder, ["jinguissl-provider-candidate", "stdx-default"])
+        @Assert(httpClient.blockedCandidates.size, 0)
+        @Assert(httpClient.publicPath, "provider-candidate")
+        @Assert(httpClient.releasePath, "experimental-only")
+        @Assert(httpClient.riskLevel, "medium")
+        @Assert(httpClient.readyNow, true)
+        @Assert(httpClient.fallbackTarget, "stdx-default")
+        @Assert(httpClient.fallbackChain, ["stdx-default"])
+        @Assert(httpClient.selectedReason.contains("provider-candidate route"), true)
+        @Assert(containsString(httpClient.observabilityTags, "provider_id:jinguissl"), true)
+        @Assert(
+            containsString(httpClient.observabilityTags, "selected_entry:jinguissl-provider-candidate"),
+            true
+        )
+        match (httpClient.smokeProfile) {
+            case Some(value) =>
+                @Assert(value.profile.toString(), "PROVIDER_CANDIDATE")
+            case None =>
+                @Fail("HTTP client provider gate should carry a smoke profile")
+        }
+        match (httpClient.smokeReadiness) {
+            case Some(value) =>
+                @Assert(value.overallReady, true)
+            case None =>
+                @Fail("HTTP client provider gate should carry a smoke readiness report")
+        }
+
+        let httpPlanning = contractDescribeProviderConsumptionGate(
+            ContractProviderConsumptionPath.HttpServerAttachPlanning
+        )
+        @Assert(httpPlanning.status.toString(), "PLANNING_ONLY")
+        @Assert(httpPlanning.providerId, "jinguissl")
+        @Assert(httpPlanning.selectedEntryId, "jinguissl-provider-candidate")
+        @Assert(httpPlanning.candidateOrder, ["jinguissl-provider-candidate", "stdx-default"])
+        @Assert(httpPlanning.blockedCandidates.size, 0)
+        @Assert(httpPlanning.publicPath, "attach-planning")
+        @Assert(httpPlanning.releasePath, "experimental-only")
+        @Assert(httpPlanning.riskLevel, "medium")
+        @Assert(httpPlanning.readyNow, true)
+        @Assert(httpPlanning.selectedReason.contains("attach planning only"), true)
+        @Assert(
+            containsString(
+                httpPlanning.warnings,
+                "server attach still depends on upper-layer stdx integration glue"
+            ),
+            true
+        )
+
+        let httpStable = contractDescribeProviderConsumptionGate(
+            ContractProviderConsumptionPath.HttpServerStableAttach
+        )
+        @Assert(httpStable.status.toString(), "BLOCKED")
+        @Assert(httpStable.providerId, "jinguissl")
+        @Assert(httpStable.selectedEntryId, "")
+        @Assert(httpStable.candidateOrder, ["jinguissl-provider-candidate", "stdx-default"])
+        @Assert(httpStable.blockedCandidates, ["jinguissl-provider-candidate:stable_attach_unpublished"])
+        @Assert(httpStable.publicPath, "blocked")
+        @Assert(httpStable.releasePath, "unsupported")
+        @Assert(httpStable.riskLevel, "high")
+        @Assert(httpStable.readyNow, false)
+        @Assert(httpStable.fallbackChain, ["stdx-default"])
+        @Assert(httpStable.selectedReason.contains("stable HTTPS listener attach"), true)
+        @Assert(containsString(httpStable.observabilityTags, "selected_entry:none"), true)
+        @Assert(containsString(httpStable.observabilityTags, "ready_now:false"), true)
+        match (httpStable.smokeProfile) {
+            case Some(value) =>
+                @Assert(value.profile.toString(), "DEFAULT_HTTPS_ELIGIBLE")
+            case None =>
+                @Fail("HTTP stable attach provider gate should carry a smoke profile")
+        }
+        match (httpStable.smokeReadiness) {
+            case Some(value) =>
+                @Assert(value.overallReady, false)
+            case None =>
+                @Fail("HTTP stable attach provider gate should carry a smoke readiness report")
+        }
+
+        let sshClient = contractDescribeProviderConsumptionGate(
+            ContractProviderConsumptionPath.SshClientLibrary
+        )
+        @Assert(sshClient.status.toString(), "LIBRARY_CONTRACT")
+        @Assert(sshClient.providerId, "jinguissl")
+        @Assert(sshClient.selectedEntryId, "jinguissl-library-direct")
+        @Assert(sshClient.candidateOrder, ["jinguissl-library-direct"])
+        @Assert(sshClient.publicPath, "library-contract")
+        @Assert(sshClient.releasePath, "library-direct")
+        @Assert(sshClient.riskLevel, "low")
+        @Assert(sshClient.readyNow, true)
+        @Assert(sshClient.fallbackTarget, "")
+        @Assert(sshClient.fallbackChain.size, 0)
+        @Assert(containsString(sshClient.observabilityTags, "provider_entry:jinguissl-library-direct"), true)
+        match (sshClient.smokeProfile) {
+            case Some(_value) =>
+                @Fail("SSH client provider gate should not require a smoke profile")
+            case None => ()
+        }
+        @Assert(sshClient.selectedReason.contains("stable library contract"), true)
+
+        let allowed = contractRequireProviderConsumptionGate(
+            ContractProviderConsumptionPath.HttpClientTls
+        )
+        @Assert(allowed.readyNow, true)
+
+        let blocked = contractTryRequireProviderConsumptionGate(
+            ContractProviderConsumptionPath.HttpServerStableAttach
+        )
+        @Assert(blocked.ok, false)
+        match (blocked.code) {
+            case Some(value) =>
+                @Assert(value.toString(), "UNSUPPORTED")
+            case None =>
+                @Fail("blocked provider gate should carry contract code")
+        }
+        match (blocked.igniteCode) {
+            case Some(value) =>
+                @Assert(value.toString(), "CRYPTO_UNAVAILABLE")
+            case None =>
+                @Fail("blocked provider gate should carry ignite code")
+        }
+        @Assert(blocked.message.contains("stable HTTPS listener attach"), true)
     }
 
     @TestCase
@@ -4592,7 +4932,7 @@ public class ContractTestSuite {
     public func testContractSshVersionBannerAndTransportPacketFacadeHelpers(): Unit {
         let banner = contractSshBuildVersionBannerRequest(
             ContractSshBuildVersionBannerRequest(
-                "jinkuiSSL_0.6.17",
+                "jinkuiSSL_0.6.21",
                 comments: "contract-test"
             )
         )
@@ -4605,11 +4945,11 @@ public class ContractTestSuite {
         )
 
         @Assert(decodedBanner.protocolVersion, "2.0")
-        @Assert(decodedBanner.softwareVersion, "jinkuiSSL_0.6.17")
+        @Assert(decodedBanner.softwareVersion, "jinkuiSSL_0.6.21")
         @Assert(decodedBanner.comments, "contract-test")
         @Assert(
             String.fromUtf8(encodedBanner),
-            "SSH-2.0-jinkuiSSL_0.6.17 contract-test\r\n"
+            "SSH-2.0-jinkuiSSL_0.6.21 contract-test\r\n"
         )
 
         let payload = "abc".toArray()
@@ -5757,6 +6097,31 @@ private func containsString(values: Array<String>, expected: String): Bool {
         }
     }
     false
+}
+
+private func parseContractTls13UInt16VectorExtension(data: Array<Byte>): Array<Int64> {
+    if (data.size < 2) {
+        throw Exception("TLS1.3 extension vector is truncated")
+    }
+    let encodedLen = readContractUInt16Be(data, 0)
+    if (encodedLen == 0 || (encodedLen % 2) != 0 || encodedLen + 2 != data.size) {
+        throw Exception("TLS1.3 extension vector length is invalid")
+    }
+
+    let values = ArrayList<Int64>()
+    var offset = 2
+    while (offset < data.size) {
+        values.add(readContractUInt16Be(data, offset))
+        offset += 2
+    }
+    values.toArray()
+}
+
+private func readContractUInt16Be(data: Array<Byte>, offset: Int64): Int64 {
+    if (offset + 2 > data.size) {
+        throw Exception("uint16 read exceeds buffer")
+    }
+    (Int64(UInt8(data[offset])) << 8) | Int64(UInt8(data[offset + 1]))
 }
 
 private func tamperHeadAscii(text: String): String {

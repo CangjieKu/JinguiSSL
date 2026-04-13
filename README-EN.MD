@@ -10,7 +10,7 @@ import jinguissl.contract.*
 
 ## Status
 
-- Release line: `0.6.17`
+- Release line: `0.6.21`
 - Maturity: `pre-1.0`
 - Package type: `static` Cangjie library
 - Public integration surface: `jinguissl.contract.*`
@@ -95,7 +95,7 @@ The audit script then verifies that:
 
 ## Versioning
 
-`0.6.17` reflects that the library is well beyond the phase-1 skeleton, but not yet at a 1.0 stability promise. During the `0.x` line, the `contract` facade is intended to stay comparatively stable, while internal `crypto.*` implementation details may keep evolving.
+`0.6.21` reflects that the library is well beyond the phase-1 skeleton, but not yet at a 1.0 stability promise. During the `0.x` line, the `contract` facade is intended to stay comparatively stable, while internal `crypto.*` implementation details may keep evolving.
 
 ## License
 

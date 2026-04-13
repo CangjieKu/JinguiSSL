@@ -55,6 +55,15 @@
 - `contractListProviderSmokeProfiles()`
 - `contractRequireProviderSmokeProfile(...)`
 - `contractTryRequireProviderSmokeProfile(...)`
+- `contractDescribeProviderConsumptionPath(...)`
+- `contractListProviderConsumptionPaths()`
+- `contractDescribeProviderConsumptionGate(...)`
+- `contractListProviderConsumptionGates()`
+- `contractRequireProviderConsumptionGate(...)`
+- `contractTryRequireProviderConsumptionGate(...)`
+- `contractDescribeProviderFallbackOutcomeGuide(...)`
+- `contractListProviderFallbackOutcomeGuides()`
+- `contractResolveProviderFallbackOutcome(...)`
 - `contractDescribeProviderErrorCode(...)`
 - `contractDescribeProviderContractException(...)`
 - `contractDescribeProviderCryptoException(...)`
@@ -67,6 +76,60 @@
 - 若上层需要真实监听链 attach，应由 `lisi` 负责 provider 选择、fallback 与记录
 - 在现阶段，`jinguissl` 不能被表述为默认 HTTPS listener 路径
 
+当前路径级消费建议固定为：
+
+- HTTP client TLS：
+  - 可尝试 `jinguissl`
+  - 仍是 provider-candidate，不等于默认切换
+- HTTP server attach planning：
+  - 只允许停在 `precheck + material preparation + planning`
+  - 不允许包装成稳定 listener attach
+- SSH client/server：
+  - 作为稳定库面直接消费 `jinguissl.contract.*`
+  - 不依赖 `stdx.net.tls.TlsServerConfig` attach bridge
+
+若上层不想自己再把 path guide、smoke profile、readiness 与 fallback target 拼装成一层 release gate，当前也可直接消费：
+
+- `contractDescribeProviderConsumptionGate(...)`
+- `contractListProviderConsumptionGates()`
+- `contractRequireProviderConsumptionGate(...)`
+- `contractTryRequireProviderConsumptionGate(...)`
+
+当前 gate status 解释固定为：
+
+- `PROVIDER_CANDIDATE`
+  - 当前可尝试 `jinguissl`，但仍保留 `stdx-default` 作为稳定 fallback target
+- `PLANNING_ONLY`
+  - 当前只允许 `precheck + material preparation + attach planning`
+- `LIBRARY_CONTRACT`
+  - 当前是稳定库面消费，不属于 provider attach 问题
+- `BLOCKED`
+  - 当前不是公开稳定路径，应该 fail closed
+
+当前 gate report 还会补齐一组更贴近 `lisi` / observe 字段的摘要：
+
+- `providerId`
+  - 当前固定为 `jinguissl`
+- `selectedEntryId`
+  - `readyNow = true` 时可直接用于上层 `selectedBackend` / provider-entry 记录
+  - `readyNow = false` 时固定为空字符串，避免伪造“已选中”
+- `candidateOrder`
+  - 当前按 `jinguissl` provider entry 在前、稳定 fallback entry 在后输出
+- `blockedCandidates`
+  - 当前在 blocked / smoke-not-ready 路径上给出结构化 blocked 原因
+- `releasePath`
+  - `experimental-only`
+  - `library-direct`
+  - `unsupported`
+- `riskLevel`
+  - `medium`
+  - `low`
+  - `high`
+- `fallbackChain`
+  - 当前主要用于表达 `stdx-default` 是否仍是建议回退链
+- `observabilityTags`
+  - 当前会固定补齐 `provider_id`、`provider_entry`、`selected_entry`、`public_path`、`release_path`、`risk_level`、`ready_now` 等标签
+
 ## Fallback Guidance
 
 推荐由 `lisi` 执行并记录 fallback，`jinguissl` 侧给出如下边界建议：
@@ -77,6 +140,17 @@
   - 可谨慎重试，或回退到 `stdx`
 - `BAD_INPUT` / `COMPLIANCE_REJECTED` / `TLS_PRECHECK_ERROR` / `TLS_VERIFY_ERROR`
   - 不建议自动回退，应直接上抛并保留失败记录
+
+若上层需要统一落到观测或 trial-build 口径，建议按下列 outcome 理解：
+
+- `suggested-only`
+  - 可以建议回退到 `stdx-default`
+- `no-auto-fallback`
+  - 不允许静默降级
+- `no-fallback`
+  - 当前已经处于稳定默认路径，没有下一条自动回退链
+- `manual-review`
+  - 当前需要上层重试/人工判定，不应继续自动切换
 
 ## Packaging Gate
 
