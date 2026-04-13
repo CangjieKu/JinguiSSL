@@ -1965,6 +1965,23 @@ public class ContractTestSuite {
 
     @TestCase
     public func testContractTlsRecordAlertFacadeAndCloseNotify(): Unit {
+        let clientHello = contractTls13BuildHttpClientHelloX25519(
+            "localhost",
+            alpnProtocols: ["http/1.1"],
+            clientPrivateKey: Some(incrementalBytes(32, start: 13))
+        )
+        let wrappedClientHelloRecord = contractTlsEncodePlaintextRecordRequest(
+            ContractTlsPlaintextRecordRequest(
+                ContractTlsVersion.Tls12,
+                ContractTlsRecordContentType.Handshake,
+                clientHello.encodedClientHello
+            )
+        )
+        let decodedWrappedClientHello = tlsDecodeRecord(wrappedClientHelloRecord)
+        @Assert(decodedWrappedClientHello.header.contentType.toString(), "HANDSHAKE")
+        @Assert(decodedWrappedClientHello.header.version.toString(), "TLS1.2")
+        @Assert(decodedWrappedClientHello.fragment, clientHello.encodedClientHello)
+
         let alertPayloadRequest = ContractTlsAlertPayloadRequest(
             ContractTlsAlertLevel.AlertWarning,
             ContractTlsAlertDescription.AlertCloseNotify

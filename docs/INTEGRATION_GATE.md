@@ -32,6 +32,16 @@
 2. 通过 precheck 后，再进入各自框架或运行时的 TLS / SSH 配置构造
 3. 统一使用 contract 返回面做错误分流，而不是自行解析底层异常
 
+## HTTP Client First Flight
+
+对 HTTP client TLS 首包，当前 contract 边界固定为：
+
+- `contractTls13BuildHttpClientHelloX25519(...)` 返回的是 `ClientHello` 握手报文；
+- 若上层要直接写 socket，应先调用
+  `contractTlsEncodePlaintextRecord(ContractTlsVersion.Tls12, ContractTlsRecordContentType.Handshake, ...)`
+  把握手报文封装成首条 TLS record；
+- 这一步只解决 client first-flight 的 wire packaging，不表示本仓已经公开稳定的 server attach 入口。
+
 ## Provider Gate
 
 面向 `lisi` / provider 选择层，当前推荐直接消费下面这些稳定 contract：

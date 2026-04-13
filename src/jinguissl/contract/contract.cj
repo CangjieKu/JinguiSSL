@@ -101,6 +101,7 @@ import jinguissl.crypto.tls.{
     tlsDecodeSessionTicket,
     tlsEncodeAlert,
     tlsEncodeAlertRecord,
+    tlsEncodeRecord,
     tlsEncodeSessionTicket,
     tlsIsCloseNotifyAlert,
     tlsIsSessionTicketExpired,
@@ -9437,6 +9438,22 @@ public class ContractTlsAlertPayloadDecodeRequest {
     }
 }
 
+public class ContractTlsPlaintextRecordRequest {
+    public let version: ContractTlsVersion
+    public let contentType: ContractTlsRecordContentType
+    public let payload: Array<Byte>
+
+    public init(
+        version: ContractTlsVersion,
+        contentType: ContractTlsRecordContentType,
+        payload: Array<Byte>
+    ) {
+        this.version = version
+        this.contentType = contentType
+        this.payload = payload.clone()
+    }
+}
+
 public class ContractTlsAlertRecordRequest {
     public let version: ContractTlsVersion
     public let level: ContractTlsAlertLevel
@@ -10172,6 +10189,35 @@ public func contractTryTlsDecodeAlertPayloadRequest(
     request: ContractTlsAlertPayloadDecodeRequest
 ): ContractTlsAlertDecodeOutcome {
     contractTryTlsDecodeAlertPayload(request.encodedAlert)
+}
+
+public func contractTlsEncodePlaintextRecord(
+    version: ContractTlsVersion,
+    contentType: ContractTlsRecordContentType,
+    payload: Array<Byte>
+): Array<Byte> {
+    try {
+        tlsEncodeRecord(
+            contractToTlsContentType(contentType),
+            contractToTlsVersion(version),
+            payload
+        )
+    } catch (e: CryptoException) {
+        throw ContractException(
+            mapCryptoErrorForOperation(e, "tls"),
+            "TLS plaintext record encoding failed: ${e.message}"
+        )
+    }
+}
+
+public func contractTlsEncodePlaintextRecordRequest(
+    request: ContractTlsPlaintextRecordRequest
+): Array<Byte> {
+    contractTlsEncodePlaintextRecord(
+        request.version,
+        request.contentType,
+        request.payload
+    )
 }
 
 public func contractTlsEncodeAlertRecord(

@@ -70,6 +70,9 @@
 - `contractDescribeProviderContractException(...)`
 - `contractDescribeProviderCryptoException(...)`
 - `contractRecommendProviderFallback(...)`
+- `ContractTlsPlaintextRecordRequest`
+- `contractTlsEncodePlaintextRecord(...)`
+- `contractTlsEncodePlaintextRecordRequest(...)`
 
 ## Capability Record
 
@@ -160,6 +163,12 @@ provider 侧建议上层至少记录：
 - `jinguissl` 目前可以稳定提供 precheck、material preparation、client TLS、X.509 verify
 - `jinguissl` 目前不能在公开契约上承诺 server-side attach
 - 真正的 attach、fallback 与记录应由 `lisi` 负责
+
+对于 HTTP client 首包边界，当前 contract 语义固定为：
+
+- `contractTls13BuildHttpClientHelloX25519(...)` 返回的是握手报文本体；
+- 若上层要把它直接发到 socket，应先用 `contractTlsEncodePlaintextRecord(...)` 包成 `HANDSHAKE` record；
+- 这只是 client-side first-flight 打包 helper，不改变 server attach 的公开边界。
 
 ## Consumption Paths
 
