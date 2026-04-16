@@ -12,6 +12,10 @@ examples/aes-bench/target/
 examples/aes-bench/target/**
 !examples/phase1-demo/
 !examples/phase1-demo/**
+!examples/handshake-interface-demo/
+!examples/handshake-interface-demo/**
+examples/handshake-interface-demo/target/
+examples/handshake-interface-demo/target/**
 
 _helper/
 benchmarks/

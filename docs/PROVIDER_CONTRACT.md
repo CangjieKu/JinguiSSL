@@ -169,6 +169,9 @@ provider 侧建议上层至少记录：
 - `contractTls13BuildHttpClientHelloX25519(...)` 返回的是握手报文本体；
 - 若上层要把它直接发到 socket，应先用 `contractTlsEncodePlaintextRecord(...)` 包成 `HANDSHAKE` record；
 - 这只是 client-side first-flight 打包 helper，不改变 server attach 的公开边界。
+- 若你要自己实现这一层接口握手，直接看：
+  - `HANDSHAKE_INTERFACE_GUIDE.md`
+  - `examples/handshake-interface-demo/`
 
 ## Consumption Paths
 
@@ -201,6 +204,11 @@ provider 侧建议上层至少记录：
 - `SSH_SERVER_LIBRARY`
   - 可以直接消费 `jinguissl.contract.*`
   - 这同样不是 `stdx.net.tls.TlsServerConfig` bridge 问题
+
+如果你要把 SSH 握手接到自己的上层接口，而不是只做 capability 判断，也直接看：
+
+- `HANDSHAKE_INTERFACE_GUIDE.md`
+- `examples/handshake-interface-demo/`
 
 这里对 `buildTlsAttachPlan(...)` 的公开解释固定为：
 
