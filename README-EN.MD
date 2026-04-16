@@ -50,7 +50,6 @@ External projects should avoid depending deeply on `jinguissl.crypto.*` unless t
 - Public docs: `docs/`
 - Public packaging helper: `tools/cjpm_bundle_finish.sh`
 - Public packaging audit helper: `tools/cjpm_bundle_audit.sh`
-- Public release guard: `tools/release_guard.sh`
 
 The following directories are mainly local collaboration, reference, or experimental areas and are not part of the public release contract:
 
@@ -67,25 +66,16 @@ cjpm test
 
 Run them serially. Running `cjpm build` and `cjpm test` in parallel can race on the shared `target/` directory and create false failures.
 
-For the full release gate, prefer:
-
-```bash
-./tools/release_guard.sh
-```
-
 ## Packaging Note
 
-On the current Cangjie toolchain, native `cjpm bundle` may still crash during a known SHA256 indexing step after a valid artifact has already been produced. This repository provides one public release gate and the underlying bundle helpers:
+On the current Cangjie toolchain, native `cjpm bundle` may still crash during a known SHA256 indexing step after a valid artifact has already been produced. This repository provides a finishing script:
 
 ```bash
-./tools/release_guard.sh
 ./tools/cjpm_bundle_finish.sh
 ./tools/cjpm_bundle_audit.sh
 ```
 
-`tools/release_guard.sh` runs `cjpm build`, `cjpm test --no-progress`, `./tools/cjpm_bundle_finish.sh`, and `./tools/cjpm_bundle_audit.sh` in order.
-
-`tools/cjpm_bundle_finish.sh` runs `cjpm bundle`, detects the known post-artifact crash pattern, and generates the final `sha256` plus manifest for a valid `.cjp`.
+The script runs `cjpm bundle`, detects the known post-artifact crash pattern, and generates the final `sha256` plus manifest for a valid `.cjp`.
 
 `tools/cjpm_bundle_audit.sh` then verifies that:
 

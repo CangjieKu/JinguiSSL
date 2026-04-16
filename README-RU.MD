@@ -50,7 +50,6 @@ import jinguissl.contract.*
 - Публичная документация: `docs/`
 - Публичный вспомогательный скрипт для упаковки: `tools/cjpm_bundle_finish.sh`
 - Публичный вспомогательный скрипт для аудита упаковки: `tools/cjpm_bundle_audit.sh`
-- Публичный release gate скрипт: `tools/release_guard.sh`
 
 Следующие каталоги в основном используются для локальной совместной работы, справочных материалов или экспериментов и не входят в публичный контракт релиза:
 
@@ -67,25 +66,16 @@ cjpm test
 
 Запускайте их последовательно. Параллельный запуск `cjpm build` и `cjpm test` может конфликтовать из-за общей директории `target/` и давать ложные ошибки.
 
-Для полного release gate предпочтительно запускать:
-
-```bash
-./tools/release_guard.sh
-```
-
 ## Замечание по упаковке
 
-В текущем toolchain Cangjie команда `cjpm bundle` все еще может аварийно завершаться на известном шаге SHA256 indexing уже после создания корректного артефакта. Для этого в репозитории есть единый release gate и базовые вспомогательные скрипты:
+В текущем toolchain Cangjie команда `cjpm bundle` все еще может аварийно завершаться на известном шаге SHA256 indexing уже после создания корректного артефакта. Для этого в репозитории есть вспомогательный скрипт:
 
 ```bash
-./tools/release_guard.sh
 ./tools/cjpm_bundle_finish.sh
 ./tools/cjpm_bundle_audit.sh
 ```
 
-`tools/release_guard.sh` последовательно запускает `cjpm build`, `cjpm test --no-progress`, `./tools/cjpm_bundle_finish.sh` и `./tools/cjpm_bundle_audit.sh`.
-
-`tools/cjpm_bundle_finish.sh` запускает `cjpm bundle`, распознает известный сбой после генерации артефакта и дописывает итоговые `sha256` и manifest для валидного `.cjp`.
+Скрипт запускает `cjpm bundle`, распознает известный сбой после генерации артефакта и дописывает итоговые `sha256` и manifest для валидного `.cjp`.
 
 `tools/cjpm_bundle_audit.sh` затем проверяет, что:
 
