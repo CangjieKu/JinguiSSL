@@ -195,6 +195,7 @@ provider 侧建议上层至少记录：
   - 可以尝试 `jinguissl`
   - 但只到 `precheck + material preparation + attach planning`
   - 推荐 smoke profile：`attach-planning`
+  - focused example：`examples/http-server-attach-planning-smoke/`
 - `HTTP_SERVER_STABLE_ATTACH`
   - 当前不允许当作公开稳定路径尝试
   - 推荐继续停在 `stdx-default`

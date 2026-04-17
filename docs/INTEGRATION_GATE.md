@@ -104,6 +104,8 @@
 - HTTP server attach planning：
   - 只允许停在 `precheck + material preparation + planning`
   - 不允许包装成稳定 listener attach
+  - focused example:
+    - `examples/http-server-attach-planning-smoke/`
 - SSH client/server：
   - 作为稳定库面直接消费 `jinguissl.contract.*`
   - 不依赖 `stdx.net.tls.TlsServerConfig` attach bridge

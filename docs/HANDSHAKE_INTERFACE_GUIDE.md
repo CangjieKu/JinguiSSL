@@ -156,7 +156,60 @@ let peerApplied = contractTls13ApplyPeerTrafficUpdateToVerifiedSessionRequest(
 
 - [`examples/handshake-interface-demo/`](../examples/handshake-interface-demo/)
 
-## C. SSH Library Handshake
+## C. HTTP Server Attach Planning
+
+如果你的上层当前只需要把 HTTP server TLS 接到“planning / precheck / material preparation”这一步，
+而不是把 listener attach 讲成已冻结公开契约，当前公开 contract 适合这样使用：
+
+1. 校验 server cert / key / ALPN 输入
+2. 准备标准化后的 PEM material，交给你自己的上层 glue 持有
+3. 读取 provider consumption gate，明确这条路仍然只是 planning-only
+4. 对 stable attach 继续 fail closed
+
+最小代码形状：
+
+```cangjie
+let request = ContractHttpServerTlsConfigRequest(
+    certChainPem,
+    privateKeyPem,
+    alpnProtocols: ["h2", "http/1.1"],
+    requireHttp2Alpn: true
+)
+let validated = contractValidateHttpServerTlsConfigRequest(request)
+let material = contractPrepareHttpServerTlsMaterialRequest(request)
+let planningGate = contractRequireProviderConsumptionGate(
+    ContractProviderConsumptionPath.HttpServerAttachPlanning
+)
+let stableAttach = contractTryRequireProviderConsumptionGate(
+    ContractProviderConsumptionPath.HttpServerStableAttach
+)
+```
+
+你自己的上层应保留：
+
+- 原始 certificate/key source
+- `validated.normalizedAlpnProtocols`
+- `material.certificateChainPemBlocks`
+- `material.privateKeyPem`
+- `planningGate`
+- 你自己的 attach-plan / provider-selection record
+
+这里的边界也要写死：
+
+- 当前公开稳定的是：
+  - `contractValidateHttpServerTlsConfig*`
+  - `contractPrepareHttpServerTlsMaterial*`
+  - `HTTP_SERVER_ATTACH_PLANNING` gate
+- 当前仍未公开稳定的是：
+  - final listener attach
+  - `stdx.net.tls.TlsServerConfig` direct bridge
+  - “默认 HTTPS 已切到 jinguissl” 这种叙事
+
+现成例子：
+
+- [`examples/http-server-attach-planning-smoke/`](../examples/http-server-attach-planning-smoke/)
+
+## D. SSH Library Handshake
 
 当前公开仓库里，SSH 的推荐实现形状是：
 
@@ -248,7 +301,7 @@ let clientRuntimeBundle = contractPrepareSshClientRuntimeRequest(
 
 - [`examples/handshake-interface-demo/`](../examples/handshake-interface-demo/)
 
-## D. SSH Runtime Rekey Continuation
+## E. SSH Runtime Rekey Continuation
 
 SSH 路径里，runtime bundle 建好以后，并不意味着上层就可以把 rekey 重新降回“自己拼 transport state”。
 
