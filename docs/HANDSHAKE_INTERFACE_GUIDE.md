@@ -335,3 +335,45 @@ let clientRekeyBundle = contractPrepareSshClientRuntimeRekeyFromSessionStateRequ
 1. [`examples/handshake-interface-demo/`](../examples/handshake-interface-demo/)
 2. [`INTEGRATION_GATE.md`](./INTEGRATION_GATE.md)
 3. [`PROVIDER_CONTRACT.md`](./PROVIDER_CONTRACT.md)
+
+## Structured ES256 Verify
+
+如果你的上层已经自己完成了：
+
+- `CBOR` 读取
+- `COSE_Key` 解析
+- WebAuthn `authenticatorData || clientDataHash` 等 ceremony 语义拼接
+
+但还想把最窄的一段 `ES256 / P-256` 校验交给 `jinguiSSL`，当前可以直接使用一个明确标成 bridge-support 的低层 helper：
+
+```cangjie
+import jinguissl.crypto.ecc.*
+
+let outcome = tryEs256P256VerifyStructuredRequest(
+    Es256P256StructuredVerifyRequest(
+        coseX,
+        coseY,
+        signedBytes,
+        derSignature
+    )
+)
+```
+
+这里的边界要写死：
+
+- 输入必须已经是结构化完成的 `x / y / signedBytes / derSignature`
+- helper 内部只负责：
+  - `P-256` 公钥点构造
+  - `SHA-256`
+  - DER ECDSA signature decode
+  - verify
+- helper 不负责：
+  - `CBOR` bytes 解码
+  - `COSE_Key` map 语义
+  - attestation / assertion ceremony 判断
+
+同时也不要把它讲成稳定 contract 扩容：
+
+- 这条 helper 当前属于 `jinguissl.crypto.ecc.*`
+- 它不是 `jinguissl.contract.*` 的稳定公开契约
+- 更适合已经持有 parser / ceremony ownership 的 upper layer 用来减少签名校验胶水代码
