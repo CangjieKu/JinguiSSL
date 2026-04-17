@@ -14,8 +14,12 @@ examples/aes-bench/target/**
 !examples/phase1-demo/**
 !examples/handshake-interface-demo/
 !examples/handshake-interface-demo/**
+!examples/http-client-consumption-smoke/
+!examples/http-client-consumption-smoke/**
 examples/handshake-interface-demo/target/
 examples/handshake-interface-demo/target/**
+examples/http-client-consumption-smoke/target/
+examples/http-client-consumption-smoke/target/**
 
 _helper/
 benchmarks/

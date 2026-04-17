@@ -172,6 +172,7 @@ provider 侧建议上层至少记录：
 - 若你要自己实现这一层接口握手，直接看：
   - `HANDSHAKE_INTERFACE_GUIDE.md`
   - `examples/handshake-interface-demo/`
+  - `examples/http-client-consumption-smoke/`（聚焦 `HTTP_CLIENT_TLS` 的 gate、fallback 与 verified-session smoke）
 
 ## Consumption Paths
 
@@ -227,6 +228,10 @@ provider 侧建议上层至少记录：
 - 当前 selected reason
 
 则可以直接消费 `contractDescribeProviderConsumptionGate(...)` 或 `contractRequireProviderConsumptionGate(...)`。
+
+如果你想看一条聚焦 `HTTP_CLIENT_TLS` 的运行样例，而不是一次性读完整个 handshake demo，也可以直接跑：
+
+- `examples/http-client-consumption-smoke/`
 
 当前 gate status 含义固定为：
 

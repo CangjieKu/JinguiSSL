@@ -36,6 +36,7 @@
 
 - `HANDSHAKE_INTERFACE_GUIDE.md`
 - `examples/handshake-interface-demo/`
+- `examples/http-client-consumption-smoke/`
 
 ## HTTP Client First Flight
 
@@ -49,6 +50,7 @@
 - 完整最小路径见：
   - `HANDSHAKE_INTERFACE_GUIDE.md`
   - `examples/handshake-interface-demo/`
+  - `examples/http-client-consumption-smoke/`（聚焦 `HTTP_CLIENT_TLS` 的 gate / fallback / verified-session smoke）
 
 ## Provider Gate
 
