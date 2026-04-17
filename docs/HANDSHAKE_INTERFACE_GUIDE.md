@@ -76,6 +76,7 @@ let firstRecord = contractTlsEncodePlaintextRecord(
 
 现成例子：
 
+- [`examples/ssh-library-consumption-smoke/`](../examples/ssh-library-consumption-smoke/)
 - [`examples/handshake-interface-demo/`](../examples/handshake-interface-demo/)
 
 ## B. TLS Server Flight Verify And Runtime Continuation
@@ -386,8 +387,9 @@ let clientRekeyBundle = contractPrepareSshClientRuntimeRekeyFromSessionStateRequ
 如果你要最快落地一条“自己实现 handshake 接口层”的最小路径，优先看：
 
 1. [`examples/handshake-interface-demo/`](../examples/handshake-interface-demo/)
-2. [`INTEGRATION_GATE.md`](./INTEGRATION_GATE.md)
-3. [`PROVIDER_CONTRACT.md`](./PROVIDER_CONTRACT.md)
+2. [`examples/ssh-library-consumption-smoke/`](../examples/ssh-library-consumption-smoke/)
+3. [`INTEGRATION_GATE.md`](./INTEGRATION_GATE.md)
+4. [`PROVIDER_CONTRACT.md`](./PROVIDER_CONTRACT.md)
 
 ## Structured ES256 Verify
 

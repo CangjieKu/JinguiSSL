@@ -49,3 +49,5 @@
 - 若你要自己实现 SSH banner / KEXINIT / handshake / runtime / rekey 接线，优先看：
   - `HANDSHAKE_INTERFACE_GUIDE.md`
   - `examples/handshake-interface-demo/`
+- 若你想先看一条聚焦稳定库面消费的最小 smoke，再决定是否读完整 handshake demo，也可以先跑：
+  - `examples/ssh-library-consumption-smoke/`

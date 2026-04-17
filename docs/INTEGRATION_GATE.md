@@ -37,6 +37,7 @@
 - `HANDSHAKE_INTERFACE_GUIDE.md`
 - `examples/handshake-interface-demo/`
 - `examples/http-client-consumption-smoke/`
+- `examples/ssh-library-consumption-smoke/`
 
 ## HTTP Client First Flight
 
@@ -109,6 +110,8 @@
 - SSH client/server：
   - 作为稳定库面直接消费 `jinguissl.contract.*`
   - 不依赖 `stdx.net.tls.TlsServerConfig` attach bridge
+  - focused example:
+    - `examples/ssh-library-consumption-smoke/`
 
 若上层不想自己再把 path guide、smoke profile、readiness 与 fallback target 拼装成一层 release gate，当前也可直接消费：
 

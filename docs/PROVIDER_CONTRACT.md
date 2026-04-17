@@ -211,6 +211,7 @@ provider 侧建议上层至少记录：
 
 - `HANDSHAKE_INTERFACE_GUIDE.md`
 - `examples/handshake-interface-demo/`
+- `examples/ssh-library-consumption-smoke/`（聚焦 `SSH_CLIENT_LIBRARY / SSH_SERVER_LIBRARY` 的 gate、startup 与 runtime smoke）
 
 这里对 `buildTlsAttachPlan(...)` 的公开解释固定为：
 
@@ -233,6 +234,10 @@ provider 侧建议上层至少记录：
 如果你想看一条聚焦 `HTTP_CLIENT_TLS` 的运行样例，而不是一次性读完整个 handshake demo，也可以直接跑：
 
 - `examples/http-client-consumption-smoke/`
+
+如果你想看一条聚焦 `SSH_CLIENT_LIBRARY / SSH_SERVER_LIBRARY` 的运行样例，而不是一次性读完整个 handshake demo，也可以直接跑：
+
+- `examples/ssh-library-consumption-smoke/`
 
 当前 gate status 含义固定为：
 
